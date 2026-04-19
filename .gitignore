@@ -57,6 +57,7 @@ tmp/
 temp/
 
 # Project-specific generated assets
-assets/figma_temp/
-test_tts/tts_test_outputs_old/
-test_tts/benchmark/
+assets/
+archive/
+plan/
+src-tham-khao/
