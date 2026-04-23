@@ -4,9 +4,9 @@ Based on plan/v1/task_1.3_database_schema.md
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -22,32 +22,49 @@ class Location(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False)
-    status = Column(String(20), default="active")  # active | inactive
-    is_start_node = Column(Boolean, default=False)
-    map_x = Column(Float, default=0.0)
-    map_y = Column(Float, default=0.0)
-    description = Column(Text, default="")
-    intro_message = Column(Text, default="")
-    background_url = Column(Text, nullable=True)
-    suggested_questions = Column(JSON, default=list)
-    voice_config = Column(JSON, nullable=True)  # TTS config per location mascot
-    camera_config = Column(JSON, nullable=True)  # 360° camera initial view
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    description = Column(Text, nullable=False, default="")
+    intro_message = Column(Text, nullable=False, default="")
+    status = Column(String(20), nullable=False, default="active")  # active | inactive
+    is_start_node = Column(Boolean, nullable=False, default=False)
+    map_x = Column(Float, nullable=False, default=0.0)
+    map_y = Column(Float, nullable=False, default=0.0)
+    avatar_model_url = Column(Text, nullable=True)
+    background_url = Column(Text, nullable=False, default="")
+    voice_config = Column(JSON, nullable=False, default={"voice_name": "Kore"})  # TTS config per location mascot
+    camera_config = Column(JSON, nullable=False, default={})  # 360° camera initial view
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     documents = relationship("Document", back_populates="location")
     media = relationship("Media", back_populates="location")
+    suggested_questions = relationship("SuggestedQuestion", back_populates="location", cascade="all, delete-orphan")
 
 
 class LocationLink(Base):
     __tablename__ = "location_links"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    from_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=False)
-    to_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=False)
-    label = Column(String(255), default="")
-    path_points = Column(JSON, default=list)  # [{x, y}, ...] for map animation
+    from_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
+    to_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
+    label = Column(String(255), nullable=False, default="")
+    path_points = Column(JSON, nullable=False, default=list)  # [{x, y}, ...] for map animation
+    
+    __table_args__ = (
+        UniqueConstraint("from_location_id", "to_location_id", name="uix_location_links_from_to"),
+    )
+
+
+class SuggestedQuestion(Base):
+    __tablename__ = "suggested_questions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=True)
+    question = Column(Text, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    location = relationship("Location", back_populates="suggested_questions")
 
 
 class Document(Base):
@@ -56,13 +73,13 @@ class Document(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String(500), nullable=False)
     file_url = Column(Text, nullable=False)
-    file_type = Column(String(10))  # pdf | docx
-    file_size = Column(Integer, default=0)
-    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True)
-    status = Column(String(20), default="pending")  # pending | processing | ready | error
-    chunk_count = Column(Integer, default=0)
+    file_type = Column(String(10), nullable=False, default="pdf")  # pdf | docx
+    file_size = Column(Integer, nullable=False, default=0)
+    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending | processing | ready | error
+    chunk_count = Column(Integer, nullable=False, default=0)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     location = relationship("Location", back_populates="documents")
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
@@ -73,12 +90,16 @@ class DocumentChunk(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
-    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True)
+    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
     content = Column(Text, nullable=False)
-    chunk_index = Column(Integer, default=0)
-    metadata_ = Column("metadata", JSON, default=dict)
-    # embedding = Column(Vector(768))  # pgvector — uncomment when pgvector extension is ready
-    created_at = Column(DateTime, default=datetime.utcnow)
+    chunk_index = Column(Integer, nullable=False, default=0)
+    metadata_ = Column("metadata", JSON, nullable=False, default=dict)
+    
+    # Import locally to avoid crashing if pgvector is missing during basic imports
+    from pgvector.sqlalchemy import Vector
+    embedding = Column(Vector(768))  # Gemini embedding size is 768
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     document = relationship("Document", back_populates="chunks")
 
@@ -87,13 +108,14 @@ class Media(Base):
     __tablename__ = "media"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=False)
+    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     type = Column(String(10), nullable=False)  # image | video | gif
     url = Column(Text, nullable=False)
-    caption = Column(Text, default="")
-    keywords = Column(JSON, default=list)
-    is_intro = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    caption = Column(Text, nullable=False, default="")
+    keywords = Column(JSON, nullable=False, default=list)
+    is_intro = Column(Boolean, nullable=False, default=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     location = relationship("Location", back_populates="media")
 
@@ -102,9 +124,12 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    started_at = Column(DateTime, default=datetime.utcnow)
-    ended_at = Column(DateTime, nullable=True)
-    is_kiosk = Column(Boolean, default=False)
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    is_kiosk = Column(Boolean, nullable=False, default=False)
+    start_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
+    message_count = Column(Integer, nullable=False, default=0)
+    device_info = Column(Text, nullable=False, default="")
 
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 
@@ -114,12 +139,12 @@ class ChatMessage(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
-    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True)
+    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
     role = Column(String(20), nullable=False)  # user | assistant
     content = Column(Text, nullable=False)
-    input_type = Column(String(10), default="text")  # text | voice
+    input_type = Column(String(10), nullable=False, default="text")  # text | voice
     response_time_ms = Column(Integer, nullable=True)
     tool_calls = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     session = relationship("ChatSession", back_populates="messages")

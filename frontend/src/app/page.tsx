@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useTourStore } from "@/features/tour/store";
 import PanoramaViewer from "@/features/tour/components/PanoramaViewer";
 import Minimap from "@/features/tour/components/Minimap";
@@ -7,8 +8,24 @@ import InfoPanel from "@/features/tour/components/InfoPanel";
 import ChatOverlay from "@/features/chat/components/ChatOverlay";
 
 export default function TourPage() {
+  const fetchLocations = useTourStore((s) => s.fetchLocations);
   const location = useTourStore((s) => s.currentLocation());
   const isTransitioning = useTourStore((s) => s.isTransitioning);
+  const isLoading = useTourStore((s) => s.isLoading);
+  const navigateTo = useTourStore((s) => s.navigateTo);
+
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
+
+  if (isLoading) {
+    return (
+      <div className="w-screen h-screen flex flex-col items-center justify-center bg-[#1a1a2e]">
+        <div className="w-12 h-12 border-4 border-white/20 border-t-[#053384] rounded-full animate-spin mb-4" />
+        <p className="text-white/60 text-sm font-medium">Đang tải dữ liệu bản đồ...</p>
+      </div>
+    );
+  }
 
   if (!location) return null;
 
@@ -18,6 +35,8 @@ export default function TourPage() {
       <PanoramaViewer
         imageUrl={location.backgroundUrl}
         isTransitioning={isTransitioning}
+        links={location.links}
+        onNavigate={navigateTo}
       />
 
       {/* === Layer 1: Avatar 3D Placeholder === */}

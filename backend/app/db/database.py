@@ -8,12 +8,22 @@ from app.config import get_settings
 
 settings = get_settings()
 
+db_url = settings.DATABASE_URL or "postgresql+asyncpg://user:pass@localhost:5432/tvu_tour"
+# Tự động chèn asyncpg vào connection string từ Supabase
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 # Async engine (uses asyncpg driver for PostgreSQL)
 engine = create_async_engine(
-    settings.DATABASE_URL or "postgresql+asyncpg://user:pass@localhost:5432/tvu_tour",
+    db_url,
     echo=settings.DEBUG,
     pool_size=5,
     max_overflow=10,
+    connect_args={
+        # Bắt buộc cho Supabase Transaction Pooler (PgBouncer) khi dùng asyncpg
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+    }
 )
 
 # Session factory

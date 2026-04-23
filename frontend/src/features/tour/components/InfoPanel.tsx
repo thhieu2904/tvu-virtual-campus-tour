@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTourStore } from "@/features/tour/store";
 
 interface MediaAsset {
   id: string;
@@ -15,7 +16,7 @@ const DEMO_INTRO_VIDEO: MediaAsset = {
   id: "intro-1",
   type: "video",
   url: "",
-  caption: "Video giới thiệu Thư viện TVU",
+  caption: "Video giới thiệu không gian",
 };
 
 type PanelMode = "video" | "info" | "chat";
@@ -23,6 +24,9 @@ type PanelMode = "video" | "info" | "chat";
 export default function InfoPanel() {
   const [mode, setMode] = useState<PanelMode>("video");
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const location = useTourStore((s) => s.currentLocation());
+
+  if (!location) return null;
 
   if (isCollapsed) {
     return (
@@ -52,7 +56,7 @@ export default function InfoPanel() {
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <span className="text-base">📍</span>
-          <h3 className="text-sm font-bold text-[#053384]">Thư viện TVU</h3>
+          <h3 className="text-sm font-bold text-[#053384] truncate max-w-[150px]">{location.name}</h3>
         </div>
         <div className="flex items-center gap-1.5">
           {/* Mode tabs */}
@@ -91,7 +95,7 @@ export default function InfoPanel() {
               className="space-y-3"
             >
               {/* Video placeholder */}
-              <div className="w-full aspect-video bg-gradient-to-br from-[#053384] to-[#1a4fa0] rounded-2xl flex items-center justify-center">
+              <div className="w-full aspect-video bg-gradient-to-br from-[#053384] to-[#1a4fa0] rounded-2xl flex items-center justify-center shadow-inner">
                 <div className="text-center text-white/80">
                   <div className="text-4xl mb-2">▶️</div>
                   <p className="text-xs">Video giới thiệu</p>
@@ -113,11 +117,10 @@ export default function InfoPanel() {
             >
               <div className="text-sm text-[#333] leading-relaxed">
                 <p className="font-bold text-[#053384] mb-2">
-                  Thư viện trung tâm TVU
+                  Giới thiệu
                 </p>
                 <p>
-                  Thư viện Trường Đại học Trà Vinh là trung tâm tài nguyên học
-                  tập phục vụ cho sinh viên, giảng viên và nhân viên của trường.
+                  {location.description || "Đang cập nhật nội dung giới thiệu..."}
                 </p>
               </div>
 
@@ -126,7 +129,7 @@ export default function InfoPanel() {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className="aspect-[4/3] bg-gray-100 rounded-xl flex items-center justify-center text-gray-300 text-xs"
+                    className="aspect-[4/3] bg-gray-100 rounded-xl flex items-center justify-center text-gray-300 text-xs shadow-sm"
                   >
                     🖼️ Ảnh {i}
                   </div>
@@ -136,10 +139,10 @@ export default function InfoPanel() {
               {/* Sources */}
               <div className="pt-2 border-t border-gray-100">
                 <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">
-                  Nguồn tham khảo
+                  Thông tin từ
                 </p>
                 <p className="text-xs text-[#053384]">
-                  📄 Giới thiệu TVU 2026.pdf
+                  📄 Dữ liệu khuôn viên TVU
                 </p>
               </div>
             </motion.div>

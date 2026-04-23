@@ -39,88 +39,17 @@ interface TourState {
   currentLocation: () => LocationNode | undefined;
 
   // === Actions ===
-  setLocations: (locations: LocationNode[]) => void;
+  fetchLocations: () => Promise<void>;
   navigateTo: (slug: string) => void;
   setLoading: (loading: boolean) => void;
 }
 
-// ===== Demo Data (sẽ thay bằng API call sau) =====
-
-const DEMO_LOCATIONS: LocationNode[] = [
-  {
-    id: "1",
-    name: "Cổng chính TVU",
-    slug: "cong-chinh",
-    status: "active",
-    mapX: 50,
-    mapY: 85,
-    isStartNode: true,
-    description: "Cổng chính Đại học Trà Vinh - Khu 1",
-    introMessage:
-      "Chào mừng bạn đến với Đại học Trà Vinh! Mình là Trợ lý ảo TVU. Bạn muốn tham quan khu vực nào?",
-    backgroundUrl: "/demo/gate_giua_cong.jpg",
-    suggestedQuestions: [
-      "Giới thiệu về trường TVU",
-      "Đưa mình tới Thư viện",
-      "Có ngành CNTT không?",
-    ],
-    links: [
-      { toSlug: "thu-vien", label: "Đi tới Thư viện" },
-      { toSlug: "khoa-cntt", label: "Đi tới Khoa CNTT" },
-    ],
-  },
-  {
-    id: "2",
-    name: "Thư viện TVU",
-    slug: "thu-vien",
-    status: "active",
-    mapX: 70,
-    mapY: 10,
-    isStartNode: false,
-    description: "Thư viện trung tâm Đại học Trà Vinh",
-    introMessage:
-      "Đây là Thư viện trung tâm TVU! Nơi đây phục vụ hơn 20,000 sinh viên với hàng ngàn đầu sách và tài liệu điện tử.",
-    backgroundUrl: "/demo/c7_middle.jpg",
-    suggestedQuestions: [
-      "Giờ mở cửa thư viện?",
-      "Có WiFi không?",
-      "Đưa mình tới Khoa CNTT",
-    ],
-    links: [
-      { toSlug: "cong-chinh", label: "Quay lại Cổng chính" },
-      { toSlug: "khoa-cntt", label: "Đi tới Khoa CNTT" },
-    ],
-  },
-  {
-    id: "3",
-    name: "Khoa CNTT",
-    slug: "khoa-cntt",
-    status: "active",
-    mapX: 30,
-    mapY: 50,
-    isStartNode: false,
-    description: "Khoa Công nghệ Thông tin - Tòa C7",
-    introMessage:
-      "Chào mừng bạn đến Khoa Công nghệ Thông tin! Khoa CNTT là một trong những khoa mạnh nhất của TVU.",
-    backgroundUrl: "/demo/c7_them.jpg",
-    suggestedQuestions: [
-      "Ngành CNTT học gì?",
-      "Học phí bao nhiêu?",
-      "Cơ hội việc làm sau tốt nghiệp?",
-    ],
-    links: [
-      { toSlug: "cong-chinh", label: "Quay lại Cổng chính" },
-      { toSlug: "thu-vien", label: "Đi tới Thư viện" },
-    ],
-  },
-];
-
 // ===== Store =====
 
 export const useTourStore = create<TourState>((set, get) => ({
-  locations: DEMO_LOCATIONS,
-  currentLocationSlug: "cong-chinh",
-  isLoading: false,
+  locations: [],
+  currentLocationSlug: "",
+  isLoading: true,
   isTransitioning: false,
 
   currentLocation: () => {
@@ -128,7 +57,28 @@ export const useTourStore = create<TourState>((set, get) => ({
     return locations.find((l) => l.slug === currentLocationSlug);
   },
 
-  setLocations: (locations) => set({ locations }),
+  fetchLocations: async () => {
+    set({ isLoading: true });
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/locations");
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const data = await response.json();
+      const locations = data.locations || [];
+      
+      // Determine starting node
+      const startNode = locations.find((l: LocationNode) => l.isStartNode) || locations[0];
+      
+      set({ 
+        locations, 
+        currentLocationSlug: startNode ? startNode.slug : "",
+        isLoading: false 
+      });
+    } catch (error) {
+      console.error("Failed to fetch locations from backend API:", error);
+      set({ isLoading: false });
+    }
+  },
 
   navigateTo: (slug) => {
     const { locations, currentLocationSlug } = get();

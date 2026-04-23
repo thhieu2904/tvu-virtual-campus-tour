@@ -19,6 +19,8 @@ interface PanoramaViewerProps {
   initialPitch?: number;
   initialYaw?: number;
   isTransitioning?: boolean;
+  links?: { toSlug: string; label: string }[];
+  onNavigate?: (slug: string) => void;
 }
 
 export default function PanoramaViewer({
@@ -27,6 +29,8 @@ export default function PanoramaViewer({
   initialPitch = 0,
   initialYaw = 0,
   isTransitioning = false,
+  links = [],
+  onNavigate,
 }: PanoramaViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
@@ -168,6 +172,35 @@ export default function PanoramaViewer({
             <span className="animate-pulse">→</span>
           </div>
         </motion.div>
+      )}
+
+      {/* Navigation Links Overlay */}
+      {isLoaded && !hasError && links && links.length > 0 && onNavigate && (
+        <div className="absolute top-1/2 right-8 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
+          {links.map((link) => (
+            <motion.button
+              key={link.toSlug}
+              onClick={() => onNavigate(link.toSlug)}
+              className="flex items-center gap-3 bg-black/30 hover:bg-[#053384]/80 backdrop-blur-md px-5 py-3 rounded-2xl text-white/90 border border-white/10 shadow-lg transition-colors group cursor-pointer"
+              whileHover={{ scale: 1.05, x: -5 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] uppercase tracking-wider text-white/50 group-hover:text-white/80 transition-colors">
+                  Di chuyển đến
+                </span>
+                <span className="text-sm font-bold whitespace-nowrap">
+                  {link.label}
+                </span>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                <span className="text-lg">→</span>
+              </div>
+            </motion.button>
+          ))}
+        </div>
       )}
     </div>
   );

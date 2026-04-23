@@ -2,36 +2,30 @@
 Pydantic schemas for Location endpoints (Request/Response DTOs).
 """
 
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
+class LinkDTO(BaseModel):
+    toSlug: str
+    label: str
 
-class LocationResponse(BaseModel):
-    """Location data returned to frontend."""
-
+class LocationNode(BaseModel):
+    """Exact schema expected by Frontend Zustand store."""
     id: str
     name: str
     slug: str
-    status: str  # "active" | "inactive"
-    map_x: float
-    map_y: float
-    is_start_node: bool = False
-    background_url: Optional[str] = None
+    status: str
+    mapX: float
+    mapY: float
+    isStartNode: bool
+    description: str
+    introMessage: str
+    backgroundUrl: str
+    suggestedQuestions: List[str]
+    links: List[LinkDTO]
 
+    class Config:
+        from_attributes = True
 
-class LocationDetailResponse(LocationResponse):
-    """Detailed location data with description and links."""
-
-    description: str = ""
-    intro_message: str = ""
-    suggested_questions: list[str] = []
-    links: list[dict] = []  # [{ to_slug, label }]
-
-
-class LocationUpdateRequest(BaseModel):
-    """PUT /api/admin/locations/{id} request body."""
-
-    name: Optional[str] = None
-    description: Optional[str] = None
-    intro_message: Optional[str] = None
-    suggested_questions: Optional[list[str]] = None
+class LocationsListResponse(BaseModel):
+    locations: List[LocationNode]

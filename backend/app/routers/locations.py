@@ -3,19 +3,23 @@ Locations router — Public endpoints for location data.
 Layer 1 (HTTP): Parse request → call Service → return response.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.database import get_db
+from app.services import location_service
+from app.schemas.location import LocationsListResponse
 
 router = APIRouter()
 
 
-@router.get("/locations")
-async def list_locations():
+@router.get("/locations", response_model=LocationsListResponse)
+async def list_locations(db: AsyncSession = Depends(get_db)):
     """
     GET /api/locations
     Returns all locations with basic info for map rendering.
     """
-    # TODO: Call location_service.get_all_locations()
-    return {"locations": [], "message": "Not implemented yet"}
+    return await location_service.get_all_locations(db)
 
 
 @router.get("/locations/{slug}")
