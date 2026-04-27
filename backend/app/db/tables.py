@@ -26,8 +26,6 @@ class Location(Base):
     intro_message = Column(Text, nullable=False, default="")
     status = Column(String(20), nullable=False, default="active")  # active | inactive
     is_start_node = Column(Boolean, nullable=False, default=False)
-    map_x = Column(Float, nullable=False, default=0.0)
-    map_y = Column(Float, nullable=False, default=0.0)
     avatar_model_url = Column(Text, nullable=True)
     background_url = Column(Text, nullable=False, default="")
     voice_config = Column(JSON, nullable=False, default={"voice_name": "Kore"})  # TTS config per location mascot
@@ -49,7 +47,6 @@ class LocationLink(Base):
     from_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     to_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     label = Column(String(255), nullable=False, default="")
-    path_points = Column(JSON, nullable=False, default=list)  # [{x, y}, ...] for map animation
     
     __table_args__ = (
         UniqueConstraint("from_location_id", "to_location_id", name="uix_location_links_from_to"),

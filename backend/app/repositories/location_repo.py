@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from app.db.tables import Location, LocationLink
-
 async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
     """
     Fetch all locations with their links and suggested questions.
@@ -51,8 +50,6 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
             "name": loc.name,
             "slug": loc.slug,
             "status": loc.status,
-            "mapX": loc.map_x,
-            "mapY": loc.map_y,
             "isStartNode": loc.is_start_node,
             "description": loc.description,
             "introMessage": loc.intro_message,
@@ -63,3 +60,4 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
         response_nodes.append(node)
         
     return response_nodes
+

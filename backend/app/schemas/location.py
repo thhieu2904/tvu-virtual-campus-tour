@@ -15,8 +15,6 @@ class LocationNode(BaseModel):
     name: str
     slug: str
     status: str
-    mapX: float
-    mapY: float
     isStartNode: bool
     description: str
     introMessage: str

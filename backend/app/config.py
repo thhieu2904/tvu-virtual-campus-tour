@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # === Security ===
     ADMIN_API_KEY: str = "change-me-in-production"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"]
 
     # === Gemini AI ===
     GEMINI_API_KEY: str = ""

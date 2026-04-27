@@ -1,0 +1,864 @@
+{
+  "map": {
+    "name": "Campus navigation graph - v3 corrected",
+    "coordinateSystem": "normalized_100x100",
+    "origin": "top-left",
+    "sourceImageSize": {
+      "width": 2048,
+      "height": 2048
+    },
+    "sourceImage": "map-isometric v2(1).png",
+    "markedSourceImage": "map-isometric v2 --point(1).png",
+    "routeMode": "blue-centerline-snapped-destinations",
+    "description": "Logical destination nodes are snapped onto blue route centerlines for clean UI rendering."
+  },
+  "rules": {
+    "walkableSource": "Only blue centerlines are routeable.",
+    "nodePlacement": "Destination nodes are placed on route centerlines, not building edges.",
+    "rendering": "Draw only shortest-path results, not all graph nodes.",
+    "activeFiltering": "Current tour mode should only allow active=true destinations.",
+    "a1Loop": "A1 lower loop remains enabled because it is routeable."
+  },
+  "activeDestinations": [
+    "welcome",
+    "b7_front",
+    "d5_front",
+    "c7_front"
+  ],
+  "nodes": [
+    {
+      "id": "welcome",
+      "label": "Cổng chính",
+      "type": "entry",
+      "x": 67.0,
+      "y": 95.0,
+      "active": true
+    },
+    {
+      "id": "b7_front",
+      "label": "Thư viện (B7)",
+      "building": "B7",
+      "type": "destination",
+      "x": 67.0,
+      "y": 18.0,
+      "active": true
+    },
+    {
+      "id": "d5_front",
+      "label": "D5",
+      "building": "D5",
+      "type": "destination",
+      "x": 40.0,
+      "y": 27.0,
+      "active": true
+    },
+    {
+      "id": "c7_front",
+      "label": "Khoa CNTT (C7)",
+      "building": "C7",
+      "type": "destination",
+      "x": 21.5,
+      "y": 57.0,
+      "active": true
+    },
+    {
+      "id": "d6_front",
+      "label": "D6",
+      "building": "D6",
+      "type": "destination",
+      "x": 27.0,
+      "y": 18.0,
+      "active": false
+    },
+    {
+      "id": "d3_front",
+      "label": "D3",
+      "building": "D3",
+      "type": "destination",
+      "x": 27.0,
+      "y": 36.0,
+      "active": false
+    },
+    {
+      "id": "c9_front",
+      "label": "C9",
+      "building": "C9",
+      "type": "destination",
+      "x": 16.0,
+      "y": 47.0,
+      "active": false
+    },
+    {
+      "id": "c6_front",
+      "label": "C6",
+      "building": "C6",
+      "type": "destination",
+      "x": 16.0,
+      "y": 55.0,
+      "active": false
+    },
+    {
+      "id": "c5_front",
+      "label": "C5",
+      "building": "C5",
+      "type": "destination",
+      "x": 16.0,
+      "y": 64.0,
+      "active": false
+    },
+    {
+      "id": "c4_front",
+      "label": "C4",
+      "building": "C4",
+      "type": "destination",
+      "x": 16.0,
+      "y": 72.5,
+      "active": false
+    },
+    {
+      "id": "c3_front",
+      "label": "C3",
+      "building": "C3",
+      "type": "destination",
+      "x": 20.0,
+      "y": 74.0,
+      "active": false
+    },
+    {
+      "id": "c2_front",
+      "label": "C2",
+      "building": "C2",
+      "type": "destination",
+      "x": 31.0,
+      "y": 74.0,
+      "active": false
+    },
+    {
+      "id": "c1_front",
+      "label": "C1",
+      "building": "C1",
+      "type": "destination",
+      "x": 40.0,
+      "y": 90.5,
+      "active": false
+    },
+    {
+      "id": "c8_front",
+      "label": "C8",
+      "building": "C8",
+      "type": "destination",
+      "x": 32.0,
+      "y": 57.0,
+      "active": false
+    },
+    {
+      "id": "a1_front",
+      "label": "A1",
+      "building": "A1",
+      "type": "destination",
+      "x": 61.0,
+      "y": 91.0,
+      "active": false
+    },
+    {
+      "id": "b6_front",
+      "label": "B6",
+      "building": "B6",
+      "type": "destination",
+      "x": 67.0,
+      "y": 30.0,
+      "active": false
+    },
+    {
+      "id": "b5_front",
+      "label": "B5",
+      "building": "B5",
+      "type": "destination",
+      "x": 67.0,
+      "y": 47.0,
+      "active": false
+    },
+    {
+      "id": "b4_front",
+      "label": "B4",
+      "building": "B4",
+      "type": "destination",
+      "x": 67.0,
+      "y": 61.5,
+      "active": false
+    },
+    {
+      "id": "b3_front",
+      "label": "B3",
+      "building": "B3",
+      "type": "destination",
+      "x": 67.0,
+      "y": 70.0,
+      "active": false
+    },
+    {
+      "id": "b2_front",
+      "label": "B2",
+      "building": "B2",
+      "type": "destination",
+      "x": 67.0,
+      "y": 78.0,
+      "active": false
+    },
+    {
+      "id": "b1_front",
+      "label": "B1",
+      "building": "B1",
+      "type": "destination",
+      "x": 67.0,
+      "y": 88.0,
+      "active": false
+    },
+    {
+      "id": "j_main_welcome",
+      "type": "junction",
+      "x": 67.0,
+      "y": 95.0
+    },
+    {
+      "id": "j_main_b1",
+      "type": "junction",
+      "x": 67.0,
+      "y": 88.0
+    },
+    {
+      "id": "j_main_b2",
+      "type": "junction",
+      "x": 67.0,
+      "y": 78.0
+    },
+    {
+      "id": "j_main_b3",
+      "type": "junction",
+      "x": 67.0,
+      "y": 70.0
+    },
+    {
+      "id": "j_main_b4",
+      "type": "junction",
+      "x": 67.0,
+      "y": 61.5
+    },
+    {
+      "id": "j_main_c7",
+      "type": "junction",
+      "x": 67.0,
+      "y": 57.0
+    },
+    {
+      "id": "j_main_b5",
+      "type": "junction",
+      "x": 67.0,
+      "y": 47.0
+    },
+    {
+      "id": "j_main_d3",
+      "type": "junction",
+      "x": 67.0,
+      "y": 36.0
+    },
+    {
+      "id": "j_main_b6",
+      "type": "junction",
+      "x": 67.0,
+      "y": 30.0
+    },
+    {
+      "id": "j_main_b7",
+      "type": "junction",
+      "x": 67.0,
+      "y": 18.0
+    },
+    {
+      "id": "j_top_left_gate",
+      "type": "junction",
+      "x": 8.0,
+      "y": 18.0
+    },
+    {
+      "id": "j_left_top",
+      "type": "junction",
+      "x": 16.0,
+      "y": 18.0
+    },
+    {
+      "id": "j_top_d6",
+      "type": "junction",
+      "x": 27.0,
+      "y": 18.0
+    },
+    {
+      "id": "j_top_mid",
+      "type": "junction",
+      "x": 40.0,
+      "y": 18.0
+    },
+    {
+      "id": "j_mid_d5",
+      "type": "junction",
+      "x": 40.0,
+      "y": 27.0
+    },
+    {
+      "id": "j_mid_d3",
+      "type": "junction",
+      "x": 40.0,
+      "y": 36.0
+    },
+    {
+      "id": "j_mid_c7",
+      "type": "junction",
+      "x": 40.0,
+      "y": 57.0
+    },
+    {
+      "id": "j_mid_c3",
+      "type": "junction",
+      "x": 40.0,
+      "y": 74.0
+    },
+    {
+      "id": "j_mid_a1_top",
+      "type": "junction",
+      "x": 40.0,
+      "y": 88.0
+    },
+    {
+      "id": "j_mid_a1_bottom",
+      "type": "junction",
+      "x": 40.0,
+      "y": 95.0
+    },
+    {
+      "id": "j_left_d3",
+      "type": "junction",
+      "x": 16.0,
+      "y": 36.0
+    },
+    {
+      "id": "j_left_c9",
+      "type": "junction",
+      "x": 16.0,
+      "y": 47.0
+    },
+    {
+      "id": "j_left_c6",
+      "type": "junction",
+      "x": 16.0,
+      "y": 55.0
+    },
+    {
+      "id": "j_left_c5",
+      "type": "junction",
+      "x": 16.0,
+      "y": 64.0
+    },
+    {
+      "id": "j_left_c4",
+      "type": "junction",
+      "x": 16.0,
+      "y": 72.5
+    },
+    {
+      "id": "j_left_c3",
+      "type": "junction",
+      "x": 16.0,
+      "y": 74.0
+    },
+    {
+      "id": "j_left_c1",
+      "type": "junction",
+      "x": 24.0,
+      "y": 91.0
+    },
+    {
+      "id": "j_c7_front",
+      "type": "junction",
+      "x": 21.5,
+      "y": 57.0
+    },
+    {
+      "id": "j_c8_front",
+      "type": "junction",
+      "x": 32.0,
+      "y": 57.0
+    },
+    {
+      "id": "j_c3_front",
+      "type": "junction",
+      "x": 20.0,
+      "y": 74.0
+    },
+    {
+      "id": "j_c2_front",
+      "type": "junction",
+      "x": 31.0,
+      "y": 74.0
+    },
+    {
+      "id": "j_c1_front",
+      "type": "junction",
+      "x": 40.0,
+      "y": 90.5
+    },
+    {
+      "id": "j_a1_loop_left",
+      "type": "junction",
+      "x": 52.0,
+      "y": 95.0
+    },
+    {
+      "id": "j_a1_loop_inner",
+      "type": "junction",
+      "x": 61.0,
+      "y": 91.0
+    },
+    {
+      "id": "j_a1_loop_right",
+      "type": "junction",
+      "x": 67.0,
+      "y": 95.0
+    }
+  ],
+  "edges": [
+    {
+      "from": "welcome",
+      "to": "j_main_welcome",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_welcome",
+      "to": "j_main_b1",
+      "cost": 7.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b1",
+      "to": "j_main_b2",
+      "cost": 10.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b2",
+      "to": "j_main_b3",
+      "cost": 8.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b3",
+      "to": "j_main_b4",
+      "cost": 8.5,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b4",
+      "to": "j_main_c7",
+      "cost": 4.5,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_c7",
+      "to": "j_main_b5",
+      "cost": 10.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b5",
+      "to": "j_main_d3",
+      "cost": 11.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_d3",
+      "to": "j_main_b6",
+      "cost": 6.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b6",
+      "to": "j_main_b7",
+      "cost": 12.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b7",
+      "to": "b7_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b1",
+      "to": "b1_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b2",
+      "to": "b2_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b3",
+      "to": "b3_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b4",
+      "to": "b4_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b5",
+      "to": "b5_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_main_b6",
+      "to": "b6_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_top_left_gate",
+      "to": "j_left_top",
+      "cost": 8.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_top",
+      "to": "j_top_d6",
+      "cost": 11.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_top_d6",
+      "to": "j_top_mid",
+      "cost": 13.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_top_mid",
+      "to": "j_main_b7",
+      "cost": 27.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_top_d6",
+      "to": "d6_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_top_mid",
+      "to": "j_mid_d5",
+      "cost": 9.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_d5",
+      "to": "j_mid_d3",
+      "cost": 9.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_d3",
+      "to": "j_mid_c7",
+      "cost": 21.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_c7",
+      "to": "j_mid_c3",
+      "cost": 17.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_c3",
+      "to": "j_mid_a1_top",
+      "cost": 14.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_a1_top",
+      "to": "j_mid_a1_bottom",
+      "cost": 7.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_d5",
+      "to": "d5_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_d3",
+      "to": "d3_front",
+      "cost": 13.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_d3",
+      "to": "j_mid_d3",
+      "cost": 24.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_d3",
+      "to": "j_main_d3",
+      "cost": 27.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c6",
+      "to": "j_c7_front",
+      "cost": 5.85,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c7_front",
+      "to": "j_c8_front",
+      "cost": 10.5,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c8_front",
+      "to": "j_mid_c7",
+      "cost": 8.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_c7",
+      "to": "j_main_c7",
+      "cost": 27.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c7_front",
+      "to": "c7_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c8_front",
+      "to": "c8_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c3",
+      "to": "j_c3_front",
+      "cost": 4.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c3_front",
+      "to": "j_c2_front",
+      "cost": 11.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c2_front",
+      "to": "j_mid_c3",
+      "cost": 9.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_c3",
+      "to": "j_main_b4",
+      "cost": 29.75,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c3_front",
+      "to": "c3_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c2_front",
+      "to": "c2_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_top",
+      "to": "j_left_d3",
+      "cost": 18.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_d3",
+      "to": "j_left_c9",
+      "cost": 11.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c9",
+      "to": "j_left_c6",
+      "cost": 8.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c6",
+      "to": "j_left_c5",
+      "cost": 9.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c5",
+      "to": "j_left_c4",
+      "cost": 8.5,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c4",
+      "to": "j_left_c3",
+      "cost": 1.5,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c3",
+      "to": "j_left_c1",
+      "cost": 18.79,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c9",
+      "to": "c9_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c6",
+      "to": "c6_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c5",
+      "to": "c5_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c4",
+      "to": "c4_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_left_c1",
+      "to": "j_c1_front",
+      "cost": 16.01,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_c1_front",
+      "to": "c1_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_mid_a1_bottom",
+      "to": "j_a1_loop_left",
+      "cost": 12.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_a1_loop_left",
+      "to": "j_a1_loop_inner",
+      "cost": 9.85,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_a1_loop_inner",
+      "to": "j_a1_loop_right",
+      "cost": 7.21,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_a1_loop_right",
+      "to": "j_main_welcome",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    },
+    {
+      "from": "j_a1_loop_inner",
+      "to": "a1_front",
+      "cost": 0.0,
+      "bidirectional": true,
+      "enabled": true
+    }
+  ]
+}

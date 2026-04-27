@@ -18,6 +18,9 @@ UPGRADE_SQL = [
         "IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'locations' AND column_name = 'created_at' AND data_type = 'timestamp without time zone') THEN "
         "ALTER TABLE locations ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC'; "
         "END IF; "
+        "ALTER TABLE locations DROP COLUMN IF EXISTS map_x CASCADE; "
+        "ALTER TABLE locations DROP COLUMN IF EXISTS map_y CASCADE; "
+        "ALTER TABLE location_links DROP COLUMN IF EXISTS path_points CASCADE; "
         "IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'locations' AND column_name = 'updated_at' AND data_type = 'timestamp without time zone') THEN "
         "ALTER TABLE locations ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC'; "
         "END IF; "
@@ -61,10 +64,6 @@ UPGRADE_SQL = [
     "ALTER TABLE locations ALTER COLUMN status SET NOT NULL;",
     "UPDATE locations SET is_start_node = FALSE WHERE is_start_node IS NULL;",
     "ALTER TABLE locations ALTER COLUMN is_start_node SET NOT NULL;",
-    "UPDATE locations SET map_x = 0.0 WHERE map_x IS NULL;",
-    "ALTER TABLE locations ALTER COLUMN map_x SET NOT NULL;",
-    "UPDATE locations SET map_y = 0.0 WHERE map_y IS NULL;",
-    "ALTER TABLE locations ALTER COLUMN map_y SET NOT NULL;",
     "UPDATE locations SET description = '' WHERE description IS NULL;",
     "ALTER TABLE locations ALTER COLUMN description SET NOT NULL;",
     "UPDATE locations SET intro_message = '' WHERE intro_message IS NULL;",
@@ -72,7 +71,6 @@ UPGRADE_SQL = [
 
     # === location_links ===
     "ALTER TABLE location_links ALTER COLUMN label SET NOT NULL;",
-    "ALTER TABLE location_links ALTER COLUMN path_points SET NOT NULL;",
     (
         "DELETE FROM location_links a USING location_links b "
         "WHERE a.id > b.id "

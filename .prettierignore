@@ -1,0 +1,2 @@
+# Ignore map grid data file (machine-generated, large)
+backend/data/map_grid.json
