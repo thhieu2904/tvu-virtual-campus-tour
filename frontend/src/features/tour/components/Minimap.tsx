@@ -88,40 +88,69 @@ export default function Minimap() {
       {!expanded && (
         <motion.button
           onClick={() => setExpanded(true)}
-          className="absolute top-6 left-6 z-30 w-[120px] h-[120px] rounded-2xl bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.18)] transition-shadow"
+          className="absolute top-6 left-6 z-30 w-[120px] h-[120px] rounded-2xl bg-white border-[3px] border-white shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.25)] transition-shadow"
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="w-full h-full bg-gray-100 relative">
-            <Image
-              src="/map_v3.png"
-              alt="Mini TVU Map"
-              fill
-              className="object-cover opacity-60"
-            />
-            {locations.map((loc) => {
-              const coords = getCoordsBySlug(loc.slug);
-              if (!coords) return null;
+          <div className="w-full h-full bg-gray-100 relative overflow-hidden">
+            {/* Dynamic panning container: centers on current location */}
+            {(() => {
+              const SCALE = 2.2; // 220% zoom
+              const currentCoords = currentSlug ? getCoordsBySlug(currentSlug) : null;
+              const cx = currentCoords ? currentCoords.x : 50;
+              const cy = currentCoords ? currentCoords.y : 50;
+              
+              let left = 50 - cx * SCALE;
+              let top = 40 - cy * SCALE; // Center slightly higher to leave room for bottom text
+              
+              // Clamp so we don't pan past the map edges (allow extra 25% at bottom for text)
+              left = Math.max(100 - SCALE * 100, Math.min(0, left));
+              top = Math.max(100 - SCALE * 100 - 25, Math.min(0, top));
+
               return (
-                <div
-                  key={loc.slug}
-                  className={`absolute w-3 h-3 rounded-full -translate-x-1/2 -translate-y-1/2 ${
-                    loc.slug === currentSlug ? "bg-[#053384]" : "bg-[#f5c518] shadow-sm"
-                  } ${loc.status === "inactive" ? "opacity-40" : ""}`}
-                  style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
+                <div 
+                  className="absolute transition-all duration-1000 ease-in-out"
+                  style={{ 
+                    width: `${SCALE * 100}%`, 
+                    height: `${SCALE * 100}%`, 
+                    top: `${top}%`, 
+                    left: `${left}%` 
+                  }}
                 >
-                  {loc.slug === currentSlug && (
-                    <span className="absolute inset-0 rounded-full bg-[#053384] animate-ping opacity-40" />
-                  )}
+                  <Image
+                    src="/map_v3.png"
+                    alt="Mini TVU Map"
+                    fill
+                    className="object-cover opacity-60"
+                  />
+                  {locations.map((loc) => {
+                    const coords = getCoordsBySlug(loc.slug);
+                    if (!coords) return null;
+                    return (
+                      <div
+                        key={loc.slug}
+                        className={`absolute w-3 h-3 rounded-full -translate-x-1/2 -translate-y-1/2 ${
+                          loc.slug === currentSlug ? "bg-[#053384]" : "bg-[#f5c518] shadow-sm"
+                        } ${loc.status === "inactive" ? "opacity-40" : ""}`}
+                        style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
+                      >
+                        {loc.slug === currentSlug && (
+                          <span className="absolute inset-0 rounded-full bg-[#053384] animate-ping opacity-40" />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            })}
-            <div className="absolute bottom-0 left-0 right-0 bg-white/90 px-2 py-1.5 text-center">
-              <span className="text-[10px] font-medium text-[#053384]">
-                🗺️ Bản đồ
+            })()}
+            
+            {/* Full-width bottom label */}
+            <div className="absolute bottom-0 left-0 right-0 bg-white/95 px-2 py-1.5 text-center border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+              <span className="text-[10px] font-bold text-[#053384] flex items-center justify-center gap-1.5">
+                <span className="text-[11px]">🗺️</span> Bản đồ
               </span>
             </div>
           </div>
