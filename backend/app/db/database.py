@@ -7,8 +7,9 @@ Cấu hình đặc biệt cho Supabase Transaction Pooler (PgBouncer):
 """
 
 import ssl as _ssl
-from urllib.parse import urlparse, quote_plus
+import uuid
 
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -18,19 +19,16 @@ settings = get_settings()
 
 _raw_url = settings.DATABASE_URL or "postgresql+asyncpg://user:pass@localhost:5432/tvu_tour"
 
-# Parse URL để encode password đúng cách (tránh lỗi với ký tự đặc biệt)
-_parsed = urlparse(_raw_url)
-_password = quote_plus(_parsed.password) if _parsed.password else ""
-_driver = "postgresql+asyncpg"
-db_url = (
-    f"{_driver}://{_parsed.username}:{_password}"
-    f"@{_parsed.hostname}:{_parsed.port or 5432}{_parsed.path}"
-)
+# make_url() là cách chuẩn của SQLAlchemy để parse database URL.
+# .set(drivername=...) ép driver thành asyncpg bất kể .env ghi gì
+# (postgresql://, postgres://, hay postgresql+asyncpg:// đều OK).
+# Cách này tự xử lý encode password, không cần quote_plus() thủ công.
+_url = make_url(_raw_url)
+db_url = _url.set(drivername="postgresql+asyncpg")
 
 # Xác định có cần SSL không (Supabase bắt buộc SSL)
-_is_remote = "localhost" not in db_url and "127.0.0.1" not in db_url
-
-import uuid
+_host = db_url.host or "localhost"
+_is_remote = _host not in ("localhost", "127.0.0.1")
 
 # Build connect_args — tắt hoàn toàn prepared statement cache cho PgBouncer
 _connect_args: dict = {

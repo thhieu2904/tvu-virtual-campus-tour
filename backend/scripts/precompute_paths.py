@@ -92,7 +92,7 @@ SLUG_TO_NODE = {
     "cong-chinh": "welcome",
     "thu-vien": "b7_front",
     "khoa-cntt": "c7_front",
-    "d5-nha-hoc": "d5_front",
+    "d5-giang-duong": "d5_front",
 }
 
 

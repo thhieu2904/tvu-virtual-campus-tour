@@ -18,8 +18,6 @@ export interface LocationNode {
   name: string;
   slug: string;
   status: "active" | "inactive";
-  mapX?: number;
-  mapY?: number;
   isStartNode: boolean;
   description: string;
   introMessage: string;

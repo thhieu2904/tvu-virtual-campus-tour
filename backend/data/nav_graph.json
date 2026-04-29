@@ -21,6 +21,7 @@
   "nodes": [
     {
       "id": "welcome",
+      "slug": "cong-chinh",
       "x": 68.83,
       "y": 96.06,
       "label": "Cổng chính",
@@ -29,6 +30,7 @@
     },
     {
       "id": "b7_front",
+      "slug": "thu-vien",
       "x": 66.36,
       "y": 18.17,
       "label": "Thư viện (B7)",
@@ -38,15 +40,17 @@
     },
     {
       "id": "d5_front",
+      "slug": "d5-giang-duong",
       "x": 40.64,
       "y": 27.03,
-      "label": "D5",
+      "label": "Giảng đường D5",
       "building": "D5",
       "type": "destination",
       "active": true
     },
     {
       "id": "c7_front",
+      "slug": "khoa-cntt",
       "x": 21.89,
       "y": 57.74,
       "label": "Khoa CNTT (C7)",
