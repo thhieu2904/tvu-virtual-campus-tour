@@ -22,6 +22,11 @@ class Settings(BaseSettings):
 
     # === Gemini AI ===
     GEMINI_API_KEY: str = ""
+    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    GEMINI_TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
+    GEMINI_EMBEDDING_DIMENSIONS: int = 768
+    GEMINI_DEFAULT_VOICE: str = "Kore"
 
     # === Supabase (PostgreSQL + pgvector) ===
     SUPABASE_URL: str = ""

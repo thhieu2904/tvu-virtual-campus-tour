@@ -3,10 +3,32 @@ Location Repository — Data access for locations and location_links.
 Layer 3 (Data Access): Only knows SQL/ORM, does NOT know HTTP.
 """
 
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from app.db.tables import Location, LocationLink
+
+
+async def get_by_id(db: AsyncSession, location_id: str | UUID) -> Location | None:
+    """Get a single location by ID (UUID string or UUID object)."""
+    if isinstance(location_id, str):
+        location_id = UUID(location_id)
+    result = await db.execute(
+        select(Location).where(Location.id == location_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_by_slug(db: AsyncSession, slug: str) -> Location | None:
+    """Get a single location by slug."""
+    result = await db.execute(
+        select(Location).where(Location.slug == slug)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
     """
     Fetch all locations with their links and suggested questions.
@@ -60,4 +82,3 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
         response_nodes.append(node)
         
     return response_nodes
-

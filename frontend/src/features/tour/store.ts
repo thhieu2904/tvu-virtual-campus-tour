@@ -32,6 +32,7 @@ interface TourState {
   currentLocationSlug: string;
   isLoading: boolean;
   isTransitioning: boolean;
+  avatarState: "idle" | "thinking" | "speaking";
 
   // === Computed ===
   currentLocation: () => LocationNode | undefined;
@@ -40,6 +41,7 @@ interface TourState {
   fetchLocations: () => Promise<void>;
   navigateTo: (slug: string) => void;
   setLoading: (loading: boolean) => void;
+  setAvatarState: (state: "idle" | "thinking" | "speaking") => void;
 }
 
 // ===== Store =====
@@ -49,6 +51,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   currentLocationSlug: "",
   isLoading: true,
   isTransitioning: false,
+  avatarState: "idle",
 
   currentLocation: () => {
     const { locations, currentLocationSlug } = get();
@@ -97,4 +100,5 @@ export const useTourStore = create<TourState>((set, get) => ({
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
+  setAvatarState: (state) => set({ avatarState: state }),
 }));

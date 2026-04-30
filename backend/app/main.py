@@ -19,7 +19,17 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # --- Startup ---
     # TODO: Initialize DB connection pool
-    # TODO: Initialize Gemini client
+    from app.ai.core_client import get_client
+    settings = get_settings()
+    if settings.GEMINI_API_KEY:
+        try:
+            get_client()
+            print("🤖 Gemini client initialized")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize Gemini client: {e}")
+    else:
+        print("⚠️ GEMINI_API_KEY not set, AI features disabled")
+        
     print("🚀 TVU Virtual Campus Tour API starting...")
     yield
     # --- Shutdown ---

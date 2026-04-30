@@ -3,10 +3,17 @@ Admin router — Protected endpoints for content management.
 Layer 1 (HTTP): All endpoints require X-Admin-Key header.
 """
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form
-from typing import Optional
+from uuid import UUID
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.database import get_db
 from app.dependencies import verify_admin_key
+from app.repositories import document_repo, location_repo
+from app.services import ingest_service, storage_service
+from app.schemas.document import IngestResponse, DocumentStatusResponse
 
 router = APIRouter(dependencies=[Depends(verify_admin_key)])
 
@@ -57,19 +64,59 @@ async def upload_background(
 
 
 # === Documents (RAG) ===
-@router.post("/ingest")
+@router.post("/ingest", response_model=IngestResponse, status_code=202)
 async def ingest_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str = Form(...),
     location_id: Optional[str] = Form(None),
+    session: AsyncSession = Depends(get_db),
 ):
     """
     POST /api/admin/ingest
     Upload PDF/DOCX → extract → chunk → embed → store in pgvector.
     Returns immediately with status 'pending', processes in background.
     """
-    # TODO: Call ingest_service.start_ingestion(file, title, location_id)
-    return {"document_id": "placeholder", "status": "pending"}
+    # Read file bytes
+    file_bytes = await file.read()
+    filename = file.filename or "document.pdf"
+
+    # Validate file
+    try:
+        ingest_service.validate_file(filename, len(file_bytes))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Resolve location UUID and slug
+    loc_uuid: UUID | None = None
+    loc_slug: str | None = None
+    if location_id:
+        location = await location_repo.get_by_id(session, location_id)
+        if location:
+            loc_uuid = location.id
+            loc_slug = location.slug
+        else:
+            raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
+
+    # Stage 1: Upload to R2 + create DB record
+    doc_id = await ingest_service.start_ingestion(
+        file_bytes=file_bytes,
+        filename=filename,
+        title=title,
+        location_id=loc_uuid,
+        location_slug=loc_slug,
+    )
+
+    # Stage 2: Schedule background processing
+    background_tasks.add_task(
+        ingest_service.process_document_background,
+        document_id=doc_id,
+        file_bytes=file_bytes,
+        filename=filename,
+        location_id=loc_uuid,
+    )
+
+    return IngestResponse(document_id=str(doc_id), status="pending")
 
 
 @router.get("/documents")
@@ -79,33 +126,59 @@ async def list_documents(
     search: Optional[str] = None,
     page: int = 1,
     limit: int = 10,
+    session: AsyncSession = Depends(get_db),
 ):
     """
     GET /api/admin/documents?location_id=&status=&search=&page=&limit=
     List all documents with filtering and pagination.
     """
-    # TODO: Call document_service.list_documents(filters)
-    return {"total": 0, "documents": []}
+    loc_uuid = UUID(location_id) if location_id else None
+    return await document_repo.list_documents(
+        session,
+        location_id=loc_uuid,
+        status=status,
+        search=search,
+        page=page,
+        limit=limit,
+    )
 
 
-@router.get("/documents/{document_id}/status")
-async def get_document_status(document_id: str):
+@router.get("/documents/{document_id}/status", response_model=DocumentStatusResponse)
+async def get_document_status(
+    document_id: str,
+    session: AsyncSession = Depends(get_db),
+):
     """
     GET /api/admin/documents/{id}/status
     Check processing status of a document.
     """
-    # TODO: Call document_service.get_status(document_id)
-    return {"status": "pending", "chunk_count": 0}
+    doc = await document_repo.get_by_id(session, UUID(document_id))
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return DocumentStatusResponse(
+        status=doc.status,
+        chunk_count=doc.chunk_count,
+        error_message=doc.error_message,
+    )
 
 
 @router.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
+async def delete_document(
+    document_id: str,
+    session: AsyncSession = Depends(get_db),
+):
     """
     DELETE /api/admin/documents/{id}
     Delete document + chunks + file from R2.
     """
-    # TODO: Call document_service.delete(document_id)
-    return {"success": True}
+    file_url = await document_repo.delete_with_chunks(session, UUID(document_id))
+    if file_url is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Delete from R2 (best-effort, don't fail if R2 delete fails)
+    await storage_service.delete_file(file_url)
+
+    return {"success": True, "deleted_file": file_url}
 
 
 # === Media/Assets ===
