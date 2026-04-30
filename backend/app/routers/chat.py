@@ -58,6 +58,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
                             ensure_ascii=False,
                         ),
                     }
+                await stream_session.commit()
 
         return EventSourceResponse(event_generator())
 

@@ -176,19 +176,19 @@ export default function PanoramaViewer({
 
       {/* Navigation Links Overlay */}
       {isLoaded && !hasError && links && links.length > 0 && onNavigate && (
-        <div className="absolute top-1/2 right-8 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
+        <div className="absolute top-[60%] right-6 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
           {links.map((link) => (
             <motion.button
               key={link.toSlug}
               onClick={() => onNavigate(link.toSlug)}
-              className="flex items-center gap-3 bg-black/30 hover:bg-[#053384]/80 backdrop-blur-md px-5 py-3 rounded-2xl text-white/90 border border-white/10 shadow-lg transition-colors group cursor-pointer"
+              className="flex items-center gap-3 bg-black/50 hover:bg-black/70 backdrop-blur-3xl px-5 py-3 rounded-2xl text-white border border-white/20 shadow-2xl transition-colors group cursor-pointer"
               whileHover={{ scale: 1.05, x: -5 }}
               whileTap={{ scale: 0.95 }}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
             >
               <div className="flex flex-col items-end">
-                <span className="text-[10px] uppercase tracking-wider text-white/50 group-hover:text-white/80 transition-colors">
+                <span className="text-[10px] uppercase tracking-wider text-white/50 group-hover:text-white/70 transition-colors">
                   Di chuyển đến
                 </span>
                 <span className="text-sm font-bold whitespace-nowrap">

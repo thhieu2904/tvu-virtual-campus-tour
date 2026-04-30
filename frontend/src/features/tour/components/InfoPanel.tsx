@@ -19,149 +19,154 @@ const DEMO_INTRO_VIDEO: MediaAsset = {
   caption: "Video giới thiệu không gian",
 };
 
-type PanelMode = "video" | "info" | "chat";
+type PanelMode = "video" | "info";
 
 export default function InfoPanel() {
   const [mode, setMode] = useState<PanelMode>("video");
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const location = useTourStore((s) => s.currentLocation());
 
   if (!location) return null;
 
-  if (isCollapsed) {
-    return (
-      <motion.button
-        onClick={() => setIsCollapsed(false)}
-        className="absolute top-6 right-6 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] cursor-pointer text-[#053384] hover:bg-[#e8eef8] transition-colors"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-        </svg>
-      </motion.button>
-    );
-  }
-
   return (
     <motion.div
-      className="absolute top-6 right-6 z-20 w-[360px] max-h-[calc(100vh-120px)] flex flex-col bg-white rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden"
+      className="absolute top-6 right-6 z-20 w-[360px] flex flex-col bg-black/50 backdrop-blur-3xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden"
       initial={{ opacity: 0, x: 40 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+      <div className={`flex items-center justify-between px-5 py-4 bg-white/5 transition-colors ${isExpanded ? 'border-b border-white/10' : ''}`}>
         <div className="flex items-center gap-2">
           <span className="text-base">📍</span>
-          <h3 className="text-sm font-bold text-[#053384] truncate max-w-[150px]">{location.name}</h3>
+          <h3 className="text-sm font-bold text-white truncate max-w-[150px]">{location.name}</h3>
         </div>
         <div className="flex items-center gap-1.5">
           {/* Mode tabs */}
-          {(["video", "info", "chat"] as PanelMode[]).map((m) => (
+          {(["video", "info"] as PanelMode[]).map((m) => (
             <button
               key={m}
-              onClick={() => setMode(m)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                mode === m
-                  ? "bg-[#053384] text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              onClick={() => {
+                setMode(m);
+                setIsExpanded(true);
+              }}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer border ${
+                isExpanded && mode === m
+                  ? "bg-white/20 text-white border-white/30 shadow-md"
+                  : "bg-transparent text-white/50 border-transparent hover:bg-white/10 hover:text-white"
               }`}
             >
-              {m === "video" ? "🎬" : m === "info" ? "📋" : "💬"}
+              {m === "video" ? "🎬" : "🖼️"}
             </button>
           ))}
           {/* Collapse */}
-          <button
-            onClick={() => setIsCollapsed(true)}
-            className="ml-1 w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors text-gray-500 text-xs cursor-pointer"
-          >
-            ✕
-          </button>
+          {isExpanded && (
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="ml-1 w-9 h-9 flex items-center justify-center rounded-xl bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white text-sm cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="p-5 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
         <AnimatePresence mode="wait">
           {mode === "video" && (
             <motion.div
               key="video"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex flex-col gap-3"
             >
-              {/* Video placeholder */}
-              <div className="w-full aspect-video bg-gradient-to-br from-[#053384] to-[#1a4fa0] rounded-2xl flex items-center justify-center shadow-inner">
-                <div className="text-center text-white/80">
-                  <div className="text-4xl mb-2">▶️</div>
-                  <p className="text-xs">Video giới thiệu</p>
+              {/* Premium Video Placeholder */}
+              <div className="relative w-full aspect-video rounded-2xl overflow-hidden group cursor-pointer border border-white/10 bg-black/40 shadow-inner">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 group-hover:scale-105 transition-transform duration-700" />
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors duration-300" />
+                
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 group-hover:scale-110 group-hover:bg-blue-600/90 transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+                    <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 text-center">
-                {DEMO_INTRO_VIDEO.caption}
-              </p>
+              
+              <div className="flex items-center justify-between px-2 mt-1">
+                 <p className="text-[14px] font-medium text-white/90 tracking-wide">Video Không gian 360</p>
+                 <span className="text-[11px] px-2.5 py-1 bg-white/10 rounded-full text-white/70 font-medium">02:15</span>
+              </div>
             </motion.div>
           )}
 
           {mode === "info" && (
             <motion.div
               key="info"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex flex-col gap-5"
             >
-              <div className="text-sm text-[#333] leading-relaxed">
-                <p className="font-bold text-[#053384] mb-2">
-                  Giới thiệu
-                </p>
-                <p>
-                  {location.description || "Đang cập nhật nội dung giới thiệu..."}
+              {/* Giới thiệu block */}
+              <div>
+                <h4 className="text-[11px] uppercase tracking-widest text-white/50 font-bold mb-2">Thông tin địa điểm</h4>
+                <p className="text-[14px] text-white/80 leading-relaxed font-light">
+                  {location.description || "Đang cập nhật nội dung giới thiệu chi tiết về khu vực này..."}
                 </p>
               </div>
 
               {/* Image Gallery placeholder */}
-              <div className="grid grid-cols-2 gap-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="aspect-[4/3] bg-gray-100 rounded-xl flex items-center justify-center text-gray-300 text-xs shadow-sm"
-                  >
-                    🖼️ Ảnh {i}
-                  </div>
-                ))}
+              <div>
+                <h4 className="text-[11px] uppercase tracking-widest text-white/50 font-bold mb-2">Thư viện ảnh</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="relative aspect-[4/3] rounded-xl overflow-hidden group cursor-pointer border border-white/10 bg-white/5 shadow-sm"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-white/10 group-hover:scale-110 transition-transform duration-500" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-100 transition-opacity">
+                        <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Sources */}
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">
-                  Thông tin từ
-                </p>
-                <p className="text-xs text-[#053384]">
-                  📄 Dữ liệu khuôn viên TVU
-                </p>
+              <div className="mt-1 p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3.5">
+                <div className="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[10px] text-blue-200/60 uppercase font-bold tracking-wider mb-0.5">Nguồn dữ liệu</p>
+                  <p className="text-[13px] text-blue-300 font-semibold tracking-wide">Hệ thống TVU Tour</p>
+                </div>
               </div>
             </motion.div>
           )}
-
-          {mode === "chat" && (
-            <motion.div
-              key="chat"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-sm text-gray-500 text-center py-8"
-            >
-              <p>💬 Lịch sử hội thoại sẽ hiện ở đây</p>
-              <p className="text-xs mt-1">Kéo lên để xem lại tin nhắn cũ</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

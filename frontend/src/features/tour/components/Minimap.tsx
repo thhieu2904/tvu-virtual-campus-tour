@@ -88,7 +88,7 @@ export default function Minimap() {
       {!expanded && (
         <motion.button
           onClick={() => setExpanded(true)}
-          className="absolute top-6 left-6 z-30 w-[120px] h-[120px] rounded-2xl bg-white border-[3px] border-white shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.25)] transition-shadow"
+          className="absolute top-6 left-6 z-30 w-[120px] h-[120px] rounded-xl bg-white border-[3px] border-white shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.25)] transition-shadow"
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
           initial={{ opacity: 0, scale: 0.8 }}
@@ -124,6 +124,8 @@ export default function Minimap() {
                     src="/map_v3.png"
                     alt="Mini TVU Map"
                     fill
+                    sizes="200px"
+                    priority
                     className="object-cover opacity-60"
                   />
                   {locations.map((loc) => {

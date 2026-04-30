@@ -160,36 +160,45 @@ async def generate_response_stream(
 
     queue: asyncio.Queue[StreamChunk | None] = asyncio.Queue()
 
+    loop = asyncio.get_running_loop()
+
     def _iterate_stream():
         """Runs in a worker thread — iterates the blocking SDK stream."""
-        stream = get_client().models.generate_content_stream(
-            model=settings.GEMINI_CHAT_MODEL,
-            contents=messages,
-            config=config,
-        )
-        for chunk in stream:
-            candidates = getattr(chunk, "candidates", None)
-            if not candidates:
-                continue
-            content = getattr(candidates[0], "content", None)
-            if not content or not getattr(content, "parts", None):
-                continue
-            for part in content.parts:
-                if getattr(part, "thought", False):
-                    asyncio.get_event_loop().call_soon_threadsafe(
-                        queue.put_nowait,
-                        StreamChunk(type="thinking", content=part.text),
-                    )
-                else:
-                    asyncio.get_event_loop().call_soon_threadsafe(
-                        queue.put_nowait,
-                        StreamChunk(type="text", content=part.text),
-                    )
-        # Signal completion
-        asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, None)
+        try:
+            stream = get_client().models.generate_content_stream(
+                model=settings.GEMINI_CHAT_MODEL,
+                contents=messages,
+                config=config,
+            )
+            for chunk in stream:
+                candidates = getattr(chunk, "candidates", None)
+                if not candidates:
+                    continue
+                content = getattr(candidates[0], "content", None)
+                if not content or not getattr(content, "parts", None):
+                    continue
+                for part in content.parts:
+                    if getattr(part, "thought", False):
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            StreamChunk(type="thinking", content=part.text),
+                        )
+                    else:
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            StreamChunk(type="text", content=part.text),
+                        )
+        except Exception as e:
+            # Send error to queue if it fails
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                StreamChunk(type="error", content=f"Xin lỗi, có lỗi kết nối với AI ({str(e)})."),
+            )
+        finally:
+            # Signal completion
+            loop.call_soon_threadsafe(queue.put_nowait, None)
 
     # Start the blocking iteration in a background thread
-    loop = asyncio.get_running_loop()
     task = loop.run_in_executor(None, _iterate_stream)
 
     # Yield chunks as they arrive in the queue

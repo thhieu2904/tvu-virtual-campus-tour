@@ -14,7 +14,7 @@ interface ChatState {
   _setMessages: (messages: ChatMessage[]) => void;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -72,7 +72,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
-          location_id: locationId,
+          location_id: locationId || "00000000-0000-0000-0000-000000000000", // Fallback if missing
           session_id: sessionId,
           stream: true,
           history,
@@ -96,11 +96,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
+        const lines = buffer.split(/\r?\n\r?\n/);
         // Keep the last partial block in the buffer
         buffer = lines.pop() || "";
 
         for (const block of lines) {
+          // Ignore events that are not standard text chunks (like sources or thoughts)
+          if (block.trim() !== "" && !block.includes("event: text")) {
+            continue;
+          }
+
           const dataMatch = block.match(/data: (.*)/);
           if (dataMatch) {
             try {
