@@ -9,7 +9,11 @@ import CampusMap, { getCoordsBySlug, getPathPoints, getAllPathsFrom } from "./Ca
 import { CloseButton } from "@/components/ui/close-button";
 
 export default function Minimap() {
-  const [expanded, setExpanded] = useState(false);
+  const activeOverlay = useTourStore((s) => s.activeOverlay);
+  const setActiveOverlay = useTourStore((s) => s.setActiveOverlay);
+  const expanded = activeOverlay === "map";
+  const setExpanded = (val: boolean) => setActiveOverlay(val ? "map" : "none");
+
   const locations = useTourStore((s) => s.locations);
   const currentSlug = useTourStore((s) => s.currentLocationSlug);
   const isTransitioning = useTourStore((s) => s.isTransitioning);

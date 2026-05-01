@@ -3,6 +3,7 @@ Chat Engine — Orchestrator for Chat + Thinking functionality.
 """
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from typing import AsyncGenerator
 from google.genai import types
@@ -18,12 +19,13 @@ class ChatResult:
     text: str
     thinking: str | None = None
     usage: dict = field(default_factory=dict)
+    function_calls: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class StreamChunk:
     """A single chunk yielded during streaming."""
-    type: str    # "thinking" | "text" | "done"
+    type: str    # "thinking" | "text" | "tool_call" | "done"
     content: str
 
 
@@ -49,8 +51,9 @@ def _build_config(
     system_prompt: str,
     enable_thinking: bool,
     thinking_budget: int,
+    tools: list | None = None,
 ) -> types.GenerateContentConfig:
-    """Build GenerateContentConfig with optional thinking."""
+    """Build GenerateContentConfig with optional thinking and tools."""
     config_args: dict = {
         "system_instruction": types.Content(
             parts=[types.Part.from_text(text=system_prompt)]
@@ -60,16 +63,24 @@ def _build_config(
         config_args["thinking_config"] = types.ThinkingConfig(
             thinking_budget=thinking_budget
         )
+    if tools:
+        config_args["tools"] = tools
+        # Disable auto function calling — we orchestrate manually in rag_service
+        # because search tools need DB access that the SDK can't auto-invoke.
+        config_args["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(
+            disable=True
+        )
     return types.GenerateContentConfig(**config_args)
 
 
-def _parse_response(result) -> tuple[str, str | None, dict]:
+def _parse_response(result) -> tuple[str, str | None, dict, list[dict]]:
     """
-    Parse a Gemini response into (answer_text, thinking_text, usage_dict).
-    Safely handles missing candidates or parts.
+    Parse a Gemini response into (answer_text, thinking_text, usage_dict, function_calls).
+    Safely handles missing candidates, parts, and function_call parts.
     """
     thinking_parts: list[str] = []
     answer_parts: list[str] = []
+    function_calls: list[dict] = []
 
     candidates = getattr(result, "candidates", None)
     if candidates and len(candidates) > 0:
@@ -78,6 +89,12 @@ def _parse_response(result) -> tuple[str, str | None, dict]:
             for part in content.parts:
                 if getattr(part, "thought", False):
                     thinking_parts.append(part.text)
+                elif getattr(part, "function_call", None):
+                    fc = part.function_call
+                    function_calls.append({
+                        "name": fc.name,
+                        "args": dict(fc.args) if fc.args else {},
+                    })
                 else:
                     answer_parts.append(part.text)
 
@@ -93,7 +110,7 @@ def _parse_response(result) -> tuple[str, str | None, dict]:
             "total_tokens": getattr(usage, "total_token_count", 0),
         }
 
-    return answer_text, thinking_text, usage_dict
+    return answer_text, thinking_text, usage_dict, function_calls
 
 
 async def generate_response(
@@ -104,10 +121,12 @@ async def generate_response(
     voice_style: str = "thân thiện",
     enable_thinking: bool = False,
     thinking_budget: int = 1024,
+    tools: list | None = None,
+    available_slugs: str = "",
 ) -> ChatResult:
     """
-    Calls Gemini Flash with RAG context and history.
-    Returns a structured ChatResult with text, thinking, and usage.
+    Calls Gemini Flash with RAG context, history, and optional tools.
+    Returns a structured ChatResult with text, thinking, usage, and function_calls.
     """
     settings = get_settings()
 
@@ -116,10 +135,11 @@ async def generate_response(
         location_name=location_name,
         voice_style=voice_style,
         rag_context=rag_context_str,
+        available_slugs=available_slugs,
     )
 
     messages = _build_messages(query, history)
-    config = _build_config(system_prompt, enable_thinking, thinking_budget)
+    config = _build_config(system_prompt, enable_thinking, thinking_budget, tools=tools)
 
     result = await asyncio.to_thread(
         get_client().models.generate_content,
@@ -128,8 +148,13 @@ async def generate_response(
         config=config,
     )
 
-    answer_text, thinking_text, usage_dict = _parse_response(result)
-    return ChatResult(text=answer_text, thinking=thinking_text, usage=usage_dict)
+    answer_text, thinking_text, usage_dict, function_calls = _parse_response(result)
+    return ChatResult(
+        text=answer_text,
+        thinking=thinking_text,
+        usage=usage_dict,
+        function_calls=function_calls,
+    )
 
 
 async def generate_response_stream(
@@ -140,11 +165,15 @@ async def generate_response_stream(
     voice_style: str = "thân thiện",
     enable_thinking: bool = False,
     thinking_budget: int = 1024,
+    tools: list | None = None,
+    available_slugs: str = "",
 ) -> AsyncGenerator[StreamChunk, None]:
     """
     Stream response chunks via SSE.
     Uses an asyncio.Queue to bridge the blocking iterator from the SDK
     to the async generator consumed by FastAPI/SSE.
+
+    Supports function_call chunks when tools are provided.
     """
     settings = get_settings()
 
@@ -153,10 +182,11 @@ async def generate_response_stream(
         location_name=location_name,
         voice_style=voice_style,
         rag_context=rag_context_str,
+        available_slugs=available_slugs,
     )
 
     messages = _build_messages(query, history)
-    config = _build_config(system_prompt, enable_thinking, thinking_budget)
+    config = _build_config(system_prompt, enable_thinking, thinking_budget, tools=tools)
 
     queue: asyncio.Queue[StreamChunk | None] = asyncio.Queue()
 
@@ -182,6 +212,18 @@ async def generate_response_stream(
                         loop.call_soon_threadsafe(
                             queue.put_nowait,
                             StreamChunk(type="thinking", content=part.text),
+                        )
+                    elif getattr(part, "function_call", None):
+                        fc = part.function_call
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            StreamChunk(
+                                type="tool_call",
+                                content=json.dumps({
+                                    "name": fc.name,
+                                    "args": dict(fc.args) if fc.args else {},
+                                }, ensure_ascii=False),
+                            ),
                         )
                     else:
                         loop.call_soon_threadsafe(

@@ -14,10 +14,22 @@ export default function TourPage() {
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const isLoading = useTourStore((s) => s.isLoading);
   const navigateTo = useTourStore((s) => s.navigateTo);
+  const avatarState = useTourStore((s) => s.avatarState);
 
   useEffect(() => {
     fetchLocations();
   }, [fetchLocations]);
+
+  // Map AI chat state to 3D Mascot animations
+  const getAvatarAnimation = () => {
+    switch (avatarState) {
+      case "thinking": return "Texting"; // AI is loading/thinking
+      case "speaking": return "HeadNod"; // AI is streaming text
+      case "idle": 
+      default: 
+        return "Thankful"; // AI is done (bows/smiles once, then auto-returns to HeadNod)
+    }
+  };
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#1a1a2e]">
@@ -46,7 +58,7 @@ export default function TourPage() {
           location && !isLoading ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <Avatar3D animation="HeadNod" />
+        <Avatar3D animation={getAvatarAnimation() as any} />
       </div>
 
       {/* === UI Overlays === */}

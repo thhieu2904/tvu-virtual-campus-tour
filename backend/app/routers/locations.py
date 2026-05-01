@@ -3,12 +3,13 @@ Locations router — Public endpoints for location data.
 Layer 1 (HTTP): Parse request → call Service → return response.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.services import location_service
 from app.schemas.location import LocationsListResponse
+from app.repositories import location_repo, media_repo
 
 router = APIRouter()
 
@@ -23,23 +24,36 @@ async def list_locations(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/locations/{slug}")
-async def get_location(slug: str):
+async def get_location(slug: str, db: AsyncSession = Depends(get_db)):
     """
     GET /api/locations/{slug}
     Returns detailed info for a specific location.
     """
-    # TODO: Call location_service.get_location_by_slug(slug)
-    return {"slug": slug, "message": "Not implemented yet"}
+    location = await location_repo.get_by_slug(db, slug)
+    if not location:
+        return {"error": "Location not found", "slug": slug}
+    return {
+        "id": str(location.id),
+        "name": location.name,
+        "slug": location.slug,
+        "description": location.description,
+        "intro_message": location.intro_message,
+        "background_url": location.background_url,
+    }
 
 
 @router.get("/locations/{slug}/assets")
-async def get_location_assets(slug: str):
+async def get_location_assets(
+    slug: str,
+    media_type: str | None = Query(None, description="Filter: image, video, gif, or all"),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    GET /api/locations/{slug}/assets
+    GET /api/locations/{slug}/assets?media_type=image
     Returns media assets for a location's Info Panel.
     """
-    # TODO: Call media_service.get_assets_by_location(slug)
-    return {"assets": [], "message": "Not implemented yet"}
+    assets = await media_repo.get_by_location_slug(db, slug, media_type=media_type)
+    return {"assets": assets, "total": len(assets)}
 
 
 @router.get("/locations/{slug}/questions")
@@ -50,3 +64,4 @@ async def get_suggested_questions(slug: str):
     """
     # TODO: Call location_service.get_questions(slug)
     return {"questions": [], "message": "Not implemented yet"}
+

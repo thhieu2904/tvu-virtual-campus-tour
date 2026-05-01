@@ -26,6 +26,16 @@ export interface LocationNode {
   links: { toSlug: string; label: string }[];
 }
 
+export interface MediaItem {
+  id: string;
+  type: "image" | "video" | "gif";
+  url: string;
+  caption: string;
+  keywords: string[];
+  is_intro: boolean;
+  sort_order: number;
+}
+
 interface TourState {
   // === Data ===
   locations: LocationNode[];
@@ -33,15 +43,21 @@ interface TourState {
   isLoading: boolean;
   isTransitioning: boolean;
   avatarState: "idle" | "thinking" | "speaking";
+  activeOverlay: "none" | "info" | "map";
+  mediaItems: MediaItem[];
+  navigatedByAgent: boolean; // true when AI Agent triggered the navigation
 
   // === Computed ===
   currentLocation: () => LocationNode | undefined;
 
   // === Actions ===
   fetchLocations: () => Promise<void>;
-  navigateTo: (slug: string) => void;
+  navigateTo: (slug: string, source?: "agent" | "user") => void;
   setLoading: (loading: boolean) => void;
   setAvatarState: (state: "idle" | "thinking" | "speaking") => void;
+  setActiveOverlay: (overlay: "none" | "info" | "map") => void;
+  setMediaItems: (items: MediaItem[]) => void;
+  clearMediaItems: () => void;
 }
 
 // ===== Store =====
@@ -52,6 +68,9 @@ export const useTourStore = create<TourState>((set, get) => ({
   isLoading: true,
   isTransitioning: false,
   avatarState: "idle",
+  activeOverlay: "none",
+  mediaItems: [],
+  navigatedByAgent: false,
 
   currentLocation: () => {
     const { locations, currentLocationSlug } = get();
@@ -81,7 +100,7 @@ export const useTourStore = create<TourState>((set, get) => ({
     }
   },
 
-  navigateTo: (slug) => {
+  navigateTo: (slug, source = "user") => {
     const { locations, currentLocationSlug } = get();
     if (slug === currentLocationSlug) return;
 
@@ -89,16 +108,22 @@ export const useTourStore = create<TourState>((set, get) => ({
     if (!target || target.status === "inactive") return;
 
     // Transition animation: fade out → swap data → fade in
-    set({ isTransitioning: true });
+    set({ isTransitioning: true, navigatedByAgent: source === "agent" });
 
     setTimeout(() => {
       set({
         currentLocationSlug: slug,
         isTransitioning: false,
+        // Only clear media on user navigation, NOT on agent navigation
+        // (agent will apply pending media after transition)
+        ...(source === "user" ? { mediaItems: [] } : {}),
       });
     }, 600); // Match CSS transition duration
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
   setAvatarState: (state) => set({ avatarState: state }),
+  setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+  setMediaItems: (items) => set({ mediaItems: items }),
+  clearMediaItems: () => set({ mediaItems: [] }),
 }));

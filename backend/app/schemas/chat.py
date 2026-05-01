@@ -10,7 +10,7 @@ class ChatRequest(BaseModel):
     """POST /api/chat request body."""
 
     message: str
-    location_id: str  # Required — kiosk always knows current location
+    location_id: Optional[str] = None
     session_id: Optional[str] = None
     input_type: str = "text"  # "text" | "voice"
     history: Optional[list[dict]] = None  # Frontend sends recent history in-memory

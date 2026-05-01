@@ -7,32 +7,52 @@ import { useChatStore } from "../store";
 
 export default function ChatOverlay() {
   const location = useTourStore((s) => s.currentLocation());
-  const navigateTo = useTourStore((s) => s.navigateTo);
 
-  const { messages, isLoading, initSession, sendMessage, _setMessages } = useChatStore();
+  const { messages, isLoading, initSession, sendMessage, addMessage, _setMessages, _touchIdleTimer } = useChatStore();
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [showSubtitle, setShowSubtitle] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const prevSlugRef = useRef<string | null>(null);
 
   // Khởi tạo session
   useEffect(() => {
     initSession();
   }, [initSession]);
 
-  // Cập nhật câu chào khi đổi địa điểm
+  // Continuous Session: location intro logic
+  const navigatedByAgent = useTourStore((s) => s.navigatedByAgent);
+
   useEffect(() => {
-    if (!location) return;
-    _setMessages([
-      {
-        id: `intro-${location.slug}`,
+    if (!location || isLoading) return;
+
+    const isFirstLoad = prevSlugRef.current === null;
+    const slugChanged = prevSlugRef.current !== location.slug;
+    prevSlugRef.current = location.slug;
+
+    if (!slugChanged) return;
+
+    if (isFirstLoad) {
+      // Lần đầu tải trang → set intro message
+      _setMessages([
+        {
+          id: `intro-${location.slug}-${Date.now()}`,
+          role: "assistant",
+          content: location.introMessage,
+        },
+      ]);
+    } else if (!navigatedByAgent) {
+      // User tự bấm map → append intro nhẹ (không xóa chat cũ)
+      addMessage({
+        id: `nav-${location.slug}-${Date.now()}`,
         role: "assistant",
-        content: location.introMessage,
-      },
-    ]);
-  }, [location?.slug, _setMessages]);
+        content: `📍 ${location.introMessage}`,
+      });
+    }
+    // Nếu navigatedByAgent → AI đã nói rồi, không cần thêm gì
+  }, [location?.slug, isLoading]);
 
   // Tự động cuộn xuống cuối (Transcript)
   useEffect(() => {
@@ -50,31 +70,9 @@ export default function ChatOverlay() {
 
   const handleSend = (text: string) => {
     if (!text.trim() || isLoading) return;
-
-    // Check lệnh điều hướng
-    const navLink = location?.links.find((l) =>
-      text.toLowerCase().includes(l.label.toLowerCase()),
-    );
-
-    if (navLink) {
-      _setMessages([
-        ...useChatStore.getState().messages,
-        { id: Date.now().toString(), role: "user", content: text },
-      ]);
-      setTimeout(() => {
-        _setMessages([
-          ...useChatStore.getState().messages,
-          {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: `Được rồi! Mình sẽ đưa bạn tới ${navLink.label.replace("Đi tới ", "").replace("Quay lại ", "")} ngay nhé! 🚀`,
-          },
-        ]);
-        setTimeout(() => navigateTo(navLink.toSlug), 1000);
-      }, 500);
-    } else {
-      sendMessage(text, location?.id);
-    }
+    _touchIdleTimer(); // Keep session alive on interaction
+    // All messages go through AI Agent — it decides whether to navigate, show media, etc.
+    sendMessage(text, location?.id);
     setInput("");
   };
 
