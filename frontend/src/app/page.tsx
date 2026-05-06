@@ -13,12 +13,23 @@ export default function TourPage() {
   const location = useTourStore((s) => s.currentLocation());
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const isLoading = useTourStore((s) => s.isLoading);
+  const isAppReady = useTourStore((s) => s.isAppReady);
+  const setAppReady = useTourStore((s) => s.setAppReady);
   const navigateTo = useTourStore((s) => s.navigateTo);
   const avatarState = useTourStore((s) => s.avatarState);
+  const activeOverlay = useTourStore((s) => s.activeOverlay);
 
   useEffect(() => {
     fetchLocations();
   }, [fetchLocations]);
+
+  // Sequential startup: wait 2.5s after data loads for 3D/panorama to settle
+  useEffect(() => {
+    if (!isLoading && location && !isAppReady) {
+      const timer = setTimeout(() => setAppReady(true), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, location, isAppReady, setAppReady]);
 
   // Map AI chat state to 3D Mascot animations
   const getAvatarAnimation = () => {
@@ -30,6 +41,9 @@ export default function TourPage() {
         return "Thankful"; // AI is done (bows/smiles once, then auto-returns to HeadNod)
     }
   };
+
+  // Avatar dims when map/info overlays are active
+  const isOverlayActive = activeOverlay !== "none";
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#1a1a2e]">
@@ -54,23 +68,25 @@ export default function TourPage() {
       {/* === Layer 1: Mascot 3D === */}
       {/* Luôn render để tránh lỗi WebGL Context Lost khi unmount */}
       <div 
-        className={`absolute left-[5%] bottom-[5%] top-[10%] w-[30%] max-w-[450px] z-10 pointer-events-none transition-opacity duration-1000 ${
+        className={`absolute left-[5%] bottom-[5%] top-[10%] w-[30%] max-w-[450px] z-10 pointer-events-none transition-all duration-700 ${
           location && !isLoading ? 'opacity-100' : 'opacity-0'
+        } ${
+          isOverlayActive ? 'opacity-40 scale-95 blur-[1px]' : 'scale-100'
         }`}
       >
         <Avatar3D animation={getAvatarAnimation() as any} />
       </div>
 
-      {/* === UI Overlays === */}
-      {location && !isLoading && (
+      {/* === UI Overlays (staggered entrance after isAppReady) === */}
+      {location && isAppReady && (
         <>
-          {/* Layer 2: Minimap (top-left) */}
+          {/* Layer 2: Minimap (top-left) — enters first */}
           <Minimap />
 
-          {/* Layer 2: Info Panel (top-right) */}
+          {/* Layer 2: Info Panel (top-right) — enters second */}
           <InfoPanel />
 
-          {/* Layer 3: Chat Overlay (bottom-center) */}
+          {/* Layer 3: Chat Overlay (bottom-center) — enters last */}
           <ChatOverlay />
         </>
       )}

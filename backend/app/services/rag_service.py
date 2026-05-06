@@ -18,7 +18,7 @@ from sqlalchemy.future import select
 from app.ai.embedding_engine import embed_query
 from app.ai.chat_engine import generate_response, generate_response_stream, StreamChunk
 from app.ai.tools import AGENT_TOOLS
-from app.repositories import vector_repo, media_repo
+from app.repositories import vector_repo
 from app.db.tables import ChatSession, ChatMessage, Location
 
 logger = logging.getLogger(__name__)
@@ -49,54 +49,13 @@ async def _enrich_tool_actions(
 ) -> list[dict]:
     """
     Enrich UI tool actions with additional data before sending to frontend.
-    For show_media: query actual media items from DB and inject into args.
 
-    Smart location resolution: if navigate_to is in the same batch,
-    use the TARGET location for show_media instead of current location.
+    Since the frontend auto-fetches ALL media per location,
+    show_media only needs to pass through media_type for tab selection.
+    No DB query needed here anymore.
     """
-    enriched = []
-    loc_uuid = UUID(location_id) if location_id else None
-
-    # Check if navigate_to is in the same batch → use target location for show_media
-    target_slug = None
-    for fc in tool_actions:
-        if fc["name"] == "navigate_to":
-            target_slug = fc["args"].get("location_slug")
-            break
-
-    # Resolve target location_id if navigating
-    if target_slug:
-        from app.repositories import location_repo
-        target_location = await location_repo.get_by_slug(session, target_slug)
-        if target_location:
-            media_loc_uuid = target_location.id
-        else:
-            media_loc_uuid = loc_uuid  # fallback to current
-    else:
-        media_loc_uuid = loc_uuid
-
-    for fc in tool_actions:
-        if fc["name"] == "show_media" and media_loc_uuid:
-            media_type = fc["args"].get("media_type", "all")
-            search_query = fc["args"].get("search_query")
-            media_items = await media_repo.get_by_location(
-                session, media_loc_uuid, media_type=media_type, search_query=search_query
-            )
-            # If search_query returned nothing, fallback to all media of that type
-            if not media_items and search_query:
-                media_items = await media_repo.get_by_location(
-                    session, media_loc_uuid, media_type=media_type
-                )
-            fc = {
-                **fc,
-                "args": {
-                    **fc["args"],
-                    "media_items": media_items,
-                },
-            }
-        enriched.append(fc)
-
-    return enriched
+    # Just pass through all tool actions — frontend handles media loading
+    return tool_actions
 
 
 async def process_query(
@@ -300,6 +259,7 @@ async def process_query_stream(
     # Step 4: Decide phase — check function calls
     # ──────────────────────────────────────────────────────────
     has_search_tool = False
+    search_fc: dict | None = None
     ui_tool_actions = []
 
     if result_r1.function_calls:
@@ -366,9 +326,15 @@ async def process_query_stream(
     else:
         # ──────────────────────────────────────────────────────
         # Path B: No search tool → Yield text from round 1
+        # Chunk into sentences for smoother streaming UX
         # ──────────────────────────────────────────────────────
         if result_r1.text:
-            yield StreamChunk(type="text", content=result_r1.text)
+            import re as _re
+            # Split on sentence boundaries (. ! ? + emoji) while keeping delimiters
+            sentences = _re.split(r'(?<=[.!?。]\s)', result_r1.text)
+            for sentence in sentences:
+                if sentence:  # skip empty
+                    yield StreamChunk(type="text", content=sentence)
             full_answer_parts.append(result_r1.text)
 
     # After stream completes, yield sources as a final event

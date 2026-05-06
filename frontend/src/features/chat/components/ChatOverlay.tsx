@@ -7,6 +7,8 @@ import { useChatStore } from "../store";
 
 export default function ChatOverlay() {
   const location = useTourStore((s) => s.currentLocation());
+  const isAppReady = useTourStore((s) => s.isAppReady);
+  const activeOverlay = useTourStore((s) => s.activeOverlay);
 
   const { messages, isLoading, initSession, sendMessage, addMessage, _setMessages, _touchIdleTimer } = useChatStore();
   const [input, setInput] = useState("");
@@ -26,7 +28,7 @@ export default function ChatOverlay() {
   const navigatedByAgent = useTourStore((s) => s.navigatedByAgent);
 
   useEffect(() => {
-    if (!location || isLoading) return;
+    if (!location || isLoading || !isAppReady) return;
 
     const isFirstLoad = prevSlugRef.current === null;
     const slugChanged = prevSlugRef.current !== location.slug;
@@ -52,7 +54,7 @@ export default function ChatOverlay() {
       });
     }
     // Nếu navigatedByAgent → AI đã nói rồi, không cần thêm gì
-  }, [location?.slug, isLoading]);
+  }, [location?.slug, isLoading, isAppReady]);
 
   // Tự động cuộn xuống cuối (Transcript)
   useEffect(() => {
@@ -80,11 +82,14 @@ export default function ChatOverlay() {
   const displayMessages = messages.slice(-2);
   const suggestedQuestions = location?.suggestedQuestions || [];
 
+  // Hide subtitles and suggestions when map overlay is fullscreen
+  const isMapActive = activeOverlay === "map";
+
   return (
     <>
       {/* === DYNAMIC SUBTITLES (Speech Bubbles) === */}
       <AnimatePresence>
-        {showSubtitle && displayMessages.map((msg) => {
+        {showSubtitle && !isMapActive && displayMessages.map((msg) => {
           if (msg.role === "assistant") {
             return (
               <motion.div
@@ -132,7 +137,7 @@ export default function ChatOverlay() {
       {/* === BOTTOM CONTROLS WRAPPER === */}
       <div className="fixed bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-5 z-40 w-full max-w-3xl pointer-events-none">
         {/* === QUICK ACTIONS (SUGGESTED QUESTIONS) === */}
-        {suggestedQuestions.length > 0 && (
+        {suggestedQuestions.length > 0 && !isMapActive && (
           <div className="flex flex-wrap justify-center gap-3 pointer-events-auto px-4">
             {suggestedQuestions.map((q, idx) => (
               <motion.button
@@ -240,7 +245,7 @@ export default function ChatOverlay() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 50, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-6 bottom-36 w-[380px] h-[60vh] max-h-[600px] bg-black/60 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto z-40"
+            className="fixed right-6 bottom-24 w-[380px] h-[60vh] max-h-[600px] bg-black/60 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto z-40"
           >
             <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
               <h3 className="text-white font-medium flex items-center gap-2">

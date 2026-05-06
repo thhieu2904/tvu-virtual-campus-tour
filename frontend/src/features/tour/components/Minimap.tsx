@@ -18,6 +18,12 @@ export default function Minimap() {
   const currentSlug = useTourStore((s) => s.currentLocationSlug);
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const navigateTo = useTourStore((s) => s.navigateTo);
+  const pendingNavigation = useTourStore((s) => s.pendingNavigation);
+  const pendingMediaFocus = useTourStore((s) => s.pendingMediaFocus);
+  const clearPendingNavigation = useTourStore((s) => s.clearPendingNavigation);
+  const fetchLocationMedia = useTourStore((s) => s.fetchLocationMedia);
+  const setFocusedMedia = useTourStore((s) => s.setFocusedMedia);
+  const setActiveOverlay2 = useTourStore((s) => s.setActiveOverlay);
 
   const currentLocation = locations.find((l) => l.slug === currentSlug);
 
@@ -25,6 +31,8 @@ export default function Minimap() {
   const [navTarget, setNavTarget] = useState<string | null>(null);
   const [animProgress, setAnimProgress] = useState(0);
   const animRef = useRef<number | null>(null);
+  const pendingNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAgentNavRef = useRef(false); // Tracks if current navigation was AI-triggered
 
   // Active path key for CampusMap
   const activePathKey = useMemo(() => {
@@ -51,7 +59,9 @@ export default function Minimap() {
         if (progress < 1) {
           animRef.current = requestAnimationFrame(tick);
         } else {
-          navigateTo(targetSlug);
+          // Pass "agent" source if triggered by AI, so ChatOverlay won't add duplicate intro
+          navigateTo(targetSlug, isAgentNavRef.current ? "agent" : "user");
+          isAgentNavRef.current = false;
         }
       };
       animRef.current = requestAnimationFrame(tick);
@@ -64,18 +74,52 @@ export default function Minimap() {
     if (navTarget && !isTransitioning && animProgress >= 1) {
       const timer = setTimeout(() => {
         setExpanded(false);
+        // Apply deferred media focus if AI requested it
+        if (pendingMediaFocus) {
+          setTimeout(() => {
+            setFocusedMedia(pendingMediaFocus.mediaId, pendingMediaFocus.tab);
+            setActiveOverlay2("info");
+            useTourStore.getState().setPendingMediaFocus(null);
+          }, 800); // Wait for 360 scene to settle
+        }
         setNavTarget(null);
         setAnimProgress(0);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [navTarget, isTransitioning, animProgress]);
+  }, [navTarget, isTransitioning, animProgress, pendingMediaFocus]);
 
   useEffect(() => {
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
+      if (pendingNavTimerRef.current) clearTimeout(pendingNavTimerRef.current);
     };
   }, []);
+
+  // ── AI Agent triggers navigation via pendingNavigation ──
+  useEffect(() => {
+    if (!pendingNavigation || pendingNavigation === currentSlug) return;
+
+    // Capture target slug before clearing state
+    const targetSlug = pendingNavigation;
+
+    // Clear immediately so effect doesn't re-trigger
+    clearPendingNavigation();
+
+    // 1. Open the map fullscreen
+    setExpanded(true);
+
+    // 2. Start prefetching media for target location (parallel with animation)
+    fetchLocationMedia(targetSlug);
+
+    // 3. Small delay to let map open animation finish, then start path drawing
+    // Use ref for timer so React cleanup doesn't cancel it
+    pendingNavTimerRef.current = setTimeout(() => {
+      isAgentNavRef.current = true; // Mark as AI-triggered
+      handleNavigate(targetSlug);
+      pendingNavTimerRef.current = null;
+    }, 400);
+  }, [pendingNavigation]);
 
   // ── Node list for CampusMap ──
   const mapNodes = useMemo(
@@ -92,14 +136,14 @@ export default function Minimap() {
       {!expanded && (
         <motion.button
           onClick={() => setExpanded(true)}
-          className="absolute top-6 left-6 z-30 w-[120px] h-[120px] rounded-xl bg-white border-[3px] border-white shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.25)] transition-shadow"
+          className="absolute top-6 left-6 z-30 w-[140px] rounded-2xl bg-white border-[4px] border-white shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.25)] transition-shadow flex flex-col"
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="w-full h-full bg-gray-100 relative overflow-hidden">
+          <div className="w-full aspect-square bg-gray-100 relative overflow-hidden shrink-0">
             {/* Dynamic panning container: centers on current location */}
             {(() => {
               const SCALE = 2.2; // 220% zoom
@@ -108,11 +152,11 @@ export default function Minimap() {
               const cy = currentCoords ? currentCoords.y : 50;
               
               let left = 50 - cx * SCALE;
-              let top = 40 - cy * SCALE; // Center slightly higher to leave room for bottom text
+              let top = 50 - cy * SCALE; // Properly centered now since label doesn't cover it
               
-              // Clamp so we don't pan past the map edges (allow extra 25% at bottom for text)
+              // Clamp so we don't pan past the map edges
               left = Math.max(100 - SCALE * 100, Math.min(0, left));
-              top = Math.max(100 - SCALE * 100 - 25, Math.min(0, top));
+              top = Math.max(100 - SCALE * 100, Math.min(0, top));
 
               return (
                 <div 
@@ -130,7 +174,7 @@ export default function Minimap() {
                     fill
                     sizes="200px"
                     priority
-                    className="object-cover opacity-60"
+                    className="object-cover"
                   />
                   {locations.map((loc) => {
                     const coords = getCoordsBySlug(loc.slug);
@@ -138,7 +182,7 @@ export default function Minimap() {
                     return (
                       <div
                         key={loc.slug}
-                        className={`absolute w-3 h-3 rounded-full -translate-x-1/2 -translate-y-1/2 ${
+                        className={`absolute w-3.5 h-3.5 rounded-full -translate-x-1/2 -translate-y-1/2 ${
                           loc.slug === currentSlug ? "bg-[#053384]" : "bg-[#f5c518] shadow-sm"
                         } ${loc.status === "inactive" ? "opacity-40" : ""}`}
                         style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
@@ -152,13 +196,6 @@ export default function Minimap() {
                 </div>
               );
             })()}
-            
-            {/* Full-width bottom label */}
-            <div className="absolute bottom-0 left-0 right-0 bg-white/95 px-2 py-1.5 text-center border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-              <span className="text-[10px] font-bold text-[#053384] flex items-center justify-center gap-1.5">
-                <span className="text-[11px]">🗺️</span> Bản đồ
-              </span>
-            </div>
           </div>
         </motion.button>
       )}

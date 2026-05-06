@@ -27,68 +27,69 @@ interface ChatState {
 // ── Idle Timer (module-level) ──
 let _idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ── Tool Call Coordination ──
-let _pendingMediaItems: Array<Record<string, unknown>> | null = null;
-let _navigatePending = false; // true when navigate_to is queued but hasn't executed yet
+// ── Tool Call Queue ──
+let _pendingToolCalls: { name: string; args: Record<string, unknown> }[] = [];
 
 /**
- * Execute a tool call received from the AI Agent via SSE.
- * Maps tool names to TourStore actions.
- *
- * Key: navigate_to always arrives BEFORE show_media in the SSE stream.
- * When both are present, show_media defers to navigate_to which applies
- * media AFTER the scene transition completes.
+ * Queue a tool call to be executed after AI finishes speaking.
+ * This ensures sequential flow: AI speaks → map opens → navigate.
  */
-function _executeToolCall(toolCall: { name: string; args: Record<string, unknown> }) {
+function _queueToolCall(toolCall: { name: string; args: Record<string, unknown> }) {
+  _pendingToolCalls.push(toolCall);
+}
+
+/**
+ * Flush all queued tool calls AFTER AI finishes streaming.
+ * Executes in order: navigate_to first, then show_media (deferred).
+ */
+function _flushToolCalls() {
   const tourStore = useTourStore.getState();
+  const calls = [..._pendingToolCalls];
+  _pendingToolCalls = [];
 
-  switch (toolCall.name) {
-    case "navigate_to": {
-      const slug = toolCall.args.location_slug as string;
-      if (slug) {
-        _navigatePending = true;
-        // Delay so user can read the AI's text before scene transition
-        setTimeout(() => {
-          tourStore.navigateTo(slug, "agent");
-          // After transition (600ms) + buffer → apply pending media
-          setTimeout(() => {
-            if (_pendingMediaItems) {
-              tourStore.setMediaItems(_pendingMediaItems as any);
-              tourStore.setActiveOverlay("info");
-              _pendingMediaItems = null;
-            }
-            _navigatePending = false;
-          }, 800);
-        }, 1500);
+  let hasNavigation = false;
+
+  for (const toolCall of calls) {
+    switch (toolCall.name) {
+      case "navigate_to": {
+        const slug = toolCall.args.location_slug as string;
+        if (slug && slug !== tourStore.currentLocationSlug) {
+          hasNavigation = true;
+          // Set pendingNavigation → Minimap picks this up and runs map animation
+          tourStore.setPendingNavigation(slug);
+        }
+        break;
       }
-      break;
-    }
 
-    case "show_media": {
-      const mediaItems = (toolCall.args.media_items as Array<Record<string, unknown>>) || [];
-      if (mediaItems.length > 0) {
-        if (_navigatePending) {
-          // Navigate is queued → just store, navigate_to callback will apply
-          _pendingMediaItems = mediaItems;
+      case "show_media": {
+        const preferredTab = (toolCall.args.media_type as string) === "image" ? "info" as const : "video" as const;
+        const focusMediaId = (toolCall.args.focus_media_id as string) || null;
+
+        if (hasNavigation) {
+          // Defer media focus until after navigation completes
+          tourStore.setPendingMediaFocus({ mediaId: focusMediaId, tab: preferredTab });
         } else {
-          // No navigate → show immediately
-          tourStore.setMediaItems(mediaItems as any);
+          // Show immediately at current location
+          tourStore.setFocusedMedia(focusMediaId, preferredTab);
           tourStore.setActiveOverlay("info");
         }
+        break;
       }
-      break;
-    }
 
-    case "toggle_map": {
-      const state = toolCall.args.state as string;
-      tourStore.setActiveOverlay(state === "open" ? "map" : "none");
-      break;
-    }
+      case "toggle_map": {
+        const state = toolCall.args.state as string;
+        if (!hasNavigation) {
+          // Only toggle map if we're not already about to navigate
+          tourStore.setActiveOverlay(state === "open" ? "map" : "none");
+        }
+        break;
+      }
 
-    case "search_local":
-    case "search_global":
-      // Handled server-side — no frontend action needed
-      break;
+      case "search_local":
+      case "search_global":
+        // Handled server-side — no frontend action needed
+        break;
+    }
   }
 }
 
@@ -233,14 +234,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
             continue;
           }
 
-          // Handle tool_call events from AI Agent
+          // Handle tool_call events from AI Agent — QUEUE, don't execute yet
           if (block.includes("event: tool_call")) {
             const dataMatch = block.match(/data: (.*)/);
             if (dataMatch) {
               try {
                 const payload = JSON.parse(dataMatch[1]);
                 const toolCall = JSON.parse(payload.content);
-                _executeToolCall(toolCall);
+                _queueToolCall(toolCall);
               } catch (e) {
                 console.error("Error parsing tool_call:", e);
               }
@@ -275,6 +276,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ),
       }));
       useTourStore.getState().setAvatarState("idle");
+
+      // Flush queued tool calls AFTER AI finishes speaking
+      // Small delay to let the last speech bubble render
+      setTimeout(() => {
+        _flushToolCalls();
+      }, 500);
     }
   },
 }));

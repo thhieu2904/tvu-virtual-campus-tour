@@ -1,5 +1,5 @@
 {
-  "cong-chinh_to_thu-vien": [
+  "cong-chinh_to_b7-thu-vien": [
     { "x": 68.83, "y": 96.06, "node": "welcome" },
     { "x": 68.83, "y": 86.62, "node": "b1_front" },
     { "x": 68.54, "y": 78.77, "node": "b2_front" },
@@ -11,7 +11,7 @@
     { "x": 66.73, "y": 30.38, "node": "b6_front" },
     { "x": 66.36, "y": 18.17, "node": "b7_front" }
   ],
-  "cong-chinh_to_khoa-cntt": [
+  "cong-chinh_to_c7-khoa-cntt": [
     { "x": 68.83, "y": 96.06, "node": "welcome" },
     { "x": 68.83, "y": 86.62, "node": "b1_front" },
     { "x": 68.54, "y": 78.77, "node": "b2_front" },
@@ -33,7 +33,7 @@
     { "x": 40.4, "y": 36.77, "node": "j_center_d3" },
     { "x": 40.64, "y": 27.03, "node": "d5_front" }
   ],
-  "thu-vien_to_cong-chinh": [
+  "b7-thu-vien_to_cong-chinh": [
     { "x": 66.36, "y": 18.17, "node": "b7_front" },
     { "x": 66.73, "y": 30.38, "node": "b6_front" },
     { "x": 66.73, "y": 36.77, "node": "j_right_d3" },
@@ -45,7 +45,7 @@
     { "x": 68.83, "y": 86.62, "node": "b1_front" },
     { "x": 68.83, "y": 96.06, "node": "welcome" }
   ],
-  "thu-vien_to_khoa-cntt": [
+  "b7-thu-vien_to_c7-khoa-cntt": [
     { "x": 66.36, "y": 18.17, "node": "b7_front" },
     { "x": 40.78, "y": 18.17, "node": "j_center_top" },
     { "x": 40.64, "y": 27.03, "node": "d5_front" },
@@ -54,12 +54,12 @@
     { "x": 32.79, "y": 57.74, "node": "c8_front" },
     { "x": 21.89, "y": 57.74, "node": "c7_front" }
   ],
-  "thu-vien_to_d5-giang-duong": [
+  "b7-thu-vien_to_d5-giang-duong": [
     { "x": 66.36, "y": 18.17, "node": "b7_front" },
     { "x": 40.78, "y": 18.17, "node": "j_center_top" },
     { "x": 40.64, "y": 27.03, "node": "d5_front" }
   ],
-  "khoa-cntt_to_cong-chinh": [
+  "c7-khoa-cntt_to_cong-chinh": [
     { "x": 21.89, "y": 57.74, "node": "c7_front" },
     { "x": 32.79, "y": 57.74, "node": "c8_front" },
     { "x": 40.05, "y": 57.74, "node": "j_center_c7" },
@@ -69,7 +69,7 @@
     { "x": 68.83, "y": 86.62, "node": "b1_front" },
     { "x": 68.83, "y": 96.06, "node": "welcome" }
   ],
-  "khoa-cntt_to_thu-vien": [
+  "c7-khoa-cntt_to_b7-thu-vien": [
     { "x": 21.89, "y": 57.74, "node": "c7_front" },
     { "x": 32.79, "y": 57.74, "node": "c8_front" },
     { "x": 40.05, "y": 57.74, "node": "j_center_c7" },
@@ -78,7 +78,7 @@
     { "x": 40.78, "y": 18.17, "node": "j_center_top" },
     { "x": 66.36, "y": 18.17, "node": "b7_front" }
   ],
-  "khoa-cntt_to_d5-giang-duong": [
+  "c7-khoa-cntt_to_d5-giang-duong": [
     { "x": 21.89, "y": 57.74, "node": "c7_front" },
     { "x": 32.79, "y": 57.74, "node": "c8_front" },
     { "x": 40.05, "y": 57.74, "node": "j_center_c7" },
@@ -97,12 +97,12 @@
     { "x": 68.83, "y": 86.62, "node": "b1_front" },
     { "x": 68.83, "y": 96.06, "node": "welcome" }
   ],
-  "d5-giang-duong_to_thu-vien": [
+  "d5-giang-duong_to_b7-thu-vien": [
     { "x": 40.64, "y": 27.03, "node": "d5_front" },
     { "x": 40.78, "y": 18.17, "node": "j_center_top" },
     { "x": 66.36, "y": 18.17, "node": "b7_front" }
   ],
-  "d5-giang-duong_to_khoa-cntt": [
+  "d5-giang-duong_to_c7-khoa-cntt": [
     { "x": 40.64, "y": 27.03, "node": "d5_front" },
     { "x": 40.4, "y": 36.77, "node": "j_center_d3" },
     { "x": 40.05, "y": 57.74, "node": "j_center_c7" },

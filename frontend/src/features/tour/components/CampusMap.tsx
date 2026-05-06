@@ -28,8 +28,8 @@ const paths = pathsData as PathsMap;
 // ── Destination brand colors ──
 const DEST_COLORS: Record<string, string> = {
   "cong-chinh": "#22c55e",
-  "thu-vien": "#3b82f6",
-  "khoa-cntt": "#f59e0b",
+  "b7-thu-vien": "#3b82f6",
+  "c7-khoa-cntt": "#f59e0b",
   "d5-giang-duong": "#ec4899",
 };
 
