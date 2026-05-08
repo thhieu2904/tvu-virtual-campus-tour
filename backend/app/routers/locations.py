@@ -38,6 +38,7 @@ async def get_location(slug: str, db: AsyncSession = Depends(get_db)):
         "slug": location.slug,
         "description": location.description,
         "intro_message": location.intro_message,
+        "intro_audio_url": location.intro_audio_url,
         "background_url": location.background_url,
     }
 

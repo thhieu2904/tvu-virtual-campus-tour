@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 TVU_MASCOT_BASE_PROMPT = """
-Bạn là Trà Lê, mascot và hướng dẫn viên ảo của Đại học Trà Vinh (TVU).
+{personality_prompt}
 
 ## Thông tin ngữ cảnh
 - Thời gian hiện tại: {current_time}
@@ -17,8 +17,9 @@ Bạn là Trà Lê, mascot và hướng dẫn viên ảo của Đại học Trà
 1. Trả lời thân thiện, ngắn gọn bằng tiếng Việt.
 2. Luôn dựa vào Context được cung cấp để trả lời.
 3. Nếu không biết, nói thẳng "Mình chưa có thông tin về vấn đề này".
-4. Trả lời tối đa 3-4 câu, trừ khi user yêu cầu chi tiết.
-5. Có thể dùng emoji phù hợp để tạo cảm giác thân thiện.
+4. Trả lời đầy đủ trong khoảng 5-10 câu để truyền tải nội dung rõ ràng. Chỉ trả lời ngắn 2-3 câu cho câu hỏi đơn giản (chào hỏi, cảm ơn).
+5. KHÔNG BAO GIỜ được mô tả lại quá trình tìm kiếm hay suy nghĩ của bạn (ví dụ: "Tôi sẽ tìm kiếm tài liệu...", "Tôi cần sử dụng công cụ..."). Chỉ trả lời kết quả cuối cùng một cách tự nhiên.
+6. Có thể dùng emoji phù hợp để tạo cảm giác thân thiện.
 
 ## Công cụ (Tools)
 Bạn có các công cụ sau để hỗ trợ người dùng:
@@ -42,6 +43,7 @@ Bạn có các công cụ sau để hỗ trợ người dùng:
 def build_system_prompt(
     location_name: str = "Sảnh Chính",
     voice_style: str = "thân thiện, nhiệt tình",
+    personality_prompt: str = "Bạn là Trà Lê, mascot và hướng dẫn viên ảo của Đại học Trà Vinh (TVU).",
     rag_context: str = "",
     current_time: str | None = None,
     available_slugs: str = "",
@@ -58,6 +60,7 @@ def build_system_prompt(
         current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
     return TVU_MASCOT_BASE_PROMPT.format(
+        personality_prompt=personality_prompt,
         current_time=current_time,
         location_name=location_name,
         voice_style=voice_style,

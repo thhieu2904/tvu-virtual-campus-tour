@@ -6,6 +6,7 @@ import logging
 import os
 import hashlib
 import asyncio
+import struct
 from dataclasses import dataclass
 from google.genai import types
 import edge_tts
@@ -16,7 +17,7 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 # Audio content types
-CONTENT_TYPE_PCM = "audio/pcm"    # Gemini output: raw PCM 24kHz 16-bit mono
+CONTENT_TYPE_WAV = "audio/wav"    # Gemini output: converted to WAV 24kHz 16-bit mono
 CONTENT_TYPE_MP3 = "audio/mpeg"   # Edge TTS output: MP3
 
 
@@ -24,7 +25,7 @@ CONTENT_TYPE_MP3 = "audio/mpeg"   # Edge TTS output: MP3
 class TTSResult:
     """Result from a TTS synthesis call."""
     audio_data: bytes
-    content_type: str       # "audio/pcm" or "audio/mpeg"
+    content_type: str       # "audio/wav" or "audio/mpeg"
     provider: str           # "gemini" | "edge-tts" | "cache"
     cached: bool
 
@@ -40,10 +41,10 @@ def _cache_key(text: str, voice: str) -> str:
 def _get_cached(key: str) -> tuple[bytes, str] | None:
     """
     Read from disk cache.
-    Checks for both .pcm and .mp3 extensions.
+    Checks for both .wav and .mp3 extensions.
     Returns (audio_bytes, content_type) or None.
     """
-    for ext, ct in [(".pcm", CONTENT_TYPE_PCM), (".mp3", CONTENT_TYPE_MP3)]:
+    for ext, ct in [(".wav", CONTENT_TYPE_WAV), (".mp3", CONTENT_TYPE_MP3)]:
         path = os.path.join(CACHE_DIR, f"{key}{ext}")
         if os.path.exists(path):
             with open(path, "rb") as f:
@@ -54,7 +55,7 @@ def _get_cached(key: str) -> tuple[bytes, str] | None:
 def _save_cache(key: str, audio: bytes, content_type: str):
     """Write to disk cache with the correct extension."""
     os.makedirs(CACHE_DIR, exist_ok=True)
-    ext = ".pcm" if content_type == CONTENT_TYPE_PCM else ".mp3"
+    ext = ".wav" if content_type == CONTENT_TYPE_WAV else ".mp3"
     with open(os.path.join(CACHE_DIR, f"{key}{ext}"), "wb") as f:
         f.write(audio)
 
@@ -69,9 +70,28 @@ async def _edge_tts_fallback(text: str, voice: str = "vi-VN-HoaiMyNeural") -> by
     return audio_bytes
 
 
+def _pcm_to_wav(pcm_data: bytes, sample_rate: int = 24000, num_channels: int = 1, sample_width: int = 2) -> bytes:
+    """Wrap raw PCM data in a WAV header."""
+    audio_format = 1  # PCM
+    byte_rate = sample_rate * num_channels * sample_width
+    block_align = num_channels * sample_width
+    data_size = len(pcm_data)
+    chunk_size = 36 + data_size
+    
+    header = struct.pack(
+        '<4sI4s4sIHHIIHH4sI',
+        b'RIFF', chunk_size, b'WAVE',
+        b'fmt ', 16, audio_format, num_channels, sample_rate,
+        byte_rate, block_align, sample_width * 8,
+        b'data', data_size
+    )
+    return header + pcm_data
+
+
 async def synthesize(
     text: str,
     voice_name: str | None = None,
+    voice_style: str | None = None,
 ) -> TTSResult:
     """
     Synthesize speech from text.
@@ -115,10 +135,12 @@ async def synthesize(
         )
 
         audio_data = result.candidates[0].content.parts[0].inline_data.data
-        await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_PCM)
+        audio_data = _pcm_to_wav(audio_data)
+        
+        await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_WAV)
         return TTSResult(
             audio_data=audio_data,
-            content_type=CONTENT_TYPE_PCM,
+            content_type=CONTENT_TYPE_WAV,
             provider="gemini",
             cached=False,
         )

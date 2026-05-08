@@ -16,7 +16,9 @@ async def get_by_id(db: AsyncSession, location_id: str | UUID) -> Location | Non
     if isinstance(location_id, str):
         location_id = UUID(location_id)
     result = await db.execute(
-        select(Location).where(Location.id == location_id)
+        select(Location)
+        .where(Location.id == location_id)
+        .options(selectinload(Location.mascot))
     )
     return result.scalar_one_or_none()
 
@@ -75,6 +77,7 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
             "isStartNode": loc.is_start_node,
             "description": loc.description,
             "introMessage": loc.intro_message,
+            "intro_audio_url": loc.intro_audio_url,
             "backgroundUrl": loc.background_url,
             "suggestedQuestions": [q.question for q in sorted_qs],
             "links": links_by_from.get(loc_id_str, [])

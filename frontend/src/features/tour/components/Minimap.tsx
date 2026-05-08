@@ -19,8 +19,10 @@ export default function Minimap() {
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const navigateTo = useTourStore((s) => s.navigateTo);
   const pendingNavigation = useTourStore((s) => s.pendingNavigation);
+  const pendingMapAnimationSlug = useTourStore((s) => s.pendingMapAnimationSlug);
   const pendingMediaFocus = useTourStore((s) => s.pendingMediaFocus);
   const clearPendingNavigation = useTourStore((s) => s.clearPendingNavigation);
+  const setPendingMapAnimationSlug = useTourStore((s) => s.setPendingMapAnimationSlug);
   const fetchLocationMedia = useTourStore((s) => s.fetchLocationMedia);
   const setFocusedMedia = useTourStore((s) => s.setFocusedMedia);
   const setActiveOverlay2 = useTourStore((s) => s.setActiveOverlay);
@@ -120,6 +122,22 @@ export default function Minimap() {
       pendingNavTimerRef.current = null;
     }, 400);
   }, [pendingNavigation]);
+
+  // ── User manual navigation triggers map animation ──
+  useEffect(() => {
+    if (pendingMapAnimationSlug && pendingMapAnimationSlug !== currentSlug) {
+      const targetSlug = pendingMapAnimationSlug;
+      setPendingMapAnimationSlug(null);
+      setExpanded(true); // Open map fullscreen
+      
+      // Delay to let map open, then start drawing
+      pendingNavTimerRef.current = setTimeout(() => {
+        isAgentNavRef.current = false; // Mark as USER-triggered so Intro plays!
+        handleNavigate(targetSlug);
+        pendingNavTimerRef.current = null;
+      }, 400);
+    }
+  }, [pendingMapAnimationSlug, currentSlug]);
 
   // ── Node list for CampusMap ──
   const mapNodes = useMemo(

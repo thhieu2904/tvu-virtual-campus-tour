@@ -16,6 +16,23 @@ class Base(DeclarativeBase):
     pass
 
 
+class Mascot(Base):
+    __tablename__ = "mascots"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(100), unique=True, nullable=False)
+    model_3d_url = Column(Text, nullable=False)
+    voice_name = Column(String(100), nullable=False, default="Kore")
+    voice_style = Column(Text, nullable=False, default="")
+    personality_prompt = Column(Text, nullable=False, default="")
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    locations = relationship("Location", back_populates="mascot")
+
+
 class Location(Base):
     __tablename__ = "locations"
 
@@ -24,17 +41,18 @@ class Location(Base):
     slug = Column(String(100), unique=True, nullable=False)
     description = Column(Text, nullable=False, default="")
     intro_message = Column(Text, nullable=False, default="")
+    intro_audio_url = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="active")  # active | inactive
     is_start_node = Column(Boolean, nullable=False, default=False)
-    avatar_model_url = Column(Text, nullable=True)
+    mascot_id = Column(UUID(as_uuid=True), ForeignKey("mascots.id", ondelete="SET NULL"), nullable=True)
     background_url = Column(Text, nullable=False, default="")
-    voice_config = Column(JSON, nullable=False, default={"voice_name": "Kore"})  # TTS config per location mascot
     camera_config = Column(JSON, nullable=False, default={})  # 360° camera initial view
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
+    mascot = relationship("Mascot", back_populates="locations")
     documents = relationship("Document", back_populates="location")
     media = relationship("Media", back_populates="location")
     suggested_questions = relationship("SuggestedQuestion", back_populates="location", cascade="all, delete-orphan")

@@ -99,6 +99,22 @@ async def get_presigned_url(key: str, expires_in: int = 3600) -> str:
     return url
 
 
+async def file_exists(key: str) -> bool:
+    """Check if a file exists in R2."""
+    client = _get_s3_client()
+    try:
+        await asyncio.to_thread(
+            client.head_object,
+            Bucket=_get_bucket(),
+            Key=key,
+        )
+        return True
+    except client.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            return False
+        raise
+
+
 def build_document_key(filename: str, location_slug: str | None = None) -> str:
     """Build R2 key for a document file.
 
@@ -124,11 +140,10 @@ def build_background_key(filename: str, location_slug: str) -> str:
 
 
 def get_public_url(key: str) -> str:
-    """Build the public URL for an R2 object.
-
-    Note: Requires R2 bucket to have public access enabled,
-    or use a custom domain / Cloudflare Worker for public serving.
-    For now, returns the S3-style URL.
-    """
+    """Build the public URL for an R2 object."""
     settings = get_settings()
+    if settings.R2_PUBLIC_URL:
+        # Ví dụ: https://tvu-tour.site/b7-thu-vien/audio/intro.wav
+        return f"{settings.R2_PUBLIC_URL}/{key}"
+        
     return f"{settings.R2_ENDPOINT_URL}/{_get_bucket()}/{key}"

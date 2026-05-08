@@ -94,6 +94,7 @@ export interface Location {
 export interface LocationDetail extends Location {
   description: string;
   intro_message: string;
+  intro_audio_url: string | null;
   suggested_questions: string[];
   links: { to_slug: string; label: string }[];
 }

@@ -119,6 +119,7 @@ async def generate_response(
     history: list[dict] | None = None,
     location_name: str = "Sảnh Chính",
     voice_style: str = "thân thiện",
+    personality_prompt: str = "Bạn là Trà Lê, mascot và hướng dẫn viên ảo của Đại học Trà Vinh (TVU).",
     enable_thinking: bool = False,
     thinking_budget: int = 1024,
     tools: list | None = None,
@@ -134,6 +135,7 @@ async def generate_response(
     system_prompt = build_system_prompt(
         location_name=location_name,
         voice_style=voice_style,
+        personality_prompt=personality_prompt,
         rag_context=rag_context_str,
         available_slugs=available_slugs,
     )
@@ -163,6 +165,7 @@ async def generate_response_stream(
     history: list[dict] | None = None,
     location_name: str = "Sảnh Chính",
     voice_style: str = "thân thiện",
+    personality_prompt: str = "Bạn là Trà Lê, mascot và hướng dẫn viên ảo của Đại học Trà Vinh (TVU).",
     enable_thinking: bool = False,
     thinking_budget: int = 1024,
     tools: list | None = None,
@@ -181,6 +184,7 @@ async def generate_response_stream(
     system_prompt = build_system_prompt(
         location_name=location_name,
         voice_style=voice_style,
+        personality_prompt=personality_prompt,
         rag_context=rag_context_str,
         available_slugs=available_slugs,
     )

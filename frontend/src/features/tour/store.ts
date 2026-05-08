@@ -23,6 +23,7 @@ export interface LocationNode {
   isStartNode: boolean;
   description: string;
   introMessage: string;
+  intro_audio_url?: string;
   backgroundUrl: string;
   suggestedQuestions: string[];
   links: { toSlug: string; label: string }[];
@@ -52,6 +53,7 @@ interface TourState {
   // === Sequential Navigation (AI Agent) ===
   pendingNavigation: string | null;                                       // Slug AI wants to navigate to
   pendingMediaFocus: { mediaId: string | null; tab: "video" | "info" } | null; // Deferred media focus
+  pendingMapAnimationSlug: string | null;
 
   // === Media (InfoPanel) ===
   locationMedia: MediaItem[];       // ALL media for current location (auto-fetched)
@@ -74,6 +76,7 @@ interface TourState {
   setPendingNavigation: (slug: string | null) => void;
   setPendingMediaFocus: (focus: { mediaId: string | null; tab: "video" | "info" } | null) => void;
   clearPendingNavigation: () => void;
+  setPendingMapAnimationSlug: (slug: string | null) => void;
 }
 
 // ===== Store =====
@@ -91,6 +94,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   // Sequential navigation
   pendingNavigation: null,
   pendingMediaFocus: null,
+  pendingMapAnimationSlug: null,
 
   // Media
   locationMedia: [],
@@ -176,6 +180,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   setPendingNavigation: (slug) => set({ pendingNavigation: slug }),
   setPendingMediaFocus: (focus) => set({ pendingMediaFocus: focus }),
   clearPendingNavigation: () => set({ pendingNavigation: null, pendingMediaFocus: null }),
+  setPendingMapAnimationSlug: (slug) => set({ pendingMapAnimationSlug: slug }),
 
   /**
    * AI Agent calls this to focus a specific media item + expand panel.

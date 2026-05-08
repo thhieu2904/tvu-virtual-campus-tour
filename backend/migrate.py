@@ -46,17 +46,15 @@ UPGRADE_SQL = [
     ),
 
     # === locations ===
-    "ALTER TABLE locations ADD COLUMN IF NOT EXISTS avatar_model_url TEXT;",
+    "ALTER TABLE locations ADD COLUMN IF NOT EXISTS mascot_id UUID;",
     "ALTER TABLE locations ADD COLUMN IF NOT EXISTS sort_order INTEGER;",
+    "ALTER TABLE locations ADD COLUMN IF NOT EXISTS intro_audio_url TEXT;",
     "ALTER TABLE locations ALTER COLUMN sort_order SET DEFAULT 0;",
     "UPDATE locations SET sort_order = 0 WHERE sort_order IS NULL;",
     "ALTER TABLE locations ALTER COLUMN sort_order SET NOT NULL;",
     "UPDATE locations SET background_url = '' WHERE background_url IS NULL;",
     "ALTER TABLE locations ALTER COLUMN background_url SET DEFAULT '';",
     "ALTER TABLE locations ALTER COLUMN background_url SET NOT NULL;",
-    "UPDATE locations SET voice_config = '{\"voice_name\": \"Kore\"}'::json WHERE voice_config IS NULL;",
-    "ALTER TABLE locations ALTER COLUMN voice_config SET DEFAULT '{\"voice_name\": \"Kore\"}'::json;",
-    "ALTER TABLE locations ALTER COLUMN voice_config SET NOT NULL;",
     "UPDATE locations SET camera_config = '{}'::json WHERE camera_config IS NULL;",
     "ALTER TABLE locations ALTER COLUMN camera_config SET DEFAULT '{}'::json;",
     "ALTER TABLE locations ALTER COLUMN camera_config SET NOT NULL;",
@@ -166,6 +164,9 @@ UPGRADE_SQL = [
         "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chat_messages_location_id_fkey') THEN "
         "ALTER TABLE chat_messages DROP CONSTRAINT chat_messages_location_id_fkey; "
         "END IF; "
+        "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'locations_mascot_id_fkey') THEN "
+        "ALTER TABLE locations DROP CONSTRAINT locations_mascot_id_fkey; "
+        "END IF; "
         "END $$;"
     ),
     "ALTER TABLE location_links ADD CONSTRAINT location_links_from_location_id_fkey FOREIGN KEY (from_location_id) REFERENCES locations(id) ON DELETE CASCADE;",
@@ -175,6 +176,7 @@ UPGRADE_SQL = [
     "ALTER TABLE media ADD CONSTRAINT media_location_id_fkey FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE;",
     "ALTER TABLE chat_sessions ADD CONSTRAINT chat_sessions_start_location_id_fkey FOREIGN KEY (start_location_id) REFERENCES locations(id) ON DELETE SET NULL;",
     "ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_location_id_fkey FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL;",
+    "ALTER TABLE locations ADD CONSTRAINT locations_mascot_id_fkey FOREIGN KEY (mascot_id) REFERENCES mascots(id) ON DELETE SET NULL;",
 ]
 
 async def init_models():

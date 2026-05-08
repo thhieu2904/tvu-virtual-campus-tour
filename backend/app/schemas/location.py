@@ -18,6 +18,7 @@ class LocationNode(BaseModel):
     isStartNode: bool
     description: str
     introMessage: str
+    intro_audio_url: Optional[str] = None
     backgroundUrl: str
     suggestedQuestions: List[str]
     links: List[LinkDTO]

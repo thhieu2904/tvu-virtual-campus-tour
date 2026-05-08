@@ -65,6 +65,8 @@ async def process_query(
     session_id: str | None = None,
     history: list[dict] | None = None,
     location_name: str = "Sảnh Chính",
+    personality_prompt: str | None = None,
+    voice_style: str | None = None,
 ) -> dict:
     """
     Main RAG pipeline (non-streaming) with Function Calling support:
@@ -93,13 +95,22 @@ async def process_query(
 
         # Step 3: Build RAG context and call Gemini WITH tools
         rag_context = [chunk["content"] for chunk in chunks]
+        
+        gen_kwargs = {
+            "query": message,
+            "history": history,
+            "location_name": location_name,
+            "available_slugs": available_slugs,
+        }
+        if personality_prompt:
+            gen_kwargs["personality_prompt"] = personality_prompt
+        if voice_style:
+            gen_kwargs["voice_style"] = voice_style
+            
         result = await generate_response(
-            query=message,
             rag_context=rag_context,
-            history=history,
-            location_name=location_name,
             tools=[AGENT_TOOLS],
-            available_slugs=available_slugs,
+            **gen_kwargs
         )
 
         # Step 4: Handle function calls
@@ -122,11 +133,8 @@ async def process_query(
 
                     # Call Gemini round 2 WITHOUT tools — force text-only response
                     result = await generate_response(
-                        query=message,
                         rag_context=rag_context + extra_context,
-                        history=history,
-                        location_name=location_name,
-                        available_slugs=available_slugs,
+                        **gen_kwargs
                         # No tools → Gemini only returns text
                     )
                     # Update chunks for sources
@@ -193,6 +201,8 @@ async def process_query_stream(
     session_id: str | None = None,
     history: list[dict] | None = None,
     location_name: str = "Sảnh Chính",
+    personality_prompt: str | None = None,
+    voice_style: str | None = None,
 ):
     """
     Streaming RAG pipeline with Function Calling (Collect-then-Decide):
@@ -236,13 +246,21 @@ async def process_query_stream(
     # We need the full response to decide if search tools were called.
     # ──────────────────────────────────────────────────────────
     try:
+        gen_kwargs = {
+            "query": message,
+            "history": history,
+            "location_name": location_name,
+            "available_slugs": available_slugs,
+        }
+        if personality_prompt:
+            gen_kwargs["personality_prompt"] = personality_prompt
+        if voice_style:
+            gen_kwargs["voice_style"] = voice_style
+
         result_r1 = await generate_response(
-            query=message,
             rag_context=rag_context,
-            history=history,
-            location_name=location_name,
             tools=[AGENT_TOOLS],
-            available_slugs=available_slugs,
+            **gen_kwargs
         )
     except Exception as e:
         logger.error(f"Gemini round 1 error: {e}")
@@ -299,12 +317,8 @@ async def process_query_stream(
 
             # Stream Gemini round 2 — NO tools (text only)
             async for chunk in generate_response_stream(
-                query=message,
                 rag_context=rag_context + extra_context,
-                history=history,
-                location_name=location_name,
-                available_slugs=available_slugs,
-                # No tools → guaranteed text-only stream
+                **gen_kwargs
             ):
                 if chunk.type == "text":
                     full_answer_parts.append(chunk.content)

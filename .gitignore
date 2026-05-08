@@ -1,6 +1,6 @@
 /src-tham-khao
 /plan
-
+.mp4
 
 # ===== Python =====
 __pycache__/
@@ -14,6 +14,9 @@ venv/
 .venv/
 *.egg
 
+# ===== Temp Scripts (may contain secrets) =====
+backend/_*.py
+backend/scratch/
 # ===== Node.js =====
 node_modules/
 .next/

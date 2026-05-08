@@ -3,21 +3,36 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
-import { useChatStore } from "../store";
+import { useChatStore, playPrecachedAudio } from "../store";
+import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 
 export default function ChatOverlay() {
   const location = useTourStore((s) => s.currentLocation());
   const isAppReady = useTourStore((s) => s.isAppReady);
   const activeOverlay = useTourStore((s) => s.activeOverlay);
+  const avatarState = useTourStore((s) => s.avatarState);
 
-  const { messages, isLoading, initSession, sendMessage, addMessage, _setMessages, _touchIdleTimer } = useChatStore();
+  const { messages, isLoading, initSession, sendMessage, addMessage, _setMessages, _touchIdleTimer, isTTSEnabled, toggleTTS } = useChatStore();
   const [input, setInput] = useState("");
-  const [isListening, setIsListening] = useState(false);
+  
+  const handleSpeechResult = (text: string) => {
+    handleSend(text);
+  };
+  
+  const { isListening, transcript, startListening, stopListening, browserSupportsSpeechRecognition } = useSpeechRecognition(handleSpeechResult);
+
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [showSubtitle, setShowSubtitle] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const prevSlugRef = useRef<string | null>(null);
+
+  // Chống Echo: Tự động tắt mic khi Mascot bắt đầu nói
+  useEffect(() => {
+    if (avatarState === "speaking" && isListening) {
+      stopListening();
+    }
+  }, [avatarState, isListening, stopListening]);
 
   // Khởi tạo session
   useEffect(() => {
@@ -45,6 +60,10 @@ export default function ChatOverlay() {
           content: location.introMessage,
         },
       ]);
+      // Phát âm thanh nếu đang bật tiếng
+      if (isTTSEnabled && location.intro_audio_url) {
+        playPrecachedAudio(location.intro_audio_url);
+      }
     } else if (!navigatedByAgent) {
       // User tự bấm map → append intro nhẹ (không xóa chat cũ)
       addMessage({
@@ -52,9 +71,13 @@ export default function ChatOverlay() {
         role: "assistant",
         content: `📍 ${location.introMessage}`,
       });
+      // Phát âm thanh
+      if (isTTSEnabled && location.intro_audio_url) {
+        playPrecachedAudio(location.intro_audio_url);
+      }
     }
     // Nếu navigatedByAgent → AI đã nói rồi, không cần thêm gì
-  }, [location?.slug, isLoading, isAppReady]);
+  }, [location?.slug, isLoading, isAppReady, isTTSEnabled]);
 
   // Tự động cuộn xuống cuối (Transcript)
   useEffect(() => {
@@ -182,7 +205,7 @@ export default function ChatOverlay() {
                   />
                 ))}
               </div>
-              <span className="font-medium text-red-400 text-[17px] tracking-wide animate-pulse">Đang lắng nghe...</span>
+              <span className="font-medium text-red-400 text-[17px] tracking-wide animate-pulse">{transcript || "Đang lắng nghe..."}</span>
             </div>
           ) : (
             <div className="flex w-full items-center min-w-0">
@@ -217,25 +240,45 @@ export default function ChatOverlay() {
         </div>
 
         {/* Mic Button */}
-        <button
-          onClick={() => setIsListening(!isListening)}
-          className={`w-16 h-16 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
-            isListening 
-              ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]" 
-              : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-          }`}
-        >
-          <div className={`absolute inset-0 rounded-full border-[3px] scale-110 transition-colors ${
-            isListening ? "border-red-500/40 animate-ping" : "border-white/20"
-          }`}></div>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
-          </svg>
-        </button>
+        {browserSupportsSpeechRecognition && (
+          <button
+            onClick={() => {
+              if (isListening) stopListening();
+              else startListening();
+            }}
+            className={`w-16 h-16 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
+              isListening 
+                ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]" 
+                : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            }`}
+          >
+            <div className={`absolute inset-0 rounded-full border-[3px] scale-110 transition-colors ${
+              isListening ? "border-red-500/40 animate-ping" : "border-white/20"
+            }`}></div>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
+            </svg>
+          </button>
+        )}
       </div>
 
       </div>
       {/* END BOTTOM CONTROLS WRAPPER */}
+
+      {/* === MASCOT CONTROLS (Mute Button) === */}
+      <div className="fixed left-6 bottom-24 z-40 pointer-events-auto flex flex-col gap-3">
+        <button
+          onClick={toggleTTS}
+          className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-xl border border-white/20 text-white/80 hover:text-white flex items-center justify-center transition-all hover:bg-black/70 shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
+          title={isTTSEnabled ? "Tắt tiếng Mascot" : "Bật tiếng Mascot"}
+        >
+          {isTTSEnabled ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+          )}
+        </button>
+      </div>
 
       {/* === EXPANDABLE TRANSCRIPT (Right Side Panel) === */}
       <AnimatePresence>
