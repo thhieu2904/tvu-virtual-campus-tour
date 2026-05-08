@@ -85,10 +85,6 @@ function _flushToolCalls() {
         break;
       }
 
-      case "search_local":
-      case "search_global":
-        // Handled server-side — no frontend action needed
-        break;
     }
   }
 }

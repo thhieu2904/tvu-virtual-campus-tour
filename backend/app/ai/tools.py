@@ -5,8 +5,7 @@ Defines the tools that the AI Agent can use to:
 - Navigate between locations (navigate_to)
 - Display media on InfoPanel (show_media)
 - Toggle the campus map overlay (toggle_map)
-- Search location-specific documents (search_local)
-- Search global/university-wide documents (search_global)
+- Search documents in the knowledge base (search_documents)
 - [Placeholder] Search the web (search_web) — Phase 2
 
 Usage:
@@ -89,14 +88,14 @@ toggle_map_decl = types.FunctionDeclaration(
 )
 
 # ─────────────────────────────────────────────
-# Tool 4: Search LOCAL documents (location-specific)
+# Tool 4: Search documents (Global RAG)
 # ─────────────────────────────────────────────
-search_local_decl = types.FunctionDeclaration(
-    name="search_local",
+search_documents_decl = types.FunctionDeclaration(
+    name="search_documents",
     description=(
-        "Tìm kiếm thông tin chi tiết về ĐỊA ĐIỂM ĐANG ĐỨNG "
-        "(phòng lab, thiết bị, lịch hoạt động, cơ sở vật chất, đặc điểm riêng...). "
-        "Dùng khi user hỏi về nơi đang tham quan và Context có sẵn KHÔNG đủ để trả lời."
+        "Tìm kiếm thông tin tổng thể về trường Đại học Trà Vinh (TVU): học phí, điểm chuẩn, quy chế, "
+        "chương trình đào tạo, học bổng, lịch sử phát triển, và thông tin các trường/khoa trực thuộc... "
+        "Dùng khi người dùng hỏi các thông tin không có sẵn trong đoạn giới thiệu hiện tại."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,
@@ -111,30 +110,7 @@ search_local_decl = types.FunctionDeclaration(
 )
 
 # ─────────────────────────────────────────────
-# Tool 5: Search GLOBAL documents (university-wide)
-# ─────────────────────────────────────────────
-search_global_decl = types.FunctionDeclaration(
-    name="search_global",
-    description=(
-        "Tìm kiếm thông tin CHUNG toàn trường: học phí, điểm chuẩn, quy chế đào tạo, "
-        "chương trình đào tạo, lịch trình, chính sách sinh viên, tuyển sinh, "
-        "hoặc bất kỳ thông tin nào KHÔNG liên quan đến địa điểm đang đứng. "
-        "Dùng khi Context có sẵn KHÔNG đủ để trả lời câu hỏi mang tính toàn trường."
-    ),
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "query": types.Schema(
-                type=types.Type.STRING,
-                description="Câu truy vấn tìm kiếm bằng tiếng Việt, viết lại ngắn gọn từ câu hỏi của user.",
-            ),
-        },
-        required=["query"],
-    ),
-)
-
-# ─────────────────────────────────────────────
-# Tool 6 [PLACEHOLDER]: Search the web (Tavily)
+# Tool 5 [PLACEHOLDER]: Search the web (Tavily)
 # Phase 2 — Not included in AGENT_TOOLS yet
 # ─────────────────────────────────────────────
 search_web_decl = types.FunctionDeclaration(
@@ -142,7 +118,7 @@ search_web_decl = types.FunctionDeclaration(
     description=(
         "Tìm kiếm thông tin real-time trên website trường (tvu.edu.vn) và internet. "
         "Dùng khi cần thông tin thời sự: lịch thi, thông báo mới, sự kiện, "
-        "hoặc khi cả search_local và search_global đều không có kết quả."
+        "hoặc khi tool search_documents không có kết quả."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,
@@ -167,8 +143,7 @@ AGENT_TOOLS = types.Tool(
         navigate_to_decl,
         show_media_decl,
         toggle_map_decl,
-        search_local_decl,
-        search_global_decl,
+        search_documents_decl,
         # search_web_decl,  # Phase 2: Uncomment to enable web search
     ]
 )

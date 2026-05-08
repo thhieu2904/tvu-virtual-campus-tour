@@ -24,7 +24,7 @@ from app.db.tables import ChatSession, ChatMessage, Location
 logger = logging.getLogger(__name__)
 
 # Search tool names — these require RAG round 2
-_SEARCH_TOOLS = {"search_local", "search_global"}
+_SEARCH_TOOLS = {"search_documents"}
 # UI tool names — these are forwarded directly to frontend
 _UI_TOOLS = {"navigate_to", "show_media", "toggle_map"}
 
@@ -107,14 +107,11 @@ async def process_query(
         if result.function_calls:
             for fc in result.function_calls:
                 if fc["name"] in _SEARCH_TOOLS:
-                    # Determine search scope based on tool name
-                    search_location_id = loc_uuid if fc["name"] == "search_local" else None
-
-                    # Execute RAG round 2 with the AI's refined query
+                    # Execute RAG round 2 with the AI's refined query globally
                     extra_query = fc["args"].get("query", message)
                     extra_vector = await embed_query(extra_query)
                     extra_chunks = await vector_repo.vector_search(
-                        session, extra_vector, location_id=search_location_id, top_k=5
+                        session, extra_vector, location_id=None, top_k=5
                     )
                     extra_context = [c["content"] for c in extra_chunks]
 
@@ -286,11 +283,12 @@ async def process_query_stream(
         # Path A: Search tool called → RAG round 2 → Stream round 2
         # ──────────────────────────────────────────────────────
         try:
-            search_location_id = loc_uuid if search_fc["name"] == "search_local" else None
             extra_query = search_fc["args"].get("query", message)
             extra_vector = await embed_query(extra_query)
+            
+            # LUÔN LUÔN tìm kiếm Global (location_id=None)
             extra_chunks = await vector_repo.vector_search(
-                session, extra_vector, location_id=search_location_id, top_k=5
+                session, extra_vector, location_id=None, top_k=5
             )
             extra_context = [c["content"] for c in extra_chunks]
 
