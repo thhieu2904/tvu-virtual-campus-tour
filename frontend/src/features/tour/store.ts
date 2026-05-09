@@ -45,6 +45,7 @@ interface TourState {
   currentLocationSlug: string;
   isLoading: boolean;
   isAppReady: boolean;              // Gates UI display after initial 3D/panorama load
+  isPanoramaReady: boolean;          // Panorama 360° has actually rendered (event-based)
   isTransitioning: boolean;
   avatarState: "idle" | "thinking" | "speaking";
   activeOverlay: "none" | "info" | "map";
@@ -54,6 +55,11 @@ interface TourState {
   pendingNavigation: string | null;                                       // Slug AI wants to navigate to
   pendingMediaFocus: { mediaId: string | null; tab: "video" | "info" } | null; // Deferred media focus
   pendingMapAnimationSlug: string | null;
+
+  // === Network Recovery ===
+  networkRetryCount: number;
+  isNetworkError: boolean;
+  isFatalError: boolean;
 
   // === Media (InfoPanel) ===
   locationMedia: MediaItem[];       // ALL media for current location (auto-fetched)
@@ -70,6 +76,7 @@ interface TourState {
   navigateTo: (slug: string, source?: "agent" | "user") => void;
   setLoading: (loading: boolean) => void;
   setAppReady: (ready: boolean) => void;
+  setPanoramaReady: (ready: boolean) => void;
   setAvatarState: (state: "idle" | "thinking" | "speaking") => void;
   setActiveOverlay: (overlay: "none" | "info" | "map") => void;
   setFocusedMedia: (mediaId: string | null, preferredTab?: "video" | "info") => void;
@@ -77,6 +84,7 @@ interface TourState {
   setPendingMediaFocus: (focus: { mediaId: string | null; tab: "video" | "info" } | null) => void;
   clearPendingNavigation: () => void;
   setPendingMapAnimationSlug: (slug: string | null) => void;
+  resetNetworkRetry: () => void;
 }
 
 // ===== Store =====
@@ -86,6 +94,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   currentLocationSlug: "",
   isLoading: true,
   isAppReady: false,
+  isPanoramaReady: false,
   isTransitioning: false,
   avatarState: "idle",
   activeOverlay: "none",
@@ -95,6 +104,11 @@ export const useTourStore = create<TourState>((set, get) => ({
   pendingNavigation: null,
   pendingMediaFocus: null,
   pendingMapAnimationSlug: null,
+
+  // Network Recovery
+  networkRetryCount: 0,
+  isNetworkError: false,
+  isFatalError: false,
 
   // Media
   locationMedia: [],
@@ -108,6 +122,12 @@ export const useTourStore = create<TourState>((set, get) => ({
   },
 
   fetchLocations: async () => {
+    const state = get();
+    if (state.networkRetryCount >= 6) {
+      set({ isFatalError: true, isLoading: false, isNetworkError: false });
+      return;
+    }
+
     set({ isLoading: true });
     try {
       const response = await fetch(`${API_URL}/api/locations`);
@@ -123,7 +143,10 @@ export const useTourStore = create<TourState>((set, get) => ({
       set({ 
         locations, 
         currentLocationSlug: startSlug,
-        isLoading: false 
+        isLoading: false,
+        isNetworkError: false,
+        isFatalError: false,
+        networkRetryCount: 0
       });
 
       // Auto-fetch media for starting location
@@ -131,9 +154,30 @@ export const useTourStore = create<TourState>((set, get) => ({
         get().fetchLocationMedia(startSlug);
       }
     } catch (error) {
-      console.error("Failed to fetch locations from backend API:", error);
-      set({ isLoading: false });
+      // Use console.warn instead of console.error to prevent Next.js dev overlay from showing a red error dot
+      console.warn("Failed to fetch locations. Retrying in 10s...", error);
+      
+      const nextCount = get().networkRetryCount + 1;
+      set({ 
+        isNetworkError: nextCount < 6, 
+        isFatalError: nextCount >= 6,
+        networkRetryCount: nextCount
+      });
+      
+      if (nextCount < 6) {
+        // Retry after 10s
+        setTimeout(() => {
+          get().fetchLocations();
+        }, 10000);
+      } else {
+        set({ isLoading: false });
+      }
     }
+  },
+
+  resetNetworkRetry: () => {
+    set({ networkRetryCount: 0, isFatalError: false, isNetworkError: false });
+    get().fetchLocations();
   },
 
   /**
@@ -161,7 +205,7 @@ export const useTourStore = create<TourState>((set, get) => ({
     if (!target || target.status === "inactive") return;
 
     // Transition animation: fade out → swap data → fade in
-    set({ isTransitioning: true, navigatedByAgent: source === "agent" });
+    set({ isTransitioning: true, isPanoramaReady: false, navigatedByAgent: source === "agent" });
 
     setTimeout(() => {
       set({
@@ -175,6 +219,7 @@ export const useTourStore = create<TourState>((set, get) => ({
 
   setLoading: (loading) => set({ isLoading: loading }),
   setAppReady: (ready) => set({ isAppReady: ready }),
+  setPanoramaReady: (ready) => set({ isPanoramaReady: ready }),
   setAvatarState: (state) => set({ avatarState: state }),
   setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
   setPendingNavigation: (slug) => set({ pendingNavigation: slug }),

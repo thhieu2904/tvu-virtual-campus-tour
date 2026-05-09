@@ -21,6 +21,7 @@ interface PanoramaViewerProps {
   isTransitioning?: boolean;
   links?: { toSlug: string; label: string }[];
   onNavigate?: (slug: string) => void;
+  onLoad?: () => void;
 }
 
 export default function PanoramaViewer({
@@ -31,9 +32,12 @@ export default function PanoramaViewer({
   isTransitioning = false,
   links = [],
   onNavigate,
+  onLoad,
 }: PanoramaViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
+  const onLoadRef = useRef(onLoad);
+  onLoadRef.current = onLoad;
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -101,6 +105,7 @@ export default function PanoramaViewer({
 
       viewerRef.current.on("load", () => {
         setIsLoaded(true);
+        onLoadRef.current?.();
       });
 
       viewerRef.current.on("error", () => {

@@ -141,3 +141,17 @@ body {
     margin: 0;
   }
 }
+
+/* === KIOSK HARDENING: Prevent browser gestures === */
+html {
+  overscroll-behavior: none;        /* Chặn pull-to-refresh */
+  touch-action: manipulation;       /* Chỉ cho phép tap + scroll, chặn pinch zoom */
+  -webkit-touch-callout: none;      /* Chặn long-press callout (iOS/Safari) */
+  -webkit-user-select: none;        /* Chặn chọn text */
+  user-select: none;
+}
+
+/* Chặn context menu (chuột phải / long press) */
+body {
+  -webkit-tap-highlight-color: transparent;  /* Bỏ highlight xanh khi tap */
+}

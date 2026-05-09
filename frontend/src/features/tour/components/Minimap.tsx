@@ -26,6 +26,7 @@ export default function Minimap() {
   const fetchLocationMedia = useTourStore((s) => s.fetchLocationMedia);
   const setFocusedMedia = useTourStore((s) => s.setFocusedMedia);
   const setActiveOverlay2 = useTourStore((s) => s.setActiveOverlay);
+  const isPanoramaReady = useTourStore((s) => s.isPanoramaReady);
 
   const currentLocation = locations.find((l) => l.slug === currentSlug);
 
@@ -71,9 +72,9 @@ export default function Minimap() {
     [currentSlug, navigateTo]
   );
 
-  // ── Auto-close after navigation completes ──
+  // ── Auto-close after navigation completes AND panorama is ready ──
   useEffect(() => {
-    if (navTarget && !isTransitioning && animProgress >= 1) {
+    if (navTarget && !isTransitioning && animProgress >= 1 && isPanoramaReady) {
       const timer = setTimeout(() => {
         setExpanded(false);
         // Apply deferred media focus if AI requested it
@@ -89,7 +90,20 @@ export default function Minimap() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [navTarget, isTransitioning, animProgress, pendingMediaFocus]);
+  }, [navTarget, isTransitioning, animProgress, isPanoramaReady, pendingMediaFocus]);
+
+  // ── Safety: force close map if panorama doesn't load after 6s ──
+  useEffect(() => {
+    if (navTarget && !isTransitioning && animProgress >= 1 && !isPanoramaReady) {
+      const safety = setTimeout(() => {
+        console.warn("[Minimap] Safety timeout — closing map without panorama ready");
+        setExpanded(false);
+        setNavTarget(null);
+        setAnimProgress(0);
+      }, 6000);
+      return () => clearTimeout(safety);
+    }
+  }, [navTarget, isTransitioning, animProgress, isPanoramaReady]);
 
   useEffect(() => {
     return () => {

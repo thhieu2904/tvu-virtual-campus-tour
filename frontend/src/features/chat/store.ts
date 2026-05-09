@@ -317,7 +317,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           useTourStore.getState().setAvatarState("idle");
           setTimeout(() => {
             if (data.tool_actions && data.tool_actions.length > 0) {
-              _flushToolCalls(data.tool_actions);
+              _flushToolCalls();
             }
           }, 500);
         }
