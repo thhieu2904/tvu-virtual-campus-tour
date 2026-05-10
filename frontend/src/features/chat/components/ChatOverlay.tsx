@@ -12,14 +12,29 @@ export default function ChatOverlay() {
   const activeOverlay = useTourStore((s) => s.activeOverlay);
   const avatarState = useTourStore((s) => s.avatarState);
 
-  const { messages, isLoading, initSession, sendMessage, addMessage, _setMessages, _touchIdleTimer, isTTSEnabled, toggleTTS } = useChatStore();
+  const {
+    messages,
+    isLoading,
+    initSession,
+    sendMessage,
+    addMessage,
+    _setMessages,
+    isTTSEnabled,
+    toggleTTS,
+  } = useChatStore();
   const [input, setInput] = useState("");
-  
+
   const handleSpeechResult = (text: string) => {
     handleSend(text);
   };
-  
-  const { isListening, transcript, startListening, stopListening, browserSupportsSpeechRecognition } = useSpeechRecognition(handleSpeechResult);
+
+  const {
+    isListening,
+    transcript,
+    startListening,
+    stopListening,
+    browserSupportsSpeechRecognition,
+  } = useSpeechRecognition(handleSpeechResult);
 
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [showSubtitle, setShowSubtitle] = useState(false);
@@ -60,8 +75,13 @@ export default function ChatOverlay() {
           content: location.introMessage,
         },
       ]);
-      // Phát âm thanh nếu đang bật tiếng
-      if (isTTSEnabled && location.intro_audio_url) {
+
+      // Phát âm thanh nếu đang bật tiếng và app đã start (tránh phát lén lúc Reset)
+      if (
+        isTTSEnabled &&
+        location.intro_audio_url &&
+        useTourStore.getState().hasStarted
+      ) {
         playPrecachedAudio(location.intro_audio_url);
       }
     } else if (!navigatedByAgent) {
@@ -72,7 +92,11 @@ export default function ChatOverlay() {
         content: `📍 ${location.introMessage}`,
       });
       // Phát âm thanh
-      if (isTTSEnabled && location.intro_audio_url) {
+      if (
+        isTTSEnabled &&
+        location.intro_audio_url &&
+        useTourStore.getState().hasStarted
+      ) {
         playPrecachedAudio(location.intro_audio_url);
       }
     }
@@ -95,7 +119,6 @@ export default function ChatOverlay() {
 
   const handleSend = (text: string) => {
     if (!text.trim() || isLoading) return;
-    _touchIdleTimer(); // Keep session alive on interaction
     // All messages go through AI Agent — it decides whether to navigate, show media, etc.
     sendMessage(text, location?.id);
     setInput("");
@@ -112,49 +135,59 @@ export default function ChatOverlay() {
     <>
       {/* === DYNAMIC SUBTITLES (Speech Bubbles) === */}
       <AnimatePresence>
-        {showSubtitle && !isMapActive && displayMessages.map((msg) => {
-          if (msg.role === "assistant") {
-            return (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, scale: 0.8, x: -20, y: 20 }}
-                animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                className="fixed left-[32%] top-[25%] w-max max-w-[380px] z-50 pointer-events-auto origin-bottom-left"
-              >
-                <div className="relative bg-black/70 backdrop-blur-3xl text-white px-6 py-4 rounded-[28px] rounded-bl-xl border border-white/20 shadow-2xl">
-                  <span className="whitespace-pre-wrap text-[16px] leading-relaxed font-medium">{msg.content}</span>
-                  {msg.isStreaming && (
-                    <motion.span
-                      className="inline-block w-1.5 h-4 ml-1.5 bg-white/70 align-middle"
-                      animate={{ opacity: [1, 0] }}
-                      transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
-                    />
-                  )}
-                  {/* Speech Bubble Tail */}
-                  <div className="absolute -left-2 bottom-2 w-5 h-5 bg-black/70 border-l border-b border-white/20 rounded-bl-md transform rotate-45 -z-10 backdrop-blur-3xl"></div>
-                </div>
-              </motion.div>
-            );
-          }
+        {showSubtitle &&
+          !isMapActive &&
+          displayMessages.map((msg) => {
+            if (msg.role === "assistant") {
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, scale: 0.8, x: -20, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                  className="fixed left-[32%] top-[25%] w-max max-w-[380px] z-50 pointer-events-auto origin-bottom-left"
+                >
+                  <div className="relative bg-black/70 backdrop-blur-3xl text-white px-6 py-4 rounded-[28px] rounded-bl-xl border border-white/20 shadow-2xl">
+                    <span className="whitespace-pre-wrap text-[16px] leading-relaxed font-medium">
+                      {msg.content}
+                    </span>
+                    {msg.isStreaming && (
+                      <motion.span
+                        className="inline-block w-1.5 h-4 ml-1.5 bg-white/70 align-middle"
+                        animate={{ opacity: [1, 0] }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 0.8,
+                          ease: "linear",
+                        }}
+                      />
+                    )}
+                    {/* Speech Bubble Tail */}
+                    <div className="absolute -left-2 bottom-2 w-5 h-5 bg-black/70 border-l border-b border-white/20 rounded-bl-md transform rotate-45 -z-10 backdrop-blur-3xl"></div>
+                  </div>
+                </motion.div>
+              );
+            }
 
-          if (msg.role === "user") {
-            return (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                className="fixed bottom-[260px] left-1/2 -translate-x-1/2 w-max max-w-[400px] z-40 pointer-events-auto flex justify-center"
-              >
-                <div className="bg-blue-600/90 text-white px-6 py-3 rounded-full border border-blue-400/30 shadow-xl backdrop-blur-2xl">
-                  <span className="whitespace-pre-wrap text-[15px] font-medium">{msg.content}</span>
-                </div>
-              </motion.div>
-            );
-          }
-          return null;
-        })}
+            if (msg.role === "user") {
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  className="fixed bottom-[260px] left-1/2 -translate-x-1/2 w-max max-w-[400px] z-40 pointer-events-auto flex justify-center"
+                >
+                  <div className="bg-blue-600/90 text-white px-6 py-3 rounded-full border border-blue-400/30 shadow-xl backdrop-blur-2xl">
+                    <span className="whitespace-pre-wrap text-[15px] font-medium">
+                      {msg.content}
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            }
+            return null;
+          })}
       </AnimatePresence>
 
       {/* === BOTTOM CONTROLS WRAPPER === */}
@@ -174,94 +207,126 @@ export default function ChatOverlay() {
           </div>
         )}
 
-      {/* === VOICE HUB (Premium Dark Glass) === */}
-      <div className="bg-black/50 backdrop-blur-3xl border border-white/20 shadow-[0_16px_48px_0_rgba(0,0,0,0.4)] rounded-[3rem] pl-4 pr-2 py-2 flex items-center gap-4 pointer-events-auto relative overflow-hidden w-[90%] sm:w-[500px]">
-        {/* Subtle glass shimmer */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 skew-x-12 opacity-50 pointer-events-none"></div>
-        
-        {/* Transcript Toggle Button */}
-        <button
-          onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
-          className={`w-12 h-12 flex items-center justify-center rounded-full transition-all z-10 shrink-0 ${
-            isTranscriptOpen ? "bg-white/20 text-white" : "hover:bg-white/10 text-white/70"
-          }`}
-          title="Lịch sử trò chuyện"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-        </button>
+        {/* === VOICE HUB (Premium Dark Glass) === */}
+        <div className="bg-black/50 backdrop-blur-3xl border border-white/20 shadow-[0_16px_48px_0_rgba(0,0,0,0.4)] rounded-[3rem] pl-4 pr-2 py-2 flex items-center gap-4 pointer-events-auto relative overflow-hidden w-[90%] sm:w-[500px]">
+          {/* Subtle glass shimmer */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 skew-x-12 opacity-50 pointer-events-none"></div>
 
-        <div className="flex-1 flex justify-start items-center z-10 w-full border-l border-white/10 pl-4">
-          {isListening ? (
-            <div className="flex items-center gap-4">
-              <div className="flex justify-center gap-1.5 items-center">
-                {[4, 8, 12, 16, 10, 6, 14, 8, 3].map((val, idx) => (
-                  <motion.div
-                    key={idx}
-                    className="w-1.5 bg-red-400 rounded-full shadow-[0_0_8px_rgba(248,113,113,0.8)]"
-                    animate={{ height: [`${val}px`, `${val * 1.5}px`, `${val}px`] }}
-                    transition={{ repeat: Infinity, duration: 0.8, delay: idx * 0.1 }}
-                  />
-                ))}
-              </div>
-              <span className="font-medium text-red-400 text-[17px] tracking-wide animate-pulse">{transcript || "Đang lắng nghe..."}</span>
-            </div>
-          ) : (
-            <div className="flex w-full items-center min-w-0">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSend(input);
-                }}
-                disabled={isLoading}
-                placeholder="Nhập câu hỏi hoặc bấm mic..."
-                className="min-w-0 w-full bg-transparent text-white placeholder:text-white/50 text-[17px] font-medium outline-none disabled:opacity-50 pr-4"
-              />
-              <AnimatePresence>
-                {input.trim() && !isLoading && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    onClick={() => handleSend(input)}
-                    className="ml-2 w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:bg-blue-500 active:scale-90 transition-all"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                    </svg>
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-
-        {/* Mic Button */}
-        {browserSupportsSpeechRecognition && (
+          {/* Transcript Toggle Button */}
           <button
-            onClick={() => {
-              if (isListening) stopListening();
-              else startListening();
-            }}
-            className={`w-16 h-16 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
-              isListening 
-                ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]" 
-                : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
+            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all z-10 shrink-0 ${
+              isTranscriptOpen
+                ? "bg-white/20 text-white"
+                : "hover:bg-white/10 text-white/70"
             }`}
+            title="Lịch sử trò chuyện"
           >
-            <div className={`absolute inset-0 rounded-full border-[3px] scale-110 transition-colors ${
-              isListening ? "border-red-500/40 animate-ping" : "border-white/20"
-            }`}></div>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
             </svg>
           </button>
-        )}
-      </div>
 
+          <div className="flex-1 flex justify-start items-center z-10 w-full border-l border-white/10 pl-4">
+            {isListening ? (
+              <div className="flex items-center gap-4">
+                <div className="flex justify-center gap-1.5 items-center">
+                  {[4, 8, 12, 16, 10, 6, 14, 8, 3].map((val, idx) => (
+                    <motion.div
+                      key={idx}
+                      className="w-1.5 bg-red-400 rounded-full shadow-[0_0_8px_rgba(248,113,113,0.8)]"
+                      animate={{
+                        height: [`${val}px`, `${val * 1.5}px`, `${val}px`],
+                      }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.8,
+                        delay: idx * 0.1,
+                      }}
+                    />
+                  ))}
+                </div>
+                <span className="font-medium text-red-400 text-[17px] tracking-wide animate-pulse">
+                  {transcript || "Đang lắng nghe..."}
+                </span>
+              </div>
+            ) : (
+              <div className="flex w-full items-center min-w-0">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSend(input);
+                  }}
+                  disabled={isLoading}
+                  placeholder="Nhập câu hỏi hoặc bấm mic..."
+                  className="min-w-0 w-full bg-transparent text-white placeholder:text-white/50 text-[17px] font-medium outline-none disabled:opacity-50 pr-4"
+                />
+                <AnimatePresence>
+                  {input.trim() && !isLoading && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      onClick={() => handleSend(input)}
+                      className="ml-2 w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:bg-blue-500 active:scale-90 transition-all"
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                      </svg>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+
+          {/* Mic Button */}
+          {browserSupportsSpeechRecognition && (
+            <button
+              onClick={() => {
+                if (isListening) stopListening();
+                else startListening();
+              }}
+              className={`w-16 h-16 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
+                isListening
+                  ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]"
+                  : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+              }`}
+            >
+              <div
+                className={`absolute inset-0 rounded-full border-[3px] scale-110 transition-colors ${
+                  isListening
+                    ? "border-red-500/40 animate-ping"
+                    : "border-white/20"
+                }`}
+              ></div>
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
       {/* END BOTTOM CONTROLS WRAPPER */}
 
@@ -273,9 +338,35 @@ export default function ChatOverlay() {
           title={isTTSEnabled ? "Tắt tiếng Mascot" : "Bật tiếng Mascot"}
         >
           {isTTSEnabled ? (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            </svg>
           ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <line x1="23" y1="9" x2="17" y2="15"></line>
+              <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
           )}
         </button>
       </div>
@@ -292,22 +383,51 @@ export default function ChatOverlay() {
           >
             <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
               <h3 className="text-white font-medium flex items-center gap-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
                 Lịch sử trò chuyện
               </h3>
-              <button onClick={() => setIsTranscriptOpen(false)} className="text-white/50 hover:text-white transition-colors">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <button
+                onClick={() => setIsTranscriptOpen(false)}
+                className="text-white/50 hover:text-white transition-colors"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
               {messages.map((msg) => {
                 const isUser = msg.role === "user";
                 return (
-                  <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-[15px] leading-relaxed ${
-                      isUser ? "bg-blue-600/80 text-white rounded-tr-sm" : "bg-white/10 text-white/90 rounded-tl-sm"
-                    }`}>
+                  <div
+                    key={msg.id}
+                    className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] px-4 py-3 rounded-2xl text-[15px] leading-relaxed ${
+                        isUser
+                          ? "bg-blue-600/80 text-white rounded-tr-sm"
+                          : "bg-white/10 text-white/90 rounded-tl-sm"
+                      }`}
+                    >
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     </div>
                   </div>

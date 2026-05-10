@@ -47,6 +47,7 @@ interface TourState {
   isAppReady: boolean;              // Gates UI display after initial 3D/panorama load
   isPanoramaReady: boolean;          // Panorama 360° has actually rendered (event-based)
   isTransitioning: boolean;
+  hasStarted: boolean;               // True when user clicks 'Start' on the overlay
   avatarState: "idle" | "thinking" | "speaking";
   activeOverlay: "none" | "info" | "map";
   navigatedByAgent: boolean;
@@ -77,6 +78,7 @@ interface TourState {
   setLoading: (loading: boolean) => void;
   setAppReady: (ready: boolean) => void;
   setPanoramaReady: (ready: boolean) => void;
+  setHasStarted: (started: boolean) => void;
   setAvatarState: (state: "idle" | "thinking" | "speaking") => void;
   setActiveOverlay: (overlay: "none" | "info" | "map") => void;
   setFocusedMedia: (mediaId: string | null, preferredTab?: "video" | "info") => void;
@@ -96,6 +98,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   isAppReady: false,
   isPanoramaReady: false,
   isTransitioning: false,
+  hasStarted: false,
   avatarState: "idle",
   activeOverlay: "none",
   navigatedByAgent: false,
@@ -123,6 +126,7 @@ export const useTourStore = create<TourState>((set, get) => ({
 
   fetchLocations: async () => {
     const state = get();
+    if (state.isLoading) return; // Prevent race conditions during auto-retry
     if (state.networkRetryCount >= 6) {
       set({ isFatalError: true, isLoading: false, isNetworkError: false });
       return;
@@ -220,6 +224,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setAppReady: (ready) => set({ isAppReady: ready }),
   setPanoramaReady: (ready) => set({ isPanoramaReady: ready }),
+  setHasStarted: (started) => set({ hasStarted: started }),
   setAvatarState: (state) => set({ avatarState: state }),
   setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
   setPendingNavigation: (slug) => set({ pendingNavigation: slug }),

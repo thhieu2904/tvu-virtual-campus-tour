@@ -13,6 +13,7 @@ interface UseKioskIdleWatcherOptions {
 // Default: 10 minutes idle, 60 seconds warning
 const DEFAULT_IDLE_TIMEOUT = 10 * 60 * 1000;
 const DEFAULT_WARNING_DURATION = 60 * 1000;
+const DEBUG = false; // Set to true to enable logs
 
 export function useKioskIdleWatcher({
   idleTimeoutMs = DEFAULT_IDLE_TIMEOUT,
@@ -79,10 +80,10 @@ export function useKioskIdleWatcher({
       idleTimerRef.current = null;
     }
 
-    console.log(`[IdleWatcher] Idle timer started (${idleTimeoutMs / 1000}s)`);
+    if (DEBUG) console.log(`[IdleWatcher] Idle timer started (${idleTimeoutMs / 1000}s)`);
     idleTimerRef.current = setTimeout(() => {
       // Idle timeout reached → show warning
-      console.log("[IdleWatcher] Idle timeout! Showing warning...");
+      if (DEBUG) console.log("[IdleWatcher] Idle timeout! Showing warning...");
       isWarningRef.current = true;
       setIsWarning(true);
       onWarningRef.current?.();
@@ -102,7 +103,7 @@ export function useKioskIdleWatcher({
   // Main effect: manage event listeners and idle timer
   useEffect(() => {
     if (!enabled) {
-      console.log("[IdleWatcher] Disabled — clearing timers");
+      if (DEBUG) console.log("[IdleWatcher] Disabled — clearing timers");
       clearAllTimers();
       isWarningRef.current = false;
       setIsWarning(false);
@@ -110,7 +111,7 @@ export function useKioskIdleWatcher({
     }
 
     if (paused) {
-      console.log("[IdleWatcher] Paused (AI speaking) — stopping idle timer");
+      if (DEBUG) console.log("[IdleWatcher] Paused (AI speaking) — stopping idle timer");
       // Pause: stop idle timer but DON'T clear warning if it's showing
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
@@ -119,7 +120,7 @@ export function useKioskIdleWatcher({
       return;
     }
 
-    console.log(`[IdleWatcher] Active! enabled=${enabled}, paused=${paused}`);
+    if (DEBUG) console.log(`[IdleWatcher] Active! enabled=${enabled}, paused=${paused}`);
 
     const handleActivity = () => {
       if (isWarningRef.current) {

@@ -12,7 +12,6 @@ import ChatOverlay from "@/features/chat/components/ChatOverlay";
 import Avatar3D from "@/features/tour/components/Avatar3D";
 
 export default function TourPage() {
-  const [hasStarted, setHasStarted] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const fetchLocations = useTourStore((s) => s.fetchLocations);
   const location = useTourStore((s) => s.currentLocation());
@@ -31,6 +30,8 @@ export default function TourPage() {
   const isFatalError = useTourStore((s) => s.isFatalError);
   const networkRetryCount = useTourStore((s) => s.networkRetryCount);
   const resetNetworkRetry = useTourStore((s) => s.resetNetworkRetry);
+  const hasStarted = useTourStore((s) => s.hasStarted);
+  const setHasStarted = useTourStore((s) => s.setHasStarted);
 
   useEffect(() => {
     fetchLocations();
@@ -115,8 +116,11 @@ export default function TourPage() {
     setIsResetting(true); // Fade-to-black
 
     setTimeout(() => {
-      // 1. Stop audio
+      // 1. Dừng audio & Đặt lại màn hình Start TRƯỚC KHI reset/navigate
+      // Điều này ngăn ChatOverlay tự động phát audio intro khi navigate về start node
       _stopCurrentAudio();
+      setHasStarted(false);
+
       // 2. Reset chat
       useChatStore.getState().resetSession();
       // 3. Navigate to start node
@@ -126,8 +130,6 @@ export default function TourPage() {
       if (startNode) navigateTo(startNode.slug);
       // 4. Close overlays
       setActiveOverlay("none");
-      // 5. Back to Start Screen
-      setHasStarted(false);
 
       // Fade out black overlay
       setTimeout(() => setIsResetting(false), 500);

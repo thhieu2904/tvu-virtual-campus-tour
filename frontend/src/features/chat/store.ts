@@ -4,7 +4,6 @@ import { ChatMessage } from "./types";
 
 // ── Constants ──
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes idle → session reset
 const MAX_HISTORY_FOR_AI = 20; // Max messages sent to Gemini for context
 
 // ── Types ──
@@ -23,7 +22,6 @@ interface ChatState {
   addMessage: (message: ChatMessage) => void;
   _appendChunk: (messageId: string, chunk: string) => void;
   _setMessages: (messages: ChatMessage[]) => void;
-  _touchIdleTimer: () => void;
 }
 
 // ── Global Audio Manager ──
@@ -62,9 +60,6 @@ export function playPrecachedAudio(url: string) {
     useTourStore.getState().setAvatarState("idle");
   });
 }
-
-// ── Idle Timer (module-level) ──
-let _idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Tool Call Queue ──
 let _pendingToolCalls: { name: string; args: Record<string, unknown> }[] = [];
@@ -196,18 +191,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  /**
-   * Reset idle timer. Called on every user interaction.
-   * After IDLE_TIMEOUT_MS of inactivity → resetSession().
-   */
-  _touchIdleTimer: () => {
-    if (_idleTimer) clearTimeout(_idleTimer);
-    _idleTimer = setTimeout(() => {
-      console.log("[ChatStore] Idle timeout reached — resetting session");
-      get().resetSession();
-    }, IDLE_TIMEOUT_MS);
-  },
-
   _appendChunk: (messageId: string, chunk: string) => {
     set((state) => ({
       messages: state.messages.map((msg) => {
@@ -221,10 +204,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (message: string, locationId?: string) => {
-    const { sessionId, messages, _touchIdleTimer, isTTSEnabled } = get();
-
-    // Touch idle timer on every send
-    _touchIdleTimer();
+    const { sessionId, messages, isTTSEnabled } = get();
 
     // Dừng âm thanh cũ ngay khi có request mới
     _stopCurrentAudio();
