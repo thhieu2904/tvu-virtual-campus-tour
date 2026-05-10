@@ -94,7 +94,7 @@ interface TourState {
 export const useTourStore = create<TourState>((set, get) => ({
   locations: [],
   currentLocationSlug: "",
-  isLoading: true,
+  isLoading: false,
   isAppReady: false,
   isPanoramaReady: false,
   isTransitioning: false,
@@ -163,6 +163,7 @@ export const useTourStore = create<TourState>((set, get) => ({
       
       const nextCount = get().networkRetryCount + 1;
       set({ 
+        isLoading: false,
         isNetworkError: nextCount < 6, 
         isFatalError: nextCount >= 6,
         networkRetryCount: nextCount
@@ -173,8 +174,6 @@ export const useTourStore = create<TourState>((set, get) => ({
         setTimeout(() => {
           get().fetchLocations();
         }, 10000);
-      } else {
-        set({ isLoading: false });
       }
     }
   },

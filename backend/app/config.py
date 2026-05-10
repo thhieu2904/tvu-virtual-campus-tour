@@ -16,8 +16,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
 
-    # === Security ===
-    ADMIN_API_KEY: str = "change-me-in-production"
+    # === CORS ===
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"]
 
     # === Gemini AI ===
@@ -30,6 +29,7 @@ class Settings(BaseSettings):
 
     # === Supabase (PostgreSQL + pgvector) ===
     SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     DATABASE_URL: str = ""  # postgresql+asyncpg://...
 
