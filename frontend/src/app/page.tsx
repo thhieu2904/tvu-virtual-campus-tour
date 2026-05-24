@@ -167,9 +167,6 @@ export default function TourPage() {
     },
   );
 
-  // Avatar dims when map/info overlays are active
-  const isOverlayActive = activeOverlay !== "none";
-
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#1a1a2e]">
       {/* === Start Overlay (Fix Autoplay Policy) === */}
@@ -291,9 +288,15 @@ export default function TourPage() {
       {/* === Layer 1: Mascot 3D === */}
       {/* Luôn render để tránh lỗi WebGL Context Lost khi unmount */}
       <div
-        className={`absolute left-[5%] bottom-[5%] top-[10%] w-[30%] max-w-[450px] z-10 pointer-events-none transition-all duration-700 ${
+        className={`absolute right-[5%] bottom-[5%] top-[10%] w-[30%] max-w-[450px] pointer-events-none transition-all duration-700 ${
           location && !isLoading ? "opacity-100" : "opacity-0"
-        } ${isOverlayActive ? "opacity-40 scale-95 blur-[1px]" : "scale-100"}`}
+        } ${
+          activeOverlay === "info"
+            ? "z-[70] scale-100"
+            : activeOverlay === "map"
+              ? "z-20 opacity-30 scale-95 blur-[1px]"
+              : "z-30 scale-100"
+        }`}
       >
         <Avatar3D
           animation={getAvatarAnimation() as any}

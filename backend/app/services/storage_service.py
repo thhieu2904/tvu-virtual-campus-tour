@@ -49,6 +49,7 @@ async def upload_file(
     file_bytes: bytes,
     key: str,
     content_type: str = "application/octet-stream",
+    cache_control: str | None = None,
 ) -> str:
     """
     Upload a file to Cloudflare R2.
@@ -61,13 +62,16 @@ async def upload_file(
     """
     client = _get_s3_client()
 
-    await asyncio.to_thread(
-        client.put_object,
-        Bucket=_get_bucket(),
-        Key=key,
-        Body=file_bytes,
-        ContentType=content_type,
-    )
+    put_kwargs = {
+        "Bucket": _get_bucket(),
+        "Key": key,
+        "Body": file_bytes,
+        "ContentType": content_type,
+    }
+    if cache_control:
+        put_kwargs["CacheControl"] = cache_control
+
+    await asyncio.to_thread(client.put_object, **put_kwargs)
     logger.info(f"📤 Uploaded to R2: {key} ({len(file_bytes)} bytes)")
     return key
 

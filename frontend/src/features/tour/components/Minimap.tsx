@@ -5,7 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
 import Image from "next/image";
 
-import CampusMap, { getCoordsBySlug, getPathPoints, getAllPathsFrom } from "./CampusMap";
+import CampusMap, {
+  getCoordsBySlug,
+  getPathPoints,
+  getAllPathsFrom,
+} from "./CampusMap";
 import { CloseButton } from "@/components/ui/close-button";
 
 export default function Minimap() {
@@ -19,10 +23,14 @@ export default function Minimap() {
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const navigateTo = useTourStore((s) => s.navigateTo);
   const pendingNavigation = useTourStore((s) => s.pendingNavigation);
-  const pendingMapAnimationSlug = useTourStore((s) => s.pendingMapAnimationSlug);
+  const pendingMapAnimationSlug = useTourStore(
+    (s) => s.pendingMapAnimationSlug,
+  );
   const pendingMediaFocus = useTourStore((s) => s.pendingMediaFocus);
   const clearPendingNavigation = useTourStore((s) => s.clearPendingNavigation);
-  const setPendingMapAnimationSlug = useTourStore((s) => s.setPendingMapAnimationSlug);
+  const setPendingMapAnimationSlug = useTourStore(
+    (s) => s.setPendingMapAnimationSlug,
+  );
   const fetchLocationMedia = useTourStore((s) => s.fetchLocationMedia);
   const setFocusedMedia = useTourStore((s) => s.setFocusedMedia);
   const setActiveOverlay2 = useTourStore((s) => s.setActiveOverlay);
@@ -69,7 +77,7 @@ export default function Minimap() {
       };
       animRef.current = requestAnimationFrame(tick);
     },
-    [currentSlug, navigateTo]
+    [currentSlug, navigateTo],
   );
 
   // ── Auto-close after navigation completes AND panorama is ready ──
@@ -90,13 +98,26 @@ export default function Minimap() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [navTarget, isTransitioning, animProgress, isPanoramaReady, pendingMediaFocus]);
+  }, [
+    navTarget,
+    isTransitioning,
+    animProgress,
+    isPanoramaReady,
+    pendingMediaFocus,
+  ]);
 
   // ── Safety: force close map if panorama doesn't load after 6s ──
   useEffect(() => {
-    if (navTarget && !isTransitioning && animProgress >= 1 && !isPanoramaReady) {
+    if (
+      navTarget &&
+      !isTransitioning &&
+      animProgress >= 1 &&
+      !isPanoramaReady
+    ) {
       const safety = setTimeout(() => {
-        console.warn("[Minimap] Safety timeout — closing map without panorama ready");
+        console.warn(
+          "[Minimap] Safety timeout — closing map without panorama ready",
+        );
         setExpanded(false);
         setNavTarget(null);
         setAnimProgress(0);
@@ -143,7 +164,7 @@ export default function Minimap() {
       const targetSlug = pendingMapAnimationSlug;
       setPendingMapAnimationSlug(null);
       setExpanded(true); // Open map fullscreen
-      
+
       // Delay to let map open, then start drawing
       pendingNavTimerRef.current = setTimeout(() => {
         isAgentNavRef.current = false; // Mark as USER-triggered so Intro plays!
@@ -159,7 +180,7 @@ export default function Minimap() {
       locations
         .filter((l) => getCoordsBySlug(l.slug))
         .map((l) => ({ slug: l.slug, name: l.name, status: l.status })),
-    [locations]
+    [locations],
   );
 
   return (
@@ -168,36 +189,38 @@ export default function Minimap() {
       {!expanded && (
         <motion.button
           onClick={() => setExpanded(true)}
-          className="absolute top-6 left-6 z-30 w-[140px] rounded-2xl bg-white border-[4px] border-white shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.25)] transition-shadow flex flex-col"
+          className="absolute top-6 right-6 z-30 w-[168px] rounded-[24px] bg-black/35 backdrop-blur-2xl border border-white/30 p-2 shadow-[0_18px_55px_rgba(0,0,0,0.35)] overflow-hidden cursor-pointer hover:shadow-[0_22px_70px_rgba(0,0,0,0.45)] hover:border-white/60 transition-all flex flex-col"
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="w-full aspect-square bg-gray-100 relative overflow-hidden shrink-0">
+          <div className="w-full aspect-square bg-gray-100 relative overflow-hidden shrink-0 rounded-[16px] ring-2 ring-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
             {/* Dynamic panning container: centers on current location */}
             {(() => {
               const SCALE = 2.2; // 220% zoom
-              const currentCoords = currentSlug ? getCoordsBySlug(currentSlug) : null;
+              const currentCoords = currentSlug
+                ? getCoordsBySlug(currentSlug)
+                : null;
               const cx = currentCoords ? currentCoords.x : 50;
               const cy = currentCoords ? currentCoords.y : 50;
-              
+
               let left = 50 - cx * SCALE;
               let top = 50 - cy * SCALE; // Properly centered now since label doesn't cover it
-              
+
               // Clamp so we don't pan past the map edges
               left = Math.max(100 - SCALE * 100, Math.min(0, left));
               top = Math.max(100 - SCALE * 100, Math.min(0, top));
 
               return (
-                <div 
+                <div
                   className="absolute transition-all duration-1000 ease-in-out"
-                  style={{ 
-                    width: `${SCALE * 100}%`, 
-                    height: `${SCALE * 100}%`, 
-                    top: `${top}%`, 
-                    left: `${left}%` 
+                  style={{
+                    width: `${SCALE * 100}%`,
+                    height: `${SCALE * 100}%`,
+                    top: `${top}%`,
+                    left: `${left}%`,
                   }}
                 >
                   <Image
@@ -215,7 +238,9 @@ export default function Minimap() {
                       <div
                         key={loc.slug}
                         className={`absolute w-3.5 h-3.5 rounded-full -translate-x-1/2 -translate-y-1/2 ${
-                          loc.slug === currentSlug ? "bg-[#053384]" : "bg-[#f5c518] shadow-sm"
+                          loc.slug === currentSlug
+                            ? "bg-[#053384]"
+                            : "bg-[#f5c518] shadow-sm"
                         } ${loc.status === "inactive" ? "opacity-40" : ""}`}
                         style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
                       >
@@ -245,7 +270,9 @@ export default function Minimap() {
             {/* Backdrop */}
             <div
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => { if (!navTarget) setExpanded(false); }}
+              onClick={() => {
+                if (!navTarget) setExpanded(false);
+              }}
             />
 
             {/* Modal */}
@@ -311,7 +338,9 @@ export default function Minimap() {
                 {navTarget && (
                   <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 bg-white/95 backdrop-blur shadow-lg rounded-full px-5 py-2 flex items-center gap-2.5 border border-gray-100">
                     <span className="text-sm">🚶</span>
-                    <span className="text-xs font-medium text-[#053384] animate-pulse">Đang dẫn đường...</span>
+                    <span className="text-xs font-medium text-[#053384] animate-pulse">
+                      Đang dẫn đường...
+                    </span>
                   </div>
                 )}
               </div>
@@ -322,7 +351,6 @@ export default function Minimap() {
     </>
   );
 }
-
 
 // ── Help tooltip ──
 function HelpTooltip() {
@@ -339,19 +367,31 @@ function HelpTooltip() {
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             className="absolute bottom-12 right-0 w-[200px] bg-white/95 backdrop-blur shadow-xl rounded-lg border border-gray-100 p-3 mb-1"
           >
-            <p className="text-[10px] font-bold text-[#053384] uppercase tracking-wide text-center mb-2">Hướng dẫn</p>
+            <p className="text-[10px] font-bold text-[#053384] uppercase tracking-wide text-center mb-2">
+              Hướng dẫn
+            </p>
             <div className="flex flex-col gap-2 text-[10px] text-gray-500 leading-relaxed">
               <div className="flex gap-2">
                 <span className="shrink-0">👆</span>
-                <span>Nhấn <strong className="text-[#053384]">tên tòa nhà</strong> để xem đường đi</span>
+                <span>
+                  Nhấn <strong className="text-[#053384]">tên tòa nhà</strong>{" "}
+                  để xem đường đi
+                </span>
               </div>
               <div className="flex gap-2">
                 <span className="shrink-0">🚶</span>
-                <span>Đường đi được <strong className="text-[#053384]">vẽ tự động</strong> trên bản đồ</span>
+                <span>
+                  Đường đi được{" "}
+                  <strong className="text-[#053384]">vẽ tự động</strong> trên
+                  bản đồ
+                </span>
               </div>
               <div className="flex gap-2">
                 <span className="shrink-0">📍</span>
-                <span><strong className="text-[#053384]">Chấm nhấp nháy</strong> là vị trí của bạn</span>
+                <span>
+                  <strong className="text-[#053384]">Chấm nhấp nháy</strong> là
+                  vị trí của bạn
+                </span>
               </div>
             </div>
           </motion.div>
@@ -362,8 +402,8 @@ function HelpTooltip() {
       <button
         onClick={() => setShow(!show)}
         className={`w-9 h-9 flex items-center justify-center rounded-full shadow-lg border border-gray-100 text-sm font-bold transition-all cursor-pointer ${
-          show 
-            ? "bg-[#053384] text-white" 
+          show
+            ? "bg-[#053384] text-white"
             : "bg-white/95 backdrop-blur text-[#053384] hover:bg-[#053384] hover:text-white"
         }`}
       >
@@ -374,11 +414,27 @@ function HelpTooltip() {
 }
 
 // ── Legend item ──
-function LegendItem({ color, label, pulse }: { color: string; label: string; pulse?: boolean }) {
+function LegendItem({
+  color,
+  label,
+  pulse,
+}: {
+  color: string;
+  label: string;
+  pulse?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <div className="relative w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }}>
-        {pulse && <span className="absolute inset-0 rounded-full animate-ping opacity-40" style={{ backgroundColor: color }} />}
+      <div
+        className="relative w-2.5 h-2.5 rounded-full shrink-0"
+        style={{ backgroundColor: color }}
+      >
+        {pulse && (
+          <span
+            className="absolute inset-0 rounded-full animate-ping opacity-40"
+            style={{ backgroundColor: color }}
+          />
+        )}
       </div>
       <span className="text-[9px] text-gray-500">{label}</span>
     </div>

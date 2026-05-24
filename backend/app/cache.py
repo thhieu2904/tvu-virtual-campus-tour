@@ -123,9 +123,11 @@ class QACacheStore:
     def __init__(self, path: Path | None = None):
         self.path = path or Path(__file__).resolve().parent.parent / "data" / "qa_cache.json"
         self._items: dict[str, dict[str, Any]] = {}
+        self._mtime: float | None = None
         self._lock = Lock()
 
     def get(self, cache_key: str) -> dict[str, Any] | None:
+        self.reload_if_changed()
         with self._lock:
             value = self._items.get(cache_key)
             return dict(value) if value is not None else None
@@ -148,7 +150,17 @@ class QACacheStore:
 
         with self._lock:
             self._items = data if isinstance(data, dict) else {}
+            self._mtime = self.path.stat().st_mtime
             return len(self._items)
+
+    def reload_if_changed(self) -> int | None:
+        if not self.path.exists():
+            return None
+        mtime = self.path.stat().st_mtime
+        with self._lock:
+            if self._mtime == mtime:
+                return None
+        return self.reload()
 
     def __len__(self) -> int:
         with self._lock:

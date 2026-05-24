@@ -1,6 +1,7 @@
 """Protected Admin API endpoints for content management."""
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -220,8 +221,13 @@ async def regenerate_location_audio(location_id: str, session: AsyncSession = De
 
     extension = "mp3" if result.content_type == CONTENT_TYPE_MP3 else "wav"
     r2_key = storage_service.build_intro_key(loc.slug, extension)
-    await storage_service.upload_file(result.audio_data, r2_key, result.content_type)
-    loc.intro_audio_url = storage_service.get_public_url(r2_key)
+    await storage_service.upload_file(
+        result.audio_data,
+        r2_key,
+        result.content_type,
+        cache_control="no-cache, no-store, must-revalidate",
+    )
+    loc.intro_audio_url = f"{storage_service.get_public_url(r2_key)}?v={int(time.time())}"
     await session.commit()
     return {
         "success": True,

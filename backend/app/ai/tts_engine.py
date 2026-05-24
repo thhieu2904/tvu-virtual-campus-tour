@@ -117,10 +117,16 @@ async def synthesize(
         )
 
     try:
-        if style:
-            prompt = f"Say naturally in Vietnamese with a {style} tone: {text}"
-        else:
-            prompt = f"Say naturally in Vietnamese: {text}"
+        tone_instruction = f"Tone: {style}." if style else "Tone: natural Vietnamese."
+        prompt = (
+            "Read the following Vietnamese text as a single continuous speaker. "
+            f"Use the prebuilt voice '{voice}' consistently from the first word to the last word. "
+            "Keep the same speaker identity, timbre, pitch, pace, and energy throughout. "
+            "Do not switch voices, do not imitate another speaker, do not add dialogue, "
+            "and do not change persona mid-sentence. "
+            f"{tone_instruction}\n\n"
+            f"Text: {text}"
+        )
 
         result = await asyncio.to_thread(
             get_client().models.generate_content,

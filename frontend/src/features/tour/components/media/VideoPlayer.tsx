@@ -94,20 +94,6 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
     setIsMuted(video.muted);
   }, []);
 
-  const toggleFullscreen = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    const container = containerRef.current;
-    if (!container) return;
-
-    if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(err => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
-    }
-  }, []);
-
   // Show/hide controls on mouse move
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
@@ -126,10 +112,20 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
   // Autoplay
   useEffect(() => {
     if (autoPlay && hasLoaded && videoRef.current) {
-      videoRef.current.play().then(() => {
+      const video = videoRef.current;
+      video.muted = false;
+      setIsMuted(false);
+
+      video.play().then(() => {
         setIsPlaying(true);
       }).catch(() => {
-        setIsPlaying(false);
+        video.muted = true;
+        setIsMuted(true);
+        video.play().then(() => {
+          setIsPlaying(true);
+        }).catch(() => {
+          setIsPlaying(false);
+        });
       });
     }
   }, [autoPlay, hasLoaded]);
@@ -148,11 +144,11 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
       <div
         ref={containerRef}
         className={`relative rounded-2xl overflow-hidden group cursor-pointer border border-white/10 bg-black shadow-inner mx-auto flex items-center justify-center ${
-          isPortrait
-            ? isFullscreen
-              ? "w-auto max-h-[65vh] aspect-[9/16]"
-              : "w-[70%] aspect-[9/16]"
-            : "w-full aspect-video"
+          isFullscreen
+            ? "w-full h-full"
+            : isPortrait
+              ? "h-[min(52vh,430px)] w-auto max-w-full aspect-[9/16]"
+              : "w-full aspect-video"
         }`}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -180,7 +176,8 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
-          className="w-full h-full object-contain"
+          className={`w-full h-full ${isFullscreen && !isPortrait ? "object-cover" : "object-contain"}`}
+          muted={isMuted}
           playsInline
           preload="metadata"
         />
@@ -211,7 +208,7 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-30"
+              className={`absolute bottom-0 left-0 right-0 ${isFullscreen ? "p-3" : "p-4"} bg-gradient-to-t from-black/80 via-black/40 to-transparent z-30`}
               onClick={(e) => e.stopPropagation()} // Prevent video toggle when clicking controls
             >
               <div className="flex flex-col gap-2">
@@ -237,8 +234,8 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
                 </div>
 
                 {/* Bottom Controls */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 shrink-0 rounded-full bg-black/20 px-1.5 py-1 backdrop-blur-sm">
                     {/* Skip Backward */}
                     <button onClick={skipBackward} className="text-white/80 hover:text-blue-400 transition-colors p-1" title="Lùi 10 giây">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -275,17 +272,17 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
                   </div>
 
                   {/* Caption embedded in control bar */}
-                  {caption && (
-                    <div className="hidden sm:block absolute left-1/2 -translate-x-1/2 text-xs font-medium text-white/80 max-w-[50%] truncate">
+                  {caption && isFullscreen && (
+                    <div className="hidden sm:block min-w-0 flex-1 text-center text-xs font-medium text-white/80 truncate px-3">
                       {caption}
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
-                    <button onClick={toggleFullscreen} className="text-white hover:text-blue-400 transition-colors p-1">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-                    </button>
-                  </div>
+                  {caption && !isFullscreen && (
+                    <div className="min-w-0 flex-1 text-right text-xs font-medium text-white/75 truncate">
+                      {caption}
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

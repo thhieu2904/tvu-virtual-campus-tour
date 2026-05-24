@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTourStore, MediaItem } from "@/features/tour/store";
+import { useTourStore } from "@/features/tour/store";
 import ImageGallery from "./media/ImageGallery";
 import VideoPlayer from "./media/VideoPlayer";
 
@@ -24,25 +24,42 @@ export default function InfoPanel() {
   const preferredMediaTab = useTourStore((s) => s.preferredMediaTab);
 
   // Split media by type
-  const videos = locationMedia.filter((m) => m.type === "video");
-  const images = locationMedia.filter((m) => m.type === "image" || m.type === "gif");
+  const videos = useMemo(
+    () => locationMedia.filter((m) => m.type === "video"),
+    [locationMedia],
+  );
+  const images = useMemo(
+    () => locationMedia.filter((m) => m.type === "image" || m.type === "gif"),
+    [locationMedia],
+  );
   const hasMedia = locationMedia.length > 0;
 
   // Expanded video state (for carousel in expanded mode)
   const [expandedVideoIdx, setExpandedVideoIdx] = useState(0);
+  const [focusedImageIndex, setFocusedImageIndex] = useState<number | null>(null);
 
   // ── AI Focus: auto-expand + select tab when AI focuses an item ──
-  const prevFocusRef = useRef<string | null>(null);
   useEffect(() => {
-    if (focusedMediaId !== prevFocusRef.current) {
-      prevFocusRef.current = focusedMediaId;
-      if (focusedMediaId) {
+    if (focusedMediaId) {
+      const videoIdx = videos.findIndex((item) => item.id === focusedMediaId);
+      const imageIdx = images.findIndex((item) => item.id === focusedMediaId);
+
+      if (videoIdx >= 0) {
+        setMode("video");
+        setExpandedVideoIdx(videoIdx);
+        setFocusedImageIndex(null);
+      } else if (imageIdx >= 0) {
+        setMode("info");
+        setFocusedImageIndex(imageIdx);
+      } else {
         setMode(preferredMediaTab);
-        setIsExpanded(true);
-        setActiveOverlay("info");
+        setFocusedImageIndex(null);
       }
+
+      setIsExpanded(true);
+      setActiveOverlay("info");
     }
-  }, [focusedMediaId, preferredMediaTab, setActiveOverlay]);
+  }, [focusedMediaId, preferredMediaTab, setActiveOverlay, videos, images]);
 
   // Auto-expand when overlay is triggered externally
   useEffect(() => {
@@ -74,6 +91,7 @@ export default function InfoPanel() {
   useEffect(() => {
     setMiniSlideIndex(0);
     setExpandedVideoIdx(0);
+    setFocusedImageIndex(null);
   }, [location?.slug]);
 
   if (!location) return null;
@@ -103,21 +121,21 @@ export default function InfoPanel() {
         } ${
           isExpanded
             ? isOverlayOpen
-              ? "top-1/2 -translate-y-1/2 right-[3%] left-[calc(5%+min(30vw,450px)+2vw)] max-w-5xl h-[82vh]"
-              : "top-6 right-6 w-[440px] max-h-[80vh]"
-            : "top-6 right-6 w-[360px]"
+              ? "top-1/2 -translate-y-1/2 left-[3%] right-[calc(5%+min(30vw,450px)+2vw)] h-[82vh]"
+              : "top-6 left-6 w-[440px] max-h-[80vh]"
+            : "top-6 left-6 w-[360px]"
         }`}
-        initial={{ opacity: 0, x: 40 }}
+        initial={{ opacity: 0, x: -40 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
       >
         {/* ── Header ── */}
-        <div className={`flex items-center justify-between px-5 py-4 bg-white/5 transition-colors ${isExpanded ? 'border-b border-white/10' : ''}`}>
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => !isExpanded ? setIsExpanded(true) : handleClose()}>
-            <span className="text-base">📍</span>
+        <div className={`flex items-center justify-between bg-white/5 transition-colors ${isExpanded ? 'px-3.5 py-1.5 border-b border-white/10' : 'px-3.5 py-1.5'}`}>
+          <div className="flex items-center gap-2 min-w-0 cursor-pointer" onClick={() => !isExpanded ? setIsExpanded(true) : handleClose()}>
+            <span className="text-sm">📍</span>
             <h3 className="text-sm font-bold text-white truncate max-w-[150px]">{location.name}</h3>
             {hasMedia && (
-              <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-full font-medium">
+              <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-full font-medium shrink-0">
                 {locationMedia.length}
               </span>
             )}
@@ -130,7 +148,7 @@ export default function InfoPanel() {
               <button
                 key={tab.key}
                 onClick={() => { setMode(tab.key); setIsExpanded(true); }}
-                className={`relative w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer border ${
+                  className={`relative w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-all cursor-pointer border ${
                   isExpanded && mode === tab.key
                     ? "bg-white/20 text-white border-white/30 shadow-md"
                     : "bg-transparent text-white/50 border-transparent hover:bg-white/10 hover:text-white"
@@ -148,18 +166,18 @@ export default function InfoPanel() {
               <>
                 <button
                   onClick={() => setActiveOverlay(isOverlayOpen ? "none" : "info")}
-                  className="ml-1 w-9 h-9 flex items-center justify-center rounded-xl bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white cursor-pointer"
+                  className="ml-1 w-7 h-7 flex items-center justify-center rounded-lg bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white cursor-pointer"
                   title={isOverlayOpen ? "Thu nhỏ" : "Phóng to"}
                 >
                   {isOverlayOpen ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 0 2 2h3m8-8v3a2 2 0 0 1-2 2h-3m0 18v-3a2 2 0 0 1 2-2h3M3 16v-3a2 2 0 0 1 2-2h3"></path></svg>
+                    <span className="block h-0.5 w-4 rounded-full bg-current" />
                   ) : (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
                   )}
                 </button>
                 <button
                   onClick={handleClose}
-                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white text-sm cursor-pointer"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white text-sm cursor-pointer"
                 >
                   ✕
                 </button>
@@ -170,7 +188,7 @@ export default function InfoPanel() {
 
         {/* ── Mini Slideshow (collapsed state) ── */}
         {!isExpanded && (
-          <div className="px-4 py-3">
+          <div className="px-2.5 py-2">
             {isMediaLoading ? (
               <div className="flex items-center justify-center py-6">
                 <motion.div
@@ -233,10 +251,12 @@ export default function InfoPanel() {
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-              className="overflow-hidden flex-1"
+              className="overflow-hidden flex-1 min-h-0"
             >
-              <div className={`p-5 overflow-y-auto custom-scrollbar transition-all duration-500 ${
-                isOverlayOpen ? 'h-[calc(80vh-70px)]' : 'max-h-[calc(80vh-200px)]'
+              <div className={`transition-all duration-500 ${
+                isOverlayOpen
+                  ? 'h-full p-2 overflow-hidden flex flex-col'
+                  : 'max-h-[calc(80vh-170px)] p-3 overflow-y-auto custom-scrollbar'
               }`}>
                 {isMediaLoading ? (
                   <div className="flex items-center justify-center py-12">
@@ -255,23 +275,24 @@ export default function InfoPanel() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="flex flex-col gap-4"
+                        className={`flex flex-col ${isOverlayOpen ? "gap-3 h-full min-h-0" : "gap-4"}`}
                       >
                         {videos.length > 0 ? (
                           <>
                             {/* Current video */}
-                            <div className="relative">
+                            <div className={`${isOverlayOpen ? "relative flex-1 min-h-0" : "relative"}`}>
                               <VideoPlayer
                                 key={videos[expandedVideoIdx]?.id}
                                 url={videos[expandedVideoIdx]?.url}
                                 caption={videos[expandedVideoIdx]?.caption}
                                 isFullscreen={isOverlayOpen}
-                                autoPlay={false} // VĐ1: Prevent startling sound
+                                autoPlay={isOverlayOpen}
                               />
                             </div>
                             {/* Caption + nav */}
-                            <div className="flex items-center justify-between px-1">
-                              <p className="text-[13px] font-medium text-white/80">{videos[expandedVideoIdx]?.caption}</p>
+                            {(!isOverlayOpen || videos.length > 1) && (
+                              <div className={`flex items-center justify-between px-1 ${isOverlayOpen ? "shrink-0 h-8" : ""}`}>
+                              <p className="text-[13px] font-medium text-white/80 truncate">{videos[expandedVideoIdx]?.caption}</p>
                               {videos.length > 1 && (
                                 <div className="flex items-center gap-2">
                                   <button
@@ -289,7 +310,8 @@ export default function InfoPanel() {
                                   </button>
                                 </div>
                               )}
-                            </div>
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black/40">
@@ -311,31 +333,42 @@ export default function InfoPanel() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="flex flex-col gap-5"
+                        className={`flex flex-col ${isOverlayOpen ? "gap-3 h-full min-h-0" : "gap-5"}`}
                       >
-                        <div>
-                          <h4 className="text-[11px] uppercase tracking-widest text-white/50 font-bold mb-2">Thông tin địa điểm</h4>
-                          <p className="text-[14px] text-white/80 leading-relaxed font-light">
-                            {location.description || "Đang cập nhật nội dung giới thiệu chi tiết về khu vực này..."}
-                          </p>
-                        </div>
-
-                        <div>
-                          <h4 className="text-[11px] uppercase tracking-widest text-white/50 font-bold mb-2">Thư viện ảnh</h4>
-                          <ImageGallery images={images} isFullscreen={isOverlayOpen} />
-                        </div>
-
-                        <div className="mt-1 p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3.5">
-                          <div className="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-                            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </div>
+                        {!isOverlayOpen && (
                           <div>
-                            <p className="text-[10px] text-blue-200/60 uppercase font-bold tracking-wider mb-0.5">Nguồn dữ liệu</p>
-                            <p className="text-[13px] text-blue-300 font-semibold tracking-wide">Hệ thống TVU Tour</p>
+                            <h4 className="text-[11px] uppercase tracking-widest text-white/50 font-bold mb-2">Thông tin địa điểm</h4>
+                            <p className="text-[14px] text-white/80 leading-relaxed font-light">
+                              {location.description || "Đang cập nhật nội dung giới thiệu chi tiết về khu vực này..."}
+                            </p>
                           </div>
+                        )}
+
+                        <div className={isOverlayOpen ? "min-h-0 flex-1 flex flex-col" : ""}>
+                          {!isOverlayOpen && (
+                            <h4 className="text-[11px] uppercase tracking-widest text-white/50 font-bold mb-2">Thư viện ảnh</h4>
+                          )}
+                          <ImageGallery
+                            images={images}
+                            isFullscreen={isOverlayOpen}
+                            focusedIndex={focusedImageIndex}
+                            onFocusedIndexConsumed={() => setFocusedImageIndex(null)}
+                          />
                         </div>
+
+                        {!isOverlayOpen && (
+                          <div className="mt-1 p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3.5">
+                            <div className="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                              <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-blue-200/60 uppercase font-bold tracking-wider mb-0.5">Nguồn dữ liệu</p>
+                              <p className="text-[13px] text-blue-300 font-semibold tracking-wide">Hệ thống TVU Tour</p>
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>

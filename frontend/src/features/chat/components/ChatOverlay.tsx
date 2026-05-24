@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 import { useTourStore } from "@/features/tour/store";
 import { useChatStore, playPrecachedAudio } from "../store";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
@@ -84,8 +85,8 @@ export default function ChatOverlay() {
       ) {
         playPrecachedAudio(location.intro_audio_url);
       }
-    } else if (!navigatedByAgent) {
-      // User tự bấm map → append intro nhẹ (không xóa chat cũ)
+    } else {
+      // User tự bấm map hoặc AI điều hướng → append intro nhẹ
       addMessage({
         id: `nav-${location.slug}-${Date.now()}`,
         role: "assistant",
@@ -100,7 +101,6 @@ export default function ChatOverlay() {
         playPrecachedAudio(location.intro_audio_url);
       }
     }
-    // Nếu navigatedByAgent → AI đã nói rồi, không cần thêm gì
   }, [location?.slug, isLoading, isAppReady, isTTSEnabled]);
 
   // Tự động cuộn xuống cuối (Transcript)
@@ -112,7 +112,13 @@ export default function ChatOverlay() {
   useEffect(() => {
     if (messages.length > 0) {
       setShowSubtitle(true);
-      const timer = setTimeout(() => setShowSubtitle(false), 8000);
+      const lastMsg = messages[messages.length - 1];
+      // Tính thời gian hiển thị: 8s cơ bản + 50ms cho mỗi ký tự. Max 30s.
+      const duration = Math.min(
+        30000,
+        Math.max(8000, (lastMsg.content?.length || 0) * 50),
+      );
+      const timer = setTimeout(() => setShowSubtitle(false), duration);
       return () => clearTimeout(timer);
     }
   }, [messages]);
@@ -145,12 +151,37 @@ export default function ChatOverlay() {
                   initial={{ opacity: 0, scale: 0.8, x: -20, y: 20 }}
                   animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                   exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                  className="fixed left-[32%] top-[25%] w-max max-w-[380px] z-50 pointer-events-auto origin-bottom-left"
+                  className="fixed right-[30%] top-[15%] w-[420px] max-w-[40vw] z-50 pointer-events-auto origin-bottom-right"
                 >
-                  <div className="relative bg-black/70 backdrop-blur-3xl text-white px-6 py-4 rounded-[28px] rounded-bl-xl border border-white/20 shadow-2xl">
-                    <span className="whitespace-pre-wrap text-[16px] leading-relaxed font-medium">
-                      {msg.content}
-                    </span>
+                  <div className="relative bg-black/70 backdrop-blur-3xl text-white px-6 py-4 rounded-[28px] rounded-br-xl border border-white/20 shadow-2xl flex flex-col max-h-[55vh] overflow-hidden">
+                    <div className="overflow-y-auto pr-2 pb-6 flex-1 whitespace-pre-wrap text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ node, ...props }) => (
+                            <p className="mb-2 last:mb-0" {...props} />
+                          ),
+                          strong: ({ node, ...props }) => (
+                            <strong
+                              className="font-bold text-yellow-300"
+                              {...props}
+                            />
+                          ),
+                          ul: ({ node, ...props }) => (
+                            <ul className="list-disc pl-5 mb-2" {...props} />
+                          ),
+                          ol: ({ node, ...props }) => (
+                            <ol className="list-decimal pl-5 mb-2" {...props} />
+                          ),
+                          li: ({ node, ...props }) => (
+                            <li className="mb-1" {...props} />
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    {/* Fade-out Overlay for Kiosk touch scrolling hint */}
+                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
                     {msg.isStreaming && (
                       <motion.span
                         className="inline-block w-1.5 h-4 ml-1.5 bg-white/70 align-middle"
@@ -163,7 +194,7 @@ export default function ChatOverlay() {
                       />
                     )}
                     {/* Speech Bubble Tail */}
-                    <div className="absolute -left-2 bottom-2 w-5 h-5 bg-black/70 border-l border-b border-white/20 rounded-bl-md transform rotate-45 -z-10 backdrop-blur-3xl"></div>
+                    <div className="absolute -right-2 bottom-2 w-5 h-5 bg-black/70 border-r border-b border-white/20 rounded-br-md transform -rotate-45 -z-10 backdrop-blur-3xl"></div>
                   </div>
                 </motion.div>
               );
@@ -331,7 +362,7 @@ export default function ChatOverlay() {
       {/* END BOTTOM CONTROLS WRAPPER */}
 
       {/* === MASCOT CONTROLS (Mute Button) === */}
-      <div className="fixed left-6 bottom-24 z-40 pointer-events-auto flex flex-col gap-3">
+      <div className="fixed right-6 bottom-24 z-40 pointer-events-auto flex flex-col gap-3">
         <button
           onClick={toggleTTS}
           className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-xl border border-white/20 text-white/80 hover:text-white flex items-center justify-center transition-all hover:bg-black/70 shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
@@ -375,11 +406,11 @@ export default function ChatOverlay() {
       <AnimatePresence>
         {isTranscriptOpen && (
           <motion.div
-            initial={{ opacity: 0, x: 50, scale: 0.95 }}
+            initial={{ opacity: 0, x: -50, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 50, scale: 0.95 }}
+            exit={{ opacity: 0, x: -50, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-6 bottom-24 w-[380px] h-[60vh] max-h-[600px] bg-black/60 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto z-40"
+            className="fixed left-6 bottom-24 w-[380px] h-[60vh] max-h-[600px] bg-black/60 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto z-40"
           >
             <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
               <h3 className="text-white font-medium flex items-center gap-2">

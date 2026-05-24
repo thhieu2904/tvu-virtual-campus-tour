@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ImageGalleryProps {
   images: { id: string; url: string; caption: string }[];
   isFullscreen?: boolean;
+  focusedIndex?: number | null;
+  onFocusedIndexConsumed?: () => void;
 }
 
 /**
@@ -14,7 +16,12 @@ interface ImageGalleryProps {
  * - Fullscreen panel: 3-4 columns
  * - Click on image → fullscreen lightbox with backdrop blur
  */
-export default function ImageGallery({ images, isFullscreen = false }: ImageGalleryProps) {
+export default function ImageGallery({
+  images,
+  isFullscreen = false,
+  focusedIndex = null,
+  onFocusedIndexConsumed,
+}: ImageGalleryProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const openLightbox = useCallback((index: number) => setLightboxIndex(index), []);
@@ -32,6 +39,17 @@ export default function ImageGallery({ images, isFullscreen = false }: ImageGall
     );
   }, [images.length]);
 
+  useEffect(() => {
+    if (
+      focusedIndex !== null &&
+      focusedIndex >= 0 &&
+      focusedIndex < images.length
+    ) {
+      openLightbox(focusedIndex);
+      onFocusedIndexConsumed?.();
+    }
+  }, [focusedIndex, images.length, onFocusedIndexConsumed, openLightbox]);
+
   if (images.length === 0) {
     return (
       <div className="flex items-center justify-center py-8 text-white/40 text-sm">
@@ -43,7 +61,7 @@ export default function ImageGallery({ images, isFullscreen = false }: ImageGall
   return (
     <>
       {/* Grid */}
-      <div className={`grid gap-2.5 ${isFullscreen ? "grid-cols-3" : "grid-cols-2"}`}>
+      <div className={`grid gap-2.5 ${isFullscreen ? "grid-cols-3 flex-1 min-h-0 overflow-hidden" : "grid-cols-2"}`}>
         {images.map((img, index) => (
           <motion.div
             key={img.id}

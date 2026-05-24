@@ -20,7 +20,7 @@ from app.ai.embedding_engine import embed_query
 from app.ai.tools import AGENT_TOOLS
 from app.cache import slug_cache, vector_search_cache
 from app.db.tables import ChatMessage, ChatSession, Location
-from app.repositories import vector_repo
+from app.repositories import media_repo, vector_repo
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,42 @@ logger = logging.getLogger(__name__)
 _SEARCH_TOOLS = {"search_documents"}
 # UI tool names — these are forwarded directly to frontend
 _UI_TOOLS = {"navigate_to", "show_media", "toggle_map"}
+
+
+def _score_media_match(media: dict, query: str) -> int:
+    """Small deterministic matcher for choosing a focused media item."""
+    if not query:
+        return 0
+
+    normalized_query = query.strip().lower()
+    terms = [term for term in normalized_query.split() if term]
+    caption = (media.get("caption") or "").lower()
+    keywords = " ".join(str(item).lower() for item in media.get("keywords") or [])
+    haystack = f"{caption} {keywords}"
+
+    score = 0
+    if normalized_query and normalized_query in haystack:
+        score += 100
+    score += sum(10 for term in terms if term in haystack)
+    if media.get("is_intro"):
+        score += 1
+    return score
+
+
+def _media_type_filter(media_type: str | None) -> str | None:
+    if media_type in {"video", "gif"}:
+        return media_type
+    if media_type == "image":
+        return None
+    return None
+
+
+def _matches_requested_media_type(media: dict, media_type: str | None) -> bool:
+    if media_type == "image":
+        return media.get("type") in {"image", "gif"}
+    if media_type in {"video", "gif"}:
+        return media.get("type") == media_type
+    return True
 
 
 async def _get_available_slugs(session: AsyncSession) -> str:
@@ -75,12 +111,75 @@ async def _enrich_tool_actions(
     """
     Enrich UI tool actions with additional data before sending to frontend.
 
-    Since the frontend auto-fetches ALL media per location,
-    show_media only needs to pass through media_type for tab selection.
-    No DB query needed here anymore.
+    Since the frontend auto-fetches ALL media per location, show_media only
+    needs the focused media id. Resolve it server-side from search_query so the
+    model does not need a second tool call.
     """
-    # Just pass through all tool actions — frontend handles media loading
-    return tool_actions
+    if not location_id:
+        return tool_actions
+
+    try:
+        loc_uuid = UUID(location_id)
+    except (TypeError, ValueError):
+        return tool_actions
+
+    enriched_actions = []
+    for action in tool_actions:
+        if action.get("name") != "show_media":
+            enriched_actions.append(action)
+            continue
+
+        args = dict(action.get("args") or {})
+        if args.get("focus_media_id"):
+            enriched_actions.append({**action, "args": args})
+            continue
+
+        media_type = args.get("media_type")
+        search_query = (args.get("search_query") or "").strip()
+        type_filter = _media_type_filter(media_type)
+
+        assets = await media_repo.get_by_location(
+            session,
+            loc_uuid,
+            media_type=type_filter,
+            search_query=search_query or None,
+        )
+        assets = [item for item in assets if _matches_requested_media_type(item, media_type)]
+
+        if not assets and search_query:
+            all_assets = await media_repo.get_by_location(
+                session,
+                loc_uuid,
+                media_type=type_filter,
+            )
+            all_assets = [
+                item for item in all_assets
+                if _matches_requested_media_type(item, media_type)
+            ]
+            scored_assets = sorted(
+                all_assets,
+                key=lambda item: _score_media_match(item, search_query),
+                reverse=True,
+            )
+            assets = [item for item in scored_assets if _score_media_match(item, search_query) > 0]
+
+        if not assets:
+            assets = await media_repo.get_by_location(
+                session,
+                loc_uuid,
+                media_type=type_filter,
+            )
+            assets = [item for item in assets if _matches_requested_media_type(item, media_type)]
+
+        if assets:
+            focused = assets[0]
+            args["focus_media_id"] = focused["id"]
+            if media_type == "all":
+                args["media_type"] = "image" if focused["type"] in {"image", "gif"} else "video"
+
+        enriched_actions.append({**action, "args": args})
+
+    return enriched_actions
 
 
 async def process_query(

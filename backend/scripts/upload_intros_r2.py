@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import os
+import time
 from pathlib import Path
 
 # Thêm đường dẫn backend vào sys.path
@@ -57,10 +58,11 @@ async def upload_intros():
                 await storage_service.upload_file(
                     file_bytes=tts_result.audio_data,
                     key=r2_key,
-                    content_type=tts_result.content_type
+                    content_type=tts_result.content_type,
+                    cache_control="no-cache, no-store, must-revalidate",
                 )
                 
-                public_url = storage_service.get_public_url(r2_key)
+                public_url = f"{storage_service.get_public_url(r2_key)}?v={int(time.time())}"
                 
                 # Update DB
                 loc.intro_audio_url = public_url

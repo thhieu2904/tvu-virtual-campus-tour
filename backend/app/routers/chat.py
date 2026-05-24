@@ -79,6 +79,13 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
         if answer_text and not result.get("error"):
             # Ensure DB connection is released before TTS synthesis
             await session.commit()
+            tool_actions = result.get("tool_actions") or []
+            tool_names = {
+                action.get("name")
+                for action in tool_actions
+                if isinstance(action, dict)
+            }
+            should_skip_tts_on_miss = "show_media" in tool_names and "navigate_to" not in tool_names
 
             # 3. MD5 Hash Answer cho TTS Cache
             # Lấy voice_name của mascot nếu có
@@ -109,6 +116,8 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
                 if cached_r2_key:
                     logger.info("🎯 Trúng TTS Cache MD5: %s", answer_hash)
                     audio_url = storage_service.get_public_url(cached_r2_key)
+                elif should_skip_tts_on_miss:
+                    logger.info("Skip TTS miss for visual-only tool action: %s", tool_names)
                 else:
                     logger.info("Miss TTS Cache, generating new audio...")
                     # Get voice config

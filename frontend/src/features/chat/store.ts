@@ -62,14 +62,20 @@ export function playPrecachedAudio(url: string) {
 }
 
 // ── Tool Call Queue ──
-let _pendingToolCalls: { name: string; args: Record<string, unknown> }[] = [];
+type ToolCall = { name: string; args: Record<string, unknown> };
+
+let _pendingToolCalls: ToolCall[] = [];
 
 /**
  * Queue a tool call to be executed after AI finishes speaking.
  * This ensures sequential flow: AI speaks → map opens → navigate.
  */
-function _queueToolCall(toolCall: { name: string; args: Record<string, unknown> }) {
+function _queueToolCall(toolCall: ToolCall) {
   _pendingToolCalls.push(toolCall);
+}
+
+function _hasNavigation(calls: ToolCall[]) {
+  return calls.some((toolCall) => toolCall.name === "navigate_to");
 }
 
 /**
@@ -120,6 +126,18 @@ function _flushToolCalls() {
       }
 
     }
+  }
+}
+
+function _flushImmediateVisualToolCalls() {
+  const calls = [..._pendingToolCalls];
+  if (calls.length === 0 || _hasNavigation(calls)) return;
+
+  const hasVisualTool = calls.some((toolCall) =>
+    toolCall.name === "show_media" || toolCall.name === "toggle_map"
+  );
+  if (hasVisualTool) {
+    _flushToolCalls();
   }
 }
 
@@ -259,14 +277,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
           for (const tc of data.tool_actions) {
             _queueToolCall(tc);
           }
+          _flushImmediateVisualToolCalls();
         }
 
         // Chạy logic Tool Call sau khi phát xong audio
+        let audioFallbackTimer: ReturnType<typeof setTimeout> | null = null;
         const handleAudioEnded = () => {
+          if (audioFallbackTimer) {
+            clearTimeout(audioFallbackTimer);
+            audioFallbackTimer = null;
+          }
           _stopCurrentAudio();
           if (data.tool_actions && data.tool_actions.length > 0) {
             _flushToolCalls();
           }
+        };
+        const startAudioFallbackTimer = () => {
+          const textLength = typeof data.answer === "string" ? data.answer.length : 0;
+          const timeoutMs = Math.min(Math.max(textLength * 120, 10000), 30000);
+          audioFallbackTimer = setTimeout(() => {
+            console.warn("Audio playback timeout — flushing queued tool calls");
+            handleAudioEnded();
+          }, timeoutMs);
         };
 
         // Play audio if available
@@ -275,6 +307,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           _currentAudio = new Audio(data.audio_url);
           useTourStore.getState().setAvatarState("speaking");
           _currentAudio.onended = handleAudioEnded;
+          _currentAudio.onerror = () => {
+            console.error("Audio playback load error:", data.audio_url);
+            handleAudioEnded();
+          };
+          _currentAudio.onstalled = () => {
+            console.warn("Audio playback stalled:", data.audio_url);
+          };
+          startAudioFallbackTimer();
           _currentAudio.play().catch(e => {
             console.error("Audio playback error:", e);
             handleAudioEnded();
@@ -291,7 +331,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
           useTourStore.getState().setAvatarState("speaking");
 
           audio.onended = handleAudioEnded;
-          audio.play();
+          audio.onerror = () => {
+            console.error("Audio blob playback load error");
+            handleAudioEnded();
+          };
+          audio.onstalled = () => {
+            console.warn("Audio blob playback stalled");
+          };
+          startAudioFallbackTimer();
+          audio.play().catch(e => {
+            console.error("Audio blob playback error:", e);
+            handleAudioEnded();
+          });
         } else {
           // No audio (TTS failed) → go idle and flush tools immediately
           useTourStore.getState().setAvatarState("idle");

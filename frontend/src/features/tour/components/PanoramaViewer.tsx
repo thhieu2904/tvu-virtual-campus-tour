@@ -12,6 +12,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Crosshair, Minus, Plus } from "lucide-react";
+import { useTourStore } from "@/features/tour/store";
 
 interface PanoramaViewerProps {
   imageUrl: string;
@@ -40,6 +42,32 @@ export default function PanoramaViewer({
   onLoadRef.current = onLoad;
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  
+  const locations = useTourStore((s) => s.locations);
+
+  const adjustZoom = (delta: number) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const currentHfov =
+      typeof viewer.getHfov === "function" ? viewer.getHfov() : initialHfov;
+    const nextHfov = Math.max(45, Math.min(120, currentHfov + delta));
+    viewer.setHfov?.(nextHfov, 500);
+  };
+
+  const resetView = () => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    if (typeof viewer.lookAt === "function") {
+      viewer.lookAt(initialPitch, initialYaw, initialHfov, 800);
+      return;
+    }
+
+    viewer.setPitch?.(initialPitch, 800);
+    viewer.setYaw?.(initialYaw, 800);
+    viewer.setHfov?.(initialHfov, 800);
+  };
 
   useEffect(() => {
     if (!containerRef.current || !imageUrl) return;
@@ -181,30 +209,69 @@ export default function PanoramaViewer({
 
       {/* Navigation Links Overlay */}
       {isLoaded && !hasError && links && links.length > 0 && onNavigate && (
-        <div className="absolute top-[60%] right-6 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
-          {links.map((link) => (
-            <motion.button
-              key={link.toSlug}
-              onClick={() => onNavigate(link.toSlug)}
-              className="flex items-center gap-3 bg-black/50 hover:bg-black/70 backdrop-blur-3xl px-5 py-3 rounded-2xl text-white border border-white/20 shadow-2xl transition-colors group cursor-pointer"
-              whileHover={{ scale: 1.05, x: -5 }}
-              whileTap={{ scale: 0.95 }}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] uppercase tracking-wider text-white/50 group-hover:text-white/70 transition-colors">
-                  Di chuyển đến
-                </span>
-                <span className="text-sm font-bold whitespace-nowrap">
-                  {link.label}
-                </span>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-                <span className="text-lg">→</span>
-              </div>
-            </motion.button>
-          ))}
+        <div className="absolute top-[60%] left-6 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
+          {links.map((link) => {
+            const targetLoc = locations.find((l) => l.slug === link.toSlug);
+            const displayName = targetLoc ? targetLoc.name : link.label;
+
+            return (
+              <motion.button
+                key={link.toSlug}
+                onClick={() => onNavigate(link.toSlug)}
+                className="flex items-center gap-3 bg-black/50 hover:bg-black/70 backdrop-blur-3xl px-5 py-3 rounded-2xl text-white border border-white/20 shadow-2xl transition-colors group cursor-pointer"
+                whileHover={{ scale: 1.05, x: 5 }}
+                whileTap={{ scale: 0.95 }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
+                  <span className="text-lg">→</span>
+                </div>
+                <div className="flex flex-col items-start text-left">
+                  <span className="text-[10px] uppercase tracking-wider text-white/50 group-hover:text-white/70 transition-colors">
+                    Di chuyển đến
+                  </span>
+                  <span className="text-sm font-bold whitespace-nowrap">
+                    {displayName}
+                  </span>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Compact panorama controls */}
+      {isLoaded && !hasError && (
+        <div className="absolute bottom-6 left-6 z-20 flex items-center gap-1 rounded-full bg-black/35 backdrop-blur-xl border border-white/15 p-1 shadow-[0_8px_22px_rgba(0,0,0,0.28)] pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => adjustZoom(-12)}
+            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/12 active:scale-95 transition-all flex items-center justify-center"
+            title="Phóng to"
+            aria-label="Phóng to"
+          >
+            <Plus className="w-4.5 h-4.5" strokeWidth={2.3} />
+          </button>
+          <button
+            type="button"
+            onClick={() => adjustZoom(12)}
+            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/12 active:scale-95 transition-all flex items-center justify-center"
+            title="Thu nhỏ"
+            aria-label="Thu nhỏ"
+          >
+            <Minus className="w-4.5 h-4.5" strokeWidth={2.3} />
+          </button>
+          <div className="w-px h-5 bg-white/12" />
+          <button
+            type="button"
+            onClick={resetView}
+            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/12 active:scale-95 transition-all flex items-center justify-center"
+            title="Về góc nhìn ban đầu"
+            aria-label="Về góc nhìn ban đầu"
+          >
+            <Crosshair className="w-4.5 h-4.5" strokeWidth={2.3} />
+          </button>
         </div>
       )}
     </div>
