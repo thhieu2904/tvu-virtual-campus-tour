@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   MapPin, FileText, Image as ImageIcon, ToggleLeft, ToggleRight,
-  RefreshCw, Search, Star, Pencil, X, Plus, Trash2, Upload,
+  RefreshCw, Search, Star, Pencil, X, Plus, Trash2, Upload, Volume2,
 } from 'lucide-react'
 
 interface LocationItem {
   id: string; name: string; slug: string; description: string
   intro_message: string; status: 'active' | 'inactive'; is_start_node: boolean
-  background_url: string; mascot_id: string | null; sort_order: number
-  doc_count: number; media_count: number; updated_at: string | null
+  intro_audio_url?: string | null; background_url: string; mascot_id: string | null
+  sort_order: number; doc_count: number; media_count: number; updated_at: string | null
 }
 
 interface LocationDetail extends LocationItem {
@@ -36,6 +36,7 @@ export default function LocationsPage() {
   const [saving, setSaving] = useState(false)
   const [bgFile, setBgFile] = useState<File | null>(null)
   const [uploadingBg, setUploadingBg] = useState(false)
+  const [regeneratingAudio, setRegeneratingAudio] = useState(false)
 
   const fetchLocations = useCallback(async () => {
     setLoading(true); setError(null)
@@ -47,7 +48,7 @@ export default function LocationsPage() {
     } finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchLocations() }, [fetchLocations])
+  useEffect(() => { void Promise.resolve().then(fetchLocations) }, [fetchLocations])
 
   const handleToggleStatus = async (id: string) => {
     setTogglingId(id)
@@ -74,12 +75,16 @@ export default function LocationsPage() {
     if (!editData || !editingId) return
     setSaving(true)
     try {
-      const formData = new FormData()
-      formData.append('name', editData.name)
-      formData.append('description', editData.description)
-      formData.append('intro_message', editData.intro_message)
-      formData.append('suggested_questions', JSON.stringify(editQuestions.filter(q => q.trim())))
-      await adminApi.uploadPut(`/locations/${editingId}`, formData)
+      await adminApi.put(`/locations/${editingId}`, {
+        name: editData.name,
+        description: editData.description,
+        intro_message: editData.intro_message,
+      })
+      await adminApi.put(`/locations/${editingId}/questions`, {
+        questions: editQuestions
+          .map((question, sort_order) => ({ question: question.trim(), sort_order }))
+          .filter(item => item.question),
+      })
 
       // Upload background if selected
       if (bgFile) {
@@ -95,6 +100,21 @@ export default function LocationsPage() {
       fetchLocations()
     } catch (err) { setError(err instanceof Error ? err.message : 'Lỗi lưu') }
     finally { setSaving(false) }
+  }
+
+  const handleRegenerateAudio = async () => {
+    if (!editingId || !editData) return
+    setRegeneratingAudio(true)
+    try {
+      await adminApi.put(`/locations/${editingId}`, {
+        name: editData.name,
+        description: editData.description,
+        intro_message: editData.intro_message,
+      })
+      const result = await adminApi.post<{ intro_audio_url: string }>(`/locations/${editingId}/regenerate-audio`)
+      setEditData({ ...editData, intro_audio_url: result.intro_audio_url })
+    } catch (err) { setError(err instanceof Error ? err.message : 'Không thể tạo lại audio') }
+    finally { setRegeneratingAudio(false) }
   }
 
   const filtered = locations.filter(loc =>
@@ -150,6 +170,15 @@ export default function LocationsPage() {
                 <label className="text-sm font-medium">Intro Message (mascot nói khi vào location)</label>
                 <textarea className="w-full min-h-[80px] rounded-md border bg-transparent px-3 py-2 text-sm"
                   value={editData.intro_message} onChange={e => setEditData({ ...editData, intro_message: e.target.value })} />
+                <div className="mt-2 flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRegenerateAudio} disabled={regeneratingAudio || !editData.intro_message.trim()}>
+                    <Volume2 className="mr-1.5 h-4 w-4" />
+                    {regeneratingAudio ? 'Đang tạo audio...' : 'Tạo lại audio'}
+                  </Button>
+                  {editData.intro_audio_url && (
+                    <audio controls src={editData.intro_audio_url} className="h-9 max-w-[260px]" />
+                  )}
+                </div>
               </div>
 
               {/* Suggested Questions */}

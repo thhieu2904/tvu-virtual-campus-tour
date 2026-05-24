@@ -6,8 +6,8 @@ Based on plan/v1/task_1.3_database_schema.md
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey, JSON, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -65,7 +65,7 @@ class LocationLink(Base):
     from_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     to_location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     label = Column(String(255), nullable=False, default="")
-    
+
     __table_args__ = (
         UniqueConstraint("from_location_id", "to_location_id", name="uix_location_links_from_to"),
     )
@@ -109,11 +109,11 @@ class DocumentChunk(Base):
     content = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False, default=0)
     metadata_ = Column("metadata", JSON, nullable=False, default=dict)
-    
+
     # Import locally to avoid crashing if pgvector is missing during basic imports
     from pgvector.sqlalchemy import Vector
     embedding = Column(Vector(768))  # Gemini embedding size is 768
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     document = relationship("Document", back_populates="chunks")
@@ -163,3 +163,11 @@ class ChatMessage(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     session = relationship("ChatSession", back_populates="messages")
+
+
+class KioskConfig(Base):
+    __tablename__ = "kiosk_config"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(JSONB, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -15,11 +15,12 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.ai.chat_engine import StreamChunk, generate_response, generate_response_stream
 from app.ai.embedding_engine import embed_query
-from app.ai.chat_engine import generate_response, generate_response_stream, StreamChunk
 from app.ai.tools import AGENT_TOOLS
+from app.cache import slug_cache, vector_search_cache
+from app.db.tables import ChatMessage, ChatSession, Location
 from app.repositories import vector_repo
-from app.db.tables import ChatSession, ChatMessage, Location
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,36 @@ async def _get_available_slugs(session: AsyncSession) -> str:
     Query active locations from DB and format as a string for system prompt injection.
     Returns e.g. "thu-vien (Thư viện), cong-chinh (Cổng chính)"
     """
+    cached_slugs = slug_cache.get()
+    if cached_slugs is not None:
+        return cached_slugs
+
     stmt = select(Location.slug, Location.name).where(Location.status == "active").order_by(Location.sort_order)
     result = await session.execute(stmt)
     rows = result.all()
     if not rows:
-        return "Chưa có dữ liệu."
-    return ", ".join(f"{slug} ({name})" for slug, name in rows)
+        slugs = "Chưa có dữ liệu."
+    else:
+        slugs = ", ".join(f"{slug} ({name})" for slug, name in rows)
+    slug_cache.put(slugs)
+    return slugs
+
+
+async def _vector_search_with_cache(
+    session: AsyncSession,
+    query_vector: list[float],
+    location_id: UUID | None,
+) -> list[dict]:
+    cached_chunks = vector_search_cache.get(query_vector, location_id)
+    if cached_chunks is not None:
+        logger.info("🎯 Vector search cache hit (location=%s)", location_id)
+        return cached_chunks
+
+    chunks = await vector_repo.vector_search(
+        session, query_vector, location_id=location_id, top_k=5
+    )
+    vector_search_cache.put(query_vector, location_id, chunks)
+    return chunks
 
 
 async def _enrich_tool_actions(
@@ -86,16 +111,17 @@ async def process_query(
 
         # Step 2: Vector search for relevant chunks
         loc_uuid = UUID(location_id) if location_id else None
-        chunks = await vector_repo.vector_search(
-            session, query_vector, location_id=loc_uuid, top_k=5
-        )
+        chunks = await _vector_search_with_cache(session, query_vector, loc_uuid)
 
         # Step 2b: Get available slugs for system prompt
         available_slugs = await _get_available_slugs(session)
 
+        # Release DB connection before calling LLM
+        await session.commit()
+
         # Step 3: Build RAG context and call Gemini WITH tools
         rag_context = [chunk["content"] for chunk in chunks]
-        
+
         gen_kwargs = {
             "query": message,
             "history": history,
@@ -106,7 +132,7 @@ async def process_query(
             gen_kwargs["personality_prompt"] = personality_prompt
         if voice_style:
             gen_kwargs["voice_style"] = voice_style
-            
+
         result = await generate_response(
             rag_context=rag_context,
             tools=[AGENT_TOOLS],
@@ -125,6 +151,9 @@ async def process_query(
                         session, extra_vector, location_id=None, top_k=5
                     )
                     extra_context = [c["content"] for c in extra_chunks]
+
+                    # Release DB connection before calling LLM round 2
+                    await session.commit()
 
                     logger.info(
                         f"🔄 Search tool '{fc['name']}' → RAG round 2 "
@@ -174,6 +203,7 @@ async def process_query(
                 response_time_ms=response_time_ms,
                 tool_calls_data=result.function_calls if result.function_calls else None,
             )
+            await session.commit()
         except Exception as e:
             logger.warning(f"Failed to save chat messages: {e}")
 
@@ -223,12 +253,13 @@ async def process_query_stream(
 
         # Step 2: Vector search
         loc_uuid = UUID(location_id) if location_id else None
-        chunks = await vector_repo.vector_search(
-            session, query_vector, location_id=loc_uuid, top_k=5
-        )
+        chunks = await _vector_search_with_cache(session, query_vector, loc_uuid)
 
         # Step 2b: Get available slugs
         available_slugs = await _get_available_slugs(session)
+
+        # Release DB connection before calling LLM
+        await session.commit()
 
     except Exception as e:
         logger.error(f"RAG stream pipeline error: {e}")
@@ -303,12 +334,15 @@ async def process_query_stream(
         try:
             extra_query = search_fc["args"].get("query", message)
             extra_vector = await embed_query(extra_query)
-            
+
             # LUÔN LUÔN tìm kiếm Global (location_id=None)
             extra_chunks = await vector_repo.vector_search(
                 session, extra_vector, location_id=None, top_k=5
             )
             extra_context = [c["content"] for c in extra_chunks]
+
+            # Release DB connection before calling LLM round 2
+            await session.commit()
 
             logger.info(
                 f"🔄 Stream: Search tool '{search_fc['name']}' → RAG round 2 "
@@ -377,6 +411,7 @@ async def process_query_stream(
                 response_time_ms=response_time_ms,
                 tool_calls_data=result_r1.function_calls if result_r1.function_calls else None,
             )
+            await session.commit()
         except Exception as e:
             logger.warning(f"Failed to save chat messages: {e}")
 

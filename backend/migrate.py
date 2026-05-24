@@ -129,6 +129,9 @@ UPGRADE_SQL = [
     "UPDATE chat_messages SET input_type = 'text' WHERE input_type IS NULL;",
     "ALTER TABLE chat_messages ALTER COLUMN input_type SET NOT NULL;",
 
+    # === kiosk_config ===
+    "CREATE TABLE IF NOT EXISTS kiosk_config (key VARCHAR(100) PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT now());",
+
     # === FKs with on delete behavior ===
     (
         "DELETE FROM location_links "

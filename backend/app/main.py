@@ -29,7 +29,11 @@ async def lifespan(app: FastAPI):
             print(f"⚠️ Failed to initialize Gemini client: {e}")
     else:
         print("⚠️ GEMINI_API_KEY not set, AI features disabled")
-        
+
+    from app.cache import init_caches
+    await init_caches()
+    print("📦 Cache system initialized")
+
     print("🚀 TVU Virtual Campus Tour API starting...")
     yield
     # --- Shutdown ---

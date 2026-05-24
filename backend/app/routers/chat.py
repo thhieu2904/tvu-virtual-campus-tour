@@ -3,23 +3,21 @@ Chat router — Public endpoints for AI chat interaction.
 Layer 1 (HTTP): Parse request → call Service → stream response (SSE).
 """
 
+import hashlib
 import json
 import logging
-import base64
-import hashlib
-import os
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from app.db.database import get_db, async_session
-from app.schemas.chat import ChatRequest, ChatResponse, SessionResponse, TTSRequest
-from app.services import rag_service
-from app.repositories import location_repo
 from app.ai import tts_engine
-from app.services import storage_service
+from app.cache import qa_cache_store, tts_key_cache
+from app.db.database import async_session, get_db
+from app.repositories import location_repo
+from app.schemas.chat import ChatRequest, SessionResponse, TTSRequest
+from app.services import rag_service, storage_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,7 +38,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
     location_name = "Sảnh Chính"
     personality_prompt = None
     voice_style = None
-    
+
     if request.location_id:
         location = await location_repo.get_by_id(session, request.location_id)
         if location:
@@ -49,19 +47,18 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
                 personality_prompt = location.mascot.personality_prompt
                 voice_style = location.mascot.voice_style
 
+        # Release DB connection before any long processing
+        await session.commit()
+
     # ── Mode 1: Audio-First (Kiosk TTS) ──
     if request.tts:
         # 1. Kiểm tra QA Cache (Semantic Cache cho Suggested Questions)
-        qa_cache_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "qa_cache.json")
-        if os.path.exists(qa_cache_path):
-            with open(qa_cache_path, "r", encoding="utf-8") as f:
-                qa_cache = json.load(f)
-                
-            cache_key = hashlib.md5(f"{request.message}_{location_name}".encode()).hexdigest()
-            if cache_key in qa_cache:
-                logger.info("🎯 Trúng QA Cache cho câu hỏi: %s", request.message)
-                return JSONResponse(content=qa_cache[cache_key])
-                
+        cache_key = hashlib.md5(f"{request.message}_{location_name}".encode()).hexdigest()
+        cached_response = qa_cache_store.get(cache_key)
+        if cached_response:
+            logger.info("🎯 Trúng QA Cache cho câu hỏi: %s", request.message)
+            return JSONResponse(content=cached_response)
+
         # 2. Không trúng QA Cache -> Gọi RAG Service
         result = await rag_service.process_query(
             session=session,
@@ -79,17 +76,26 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
         audio_base64 = None
 
         if answer_text and not result.get("error"):
+            # Ensure DB connection is released before TTS synthesis
+            await session.commit()
+
             # 3. MD5 Hash Answer cho TTS Cache
             # Lấy voice_name của mascot nếu có
             voice_name = "default"
             if request.location_id and location and location.mascot:
                 voice_name = location.mascot.voice_name
-                
+
             answer_hash = hashlib.md5(f"{answer_text}_{voice_name}".encode()).hexdigest()
             r2_key = f"global/cache/{answer_hash}.wav"
-            
+
             try:
-                is_cached = await storage_service.file_exists(r2_key)
+                if tts_key_cache.loaded:
+                    is_cached = tts_key_cache.contains(r2_key)
+                else:
+                    is_cached = await storage_service.file_exists(r2_key)
+                    if is_cached:
+                        tts_key_cache.add(r2_key)
+
                 if is_cached:
                     logger.info("🎯 Trúng TTS Cache MD5: %s", answer_hash)
                     audio_url = storage_service.get_public_url(r2_key)
@@ -99,7 +105,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
                     voice = "vi-VN-Standard-A"
                     if request.location_id and location and location.mascot:
                         voice = location.mascot.voice_name
-                        
+
                     tts_result = await tts_engine.synthesize(text=answer_text, voice_name=voice)
                     # Upload to R2
                     await storage_service.upload_file(
@@ -107,6 +113,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
                         key=r2_key,
                         content_type="audio/wav"
                     )
+                    tts_key_cache.add(r2_key)
                     audio_url = storage_service.get_public_url(r2_key)
             except Exception as e:
                 logger.warning("TTS synthesis or R2 upload failed: %s", e)

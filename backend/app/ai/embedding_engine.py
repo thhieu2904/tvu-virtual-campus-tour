@@ -3,9 +3,15 @@ Embedding Engine — Handles vectorization of text for RAG.
 """
 
 import asyncio
+import logging
+
 from google.genai import types
+
 from app.ai.core_client import get_client
+from app.cache import embedding_cache
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 async def embed_query(text: str) -> list[float]:
@@ -13,10 +19,15 @@ async def embed_query(text: str) -> list[float]:
     Embeds a user query into a 768-dim vector.
     Uses task_type=QUESTION_ANSWERING for queries.
     """
+    cached_embedding = embedding_cache.get(text)
+    if cached_embedding is not None:
+        logger.info("🎯 Embedding cache hit")
+        return cached_embedding
+
     client = get_client()
     settings = get_settings()
-    
-    # Using asyncio.to_thread since the genai SDK might be blocking, 
+
+    # Using asyncio.to_thread since the genai SDK might be blocking,
     # or use the async client if available (google.genai exposes standard synchronous methods by default
     # but we can wrap them in asyncio if needed, or wait for native async support).
     # Since genai Client currently does not have native async embed_content in some versions,
@@ -30,7 +41,9 @@ async def embed_query(text: str) -> list[float]:
             output_dimensionality=settings.GEMINI_EMBEDDING_DIMENSIONS,
         )
     )
-    return result.embeddings[0].values
+    embedding = result.embeddings[0].values
+    embedding_cache.put(text, embedding)
+    return embedding
 
 
 async def embed_document(text: str, title: str | None = None) -> list[float]:
@@ -40,14 +53,14 @@ async def embed_document(text: str, title: str | None = None) -> list[float]:
     """
     client = get_client()
     settings = get_settings()
-    
+
     config_args = {
         "task_type": "RETRIEVAL_DOCUMENT",
         "output_dimensionality": settings.GEMINI_EMBEDDING_DIMENSIONS,
     }
     if title:
         config_args["title"] = title
-        
+
     result = await asyncio.to_thread(
         client.models.embed_content,
         model=settings.GEMINI_EMBEDDING_MODEL,
@@ -65,10 +78,10 @@ async def embed_batch(texts: list[str], batch_size: int = 100) -> list[list[floa
     all_embeddings = []
     client = get_client()
     settings = get_settings()
-    
+
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
-        
+
         result = await asyncio.to_thread(
             client.models.embed_content,
             model=settings.GEMINI_EMBEDDING_MODEL,
@@ -78,12 +91,12 @@ async def embed_batch(texts: list[str], batch_size: int = 100) -> list[list[floa
                 output_dimensionality=settings.GEMINI_EMBEDDING_DIMENSIONS,
             )
         )
-        
+
         batch_embeddings = [emb.values for emb in result.embeddings]
         all_embeddings.extend(batch_embeddings)
-        
+
         if i + batch_size < len(texts):
             # Sleep slightly to respect rate limits
             await asyncio.sleep(0.5)
-            
+
     return all_embeddings
