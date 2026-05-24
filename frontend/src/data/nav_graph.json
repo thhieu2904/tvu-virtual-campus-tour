@@ -12,18 +12,13 @@
     "routeMode": "blue-centerline-axis-snapped",
     "description": "Graph rebuilt from visible blue centerline and axis-snapped to keep logical lanes visually straight despite minor click offsets."
   },
-  "activeDestinations": [
-    "welcome",
-    "b7_front",
-    "d5_front",
-    "c7_front"
-  ],
+  "activeDestinations": ["welcome", "b7_front", "d5_front", "c7_front"],
   "nodes": [
     {
       "id": "welcome",
       "slug": "cong-chinh",
-      "x": 68.83,
-      "y": 96.06,
+      "x": 69.17,
+      "y": 96.05,
       "label": "Cổng chính",
       "type": "entry",
       "active": true
@@ -31,8 +26,8 @@
     {
       "id": "b7_front",
       "slug": "b7-thu-vien",
-      "x": 66.36,
-      "y": 18.17,
+      "x": 66.34,
+      "y": 18.42,
       "label": "Thư viện (B7)",
       "building": "B7",
       "type": "destination",
@@ -41,7 +36,7 @@
     {
       "id": "d5_front",
       "slug": "d5-giang-duong",
-      "x": 40.64,
+      "x": 40.76,
       "y": 27.03,
       "label": "Giảng đường D5",
       "building": "D5",
@@ -52,7 +47,7 @@
       "id": "c7_front",
       "slug": "c7-khoa-cntt",
       "x": 21.89,
-      "y": 57.74,
+      "y": 57.41,
       "label": "Khoa CNTT (C7)",
       "building": "C7",
       "type": "destination",
@@ -61,7 +56,7 @@
     {
       "id": "d6_front",
       "x": 26.97,
-      "y": 18.17,
+      "y": 18.43,
       "label": "D6",
       "building": "D6",
       "type": "destination",
@@ -70,7 +65,7 @@
     {
       "id": "d3_front",
       "x": 29.45,
-      "y": 36.77,
+      "y": 36.58,
       "label": "D3",
       "building": "D3",
       "type": "destination",
@@ -78,8 +73,8 @@
     },
     {
       "id": "c9_front",
-      "x": 16.66,
-      "y": 46.36,
+      "x": 16.39,
+      "y": 46.34,
       "label": "C9",
       "building": "C9",
       "type": "destination",
@@ -87,8 +82,8 @@
     },
     {
       "id": "c6_front",
-      "x": 15.64,
-      "y": 55.23,
+      "x": 15.57,
+      "y": 55.22,
       "label": "C6",
       "building": "C6",
       "type": "destination",
@@ -96,7 +91,7 @@
     },
     {
       "id": "c5_front",
-      "x": 14.62,
+      "x": 14.59,
       "y": 65.83,
       "label": "C5",
       "building": "C5",
@@ -105,8 +100,8 @@
     },
     {
       "id": "c4_front",
-      "x": 14.19,
-      "y": 72.52,
+      "x": 13.97,
+      "y": 72.5,
       "label": "C4",
       "building": "C4",
       "type": "destination",
@@ -115,7 +110,7 @@
     {
       "id": "c3_front",
       "x": 20.29,
-      "y": 74.63,
+      "y": 74.25,
       "label": "C3",
       "building": "C3",
       "type": "destination",
@@ -124,7 +119,7 @@
     {
       "id": "c2_front",
       "x": 31,
-      "y": 74.63,
+      "y": 74.32,
       "label": "C2",
       "building": "C2",
       "type": "destination",
@@ -132,8 +127,8 @@
     },
     {
       "id": "c1_front",
-      "x": 38.89,
-      "y": 90.1,
+      "x": 39.14,
+      "y": 90.11,
       "label": "C1",
       "building": "C1",
       "type": "destination",
@@ -142,7 +137,7 @@
     {
       "id": "c8_front",
       "x": 32.79,
-      "y": 57.74,
+      "y": 57.41,
       "label": "C8",
       "building": "C8",
       "type": "destination",
@@ -159,7 +154,7 @@
     },
     {
       "id": "b6_front",
-      "x": 66.73,
+      "x": 66.77,
       "y": 30.38,
       "label": "B6",
       "building": "B6",
@@ -168,8 +163,8 @@
     },
     {
       "id": "b5_front",
-      "x": 67.23,
-      "y": 47.67,
+      "x": 67.41,
+      "y": 47.77,
       "label": "B5",
       "building": "B5",
       "type": "destination",
@@ -177,8 +172,8 @@
     },
     {
       "id": "b4_front",
-      "x": 67.81,
-      "y": 61.62,
+      "x": 67.91,
+      "y": 61.61,
       "label": "B4",
       "building": "B4",
       "type": "destination",
@@ -186,8 +181,8 @@
     },
     {
       "id": "b3_front",
-      "x": 68.15,
-      "y": 70.48,
+      "x": 68.23,
+      "y": 70.47,
       "label": "B3",
       "building": "B3",
       "type": "destination",
@@ -204,7 +199,7 @@
     },
     {
       "id": "b1_front",
-      "x": 68.83,
+      "x": 68.82,
       "y": 86.62,
       "label": "B1",
       "building": "B1",
@@ -214,79 +209,79 @@
     {
       "id": "j_left_gate_top",
       "x": 8.66,
-      "y": 18.17,
+      "y": 18.43,
       "type": "junction"
     },
     {
       "id": "j_left_mid_corner",
       "x": 7.07,
-      "y": 36.77,
+      "y": 36.55,
       "type": "junction"
     },
     {
       "id": "j_left_top",
       "x": 16,
-      "y": 18.1,
+      "y": 18.43,
       "type": "junction"
     },
     {
       "id": "j_left_d3",
-      "x": 17.24,
-      "y": 36.77,
+      "x": 17.29,
+      "y": 36.66,
       "type": "junction"
     },
     {
       "id": "j_left_c7",
-      "x": 15.49,
-      "y": 57.74,
+      "x": 15.34,
+      "y": 57.41,
       "type": "junction"
     },
     {
       "id": "j_left_c3",
-      "x": 13.9,
-      "y": 74.63,
+      "x": 13.77,
+      "y": 74.21,
       "type": "junction"
     },
     {
       "id": "j_center_top",
-      "x": 40.78,
-      "y": 18.17,
+      "x": 40.98,
+      "y": 18.43,
       "type": "junction"
     },
     {
       "id": "j_center_d3",
-      "x": 40.2,
-      "y": 36.77,
+      "x": 40.51,
+      "y": 36.61,
       "type": "junction"
     },
     {
       "id": "j_center_c7",
-      "x": 40.05,
-      "y": 57.74,
+      "x": 39.97,
+      "y": 57.41,
       "type": "junction"
     },
     {
       "id": "j_center_c3",
-      "x": 39.33,
-      "y": 74.63,
+      "x": 39.54,
+      "y": 74.38,
       "type": "junction"
     },
     {
       "id": "j_center_bottom",
-      "x": 38.89,
+      "x": 38.98,
       "y": 96.35,
       "type": "junction"
     },
     {
       "id": "j_right_d3",
-      "x": 66.73,
-      "y": 36.77,
+      "x": 67,
+      "y": 36.64,
       "type": "junction"
     },
     {
       "id": "j_right_c3",
-      "x": 68.15,
-      "y": 74.63,
+      "x": 68.38,
+      "y": 74.55,
       "type": "junction"
     },
     {
@@ -294,6 +289,24 @@
       "x": 64.18,
       "y": 95.04,
       "type": "junction"
+    },
+    {
+      "id": "j_new_1",
+      "type": "junction",
+      "x": 66.46,
+      "y": 21.9
+    },
+    {
+      "id": "j_new_6",
+      "type": "junction",
+      "x": 40.29,
+      "y": 45.31
+    },
+    {
+      "id": "j_new_7",
+      "type": "junction",
+      "x": 96.65,
+      "y": 57.41
     }
   ],
   "edges": [
@@ -483,13 +496,6 @@
       "from": "c6_front",
       "to": "j_left_c7",
       "cost": 2.07,
-      "bidirectional": true,
-      "enabled": true
-    },
-    {
-      "from": "j_left_c7",
-      "to": "c5_front",
-      "cost": 7.03,
       "bidirectional": true,
       "enabled": true
     },

@@ -21,7 +21,6 @@ export default function ChatOverlay() {
     addMessage,
     _setMessages,
     isTTSEnabled,
-    toggleTTS,
   } = useChatStore();
   const [input, setInput] = useState("");
 
@@ -222,15 +221,15 @@ export default function ChatOverlay() {
       </AnimatePresence>
 
       {/* === BOTTOM CONTROLS WRAPPER === */}
-      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-5 z-40 w-full max-w-3xl pointer-events-none">
+      <div className="fixed bottom-11 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-40 w-full max-w-3xl pointer-events-none">
         {/* === QUICK ACTIONS (SUGGESTED QUESTIONS) === */}
         {suggestedQuestions.length > 0 && !isMapActive && (
-          <div className="flex flex-wrap justify-center gap-3 pointer-events-auto px-4">
+          <div className="flex max-w-[660px] flex-wrap justify-center gap-2 pointer-events-auto px-4">
             {suggestedQuestions.map((q, idx) => (
               <motion.button
                 key={idx}
                 onClick={() => handleSend(q)}
-                className="h-11 px-5 bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/20 text-white/90 font-medium text-[15px] rounded-full shadow-lg hover:shadow-white/10 hover:-translate-y-0.5 active:scale-95 transition-all flex items-center gap-2"
+                className="min-h-9 max-w-[310px] px-3.5 py-1.5 bg-[#121511]/34 hover:bg-[#121511]/54 backdrop-blur-xl border border-white/[0.12] text-white/82 font-semibold text-[13px] leading-tight rounded-full shadow-[0_7px_18px_rgba(0,0,0,0.18)] hover:shadow-white/10 hover:-translate-y-0.5 active:scale-95 transition-all flex items-center gap-2"
               >
                 {q}
               </motion.button>
@@ -239,14 +238,14 @@ export default function ChatOverlay() {
         )}
 
         {/* === VOICE HUB (Premium Dark Glass) === */}
-        <div className="bg-black/50 backdrop-blur-3xl border border-white/20 shadow-[0_16px_48px_0_rgba(0,0,0,0.4)] rounded-[3rem] pl-4 pr-2 py-2 flex items-center gap-4 pointer-events-auto relative overflow-hidden w-[90%] sm:w-[500px]">
+        <div className="bg-[#121511]/54 backdrop-blur-3xl border border-white/[0.14] shadow-[0_14px_38px_rgba(0,0,0,0.32)] rounded-[3rem] pl-3 pr-2 py-2 flex items-center gap-3 pointer-events-auto relative overflow-hidden w-[90%] sm:w-[500px]">
           {/* Subtle glass shimmer */}
           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 skew-x-12 opacity-50 pointer-events-none"></div>
 
           {/* Transcript Toggle Button */}
           <button
             onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all z-10 shrink-0 ${
+            className={`w-11 h-11 flex items-center justify-center rounded-full transition-all z-10 shrink-0 ${
               isTranscriptOpen
                 ? "bg-white/20 text-white"
                 : "hover:bg-white/10 text-white/70"
@@ -267,7 +266,7 @@ export default function ChatOverlay() {
             </svg>
           </button>
 
-          <div className="flex-1 flex justify-start items-center z-10 w-full border-l border-white/10 pl-4">
+          <div className="flex-1 flex justify-start items-center z-10 w-full border-l border-white/10 pl-3">
             {isListening ? (
               <div className="flex items-center gap-4">
                 <div className="flex justify-center gap-1.5 items-center">
@@ -301,7 +300,7 @@ export default function ChatOverlay() {
                   }}
                   disabled={isLoading}
                   placeholder="Nhập câu hỏi hoặc bấm mic..."
-                  className="min-w-0 w-full bg-transparent text-white placeholder:text-white/50 text-[17px] font-medium outline-none disabled:opacity-50 pr-4"
+                  className="min-w-0 w-full bg-transparent text-white placeholder:text-white/45 text-[16px] font-medium outline-none disabled:opacity-50 pr-4"
                 />
                 <AnimatePresence>
                   {input.trim() && !isLoading && (
@@ -334,7 +333,7 @@ export default function ChatOverlay() {
                 if (isListening) stopListening();
                 else startListening();
               }}
-              className={`w-16 h-16 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
+              className={`w-15 h-15 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
                 isListening
                   ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]"
                   : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
@@ -360,47 +359,6 @@ export default function ChatOverlay() {
         </div>
       </div>
       {/* END BOTTOM CONTROLS WRAPPER */}
-
-      {/* === MASCOT CONTROLS (Mute Button) === */}
-      <div className="fixed right-6 bottom-24 z-40 pointer-events-auto flex flex-col gap-3">
-        <button
-          onClick={toggleTTS}
-          className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-xl border border-white/20 text-white/80 hover:text-white flex items-center justify-center transition-all hover:bg-black/70 shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
-          title={isTTSEnabled ? "Tắt tiếng Mascot" : "Bật tiếng Mascot"}
-        >
-          {isTTSEnabled ? (
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-            </svg>
-          ) : (
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-              <line x1="23" y1="9" x2="17" y2="15"></line>
-              <line x1="17" y1="9" x2="23" y2="15"></line>
-            </svg>
-          )}
-        </button>
-      </div>
 
       {/* === EXPANDABLE TRANSCRIPT (Right Side Panel) === */}
       <AnimatePresence>

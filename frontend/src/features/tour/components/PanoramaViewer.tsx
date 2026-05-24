@@ -161,6 +161,8 @@ export default function PanoramaViewer({
       {/* Pannellum container */}
       <div ref={containerRef} className="w-full h-full" />
 
+      <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,rgba(0,0,0,0.08)_0%,rgba(0,0,0,0)_35%,rgba(0,0,0,0)_58%,rgba(0,0,0,0.24)_100%)]" />
+
       {/* Loading overlay */}
       <AnimatePresence>
         {(!isLoaded || isTransitioning) && (
@@ -209,7 +211,7 @@ export default function PanoramaViewer({
 
       {/* Navigation Links Overlay */}
       {isLoaded && !hasError && links && links.length > 0 && onNavigate && (
-        <div className="absolute top-[60%] left-6 -translate-y-1/2 z-20 flex flex-col gap-3 pointer-events-auto">
+        <div className="absolute top-[57%] left-5 -translate-y-1/2 z-20 flex w-[190px] flex-col gap-2 pointer-events-auto">
           {links.map((link) => {
             const targetLoc = locations.find((l) => l.slug === link.toSlug);
             const displayName = targetLoc ? targetLoc.name : link.label;
@@ -218,23 +220,18 @@ export default function PanoramaViewer({
               <motion.button
                 key={link.toSlug}
                 onClick={() => onNavigate(link.toSlug)}
-                className="flex items-center gap-3 bg-black/50 hover:bg-black/70 backdrop-blur-3xl px-5 py-3 rounded-2xl text-white border border-white/20 shadow-2xl transition-colors group cursor-pointer"
-                whileHover={{ scale: 1.05, x: 5 }}
+                className="flex min-h-10 items-center gap-2 rounded-full bg-[#121511]/34 px-3.5 py-2 text-white shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-colors hover:bg-[#121511]/54 group cursor-pointer"
+                whileHover={{ scale: 1.015, x: 3 }}
                 whileTap={{ scale: 0.95 }}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
               >
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
-                  <span className="text-lg">→</span>
-                </div>
-                <div className="flex flex-col items-start text-left">
-                  <span className="text-[10px] uppercase tracking-wider text-white/50 group-hover:text-white/70 transition-colors">
-                    Di chuyển đến
-                  </span>
-                  <span className="text-sm font-bold whitespace-nowrap">
-                    {displayName}
-                  </span>
-                </div>
+                <span className="text-base leading-none text-white/75 transition-colors group-hover:text-white">
+                  →
+                </span>
+                <span className="min-w-0 max-w-[145px] truncate text-[13px] font-bold leading-tight text-white/90">
+                  {displayName}
+                </span>
               </motion.button>
             );
           })}
@@ -243,34 +240,34 @@ export default function PanoramaViewer({
 
       {/* Compact panorama controls */}
       {isLoaded && !hasError && (
-        <div className="absolute bottom-6 left-6 z-20 flex items-center gap-1 rounded-full bg-black/35 backdrop-blur-xl border border-white/15 p-1 shadow-[0_8px_22px_rgba(0,0,0,0.28)] pointer-events-auto">
+        <div className="absolute bottom-6 left-6 z-20 flex items-center gap-1 rounded-full border border-white/25 bg-black/45 p-1.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-2xl pointer-events-auto">
           <button
             type="button"
             onClick={() => adjustZoom(-12)}
-            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/12 active:scale-95 transition-all flex items-center justify-center"
+            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center"
             title="Phóng to"
             aria-label="Phóng to"
           >
-            <Plus className="w-4.5 h-4.5" strokeWidth={2.3} />
+            <Plus className="h-[18px] w-[18px]" strokeWidth={2.3} />
           </button>
           <button
             type="button"
             onClick={() => adjustZoom(12)}
-            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/12 active:scale-95 transition-all flex items-center justify-center"
+            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center"
             title="Thu nhỏ"
             aria-label="Thu nhỏ"
           >
-            <Minus className="w-4.5 h-4.5" strokeWidth={2.3} />
+            <Minus className="h-[18px] w-[18px]" strokeWidth={2.3} />
           </button>
           <div className="w-px h-5 bg-white/12" />
           <button
             type="button"
             onClick={resetView}
-            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/12 active:scale-95 transition-all flex items-center justify-center"
+            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center"
             title="Về góc nhìn ban đầu"
             aria-label="Về góc nhìn ban đầu"
           >
-            <Crosshair className="w-4.5 h-4.5" strokeWidth={2.3} />
+            <Crosshair className="h-[18px] w-[18px]" strokeWidth={2.3} />
           </button>
         </div>
       )}

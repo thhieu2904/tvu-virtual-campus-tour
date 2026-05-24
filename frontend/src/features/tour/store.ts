@@ -24,6 +24,7 @@ export interface LocationNode {
   description: string;
   introMessage: string;
   intro_audio_url?: string;
+  mascotName?: string | null;
   mascotModelUrl?: string | null;
   backgroundUrl: string;
   suggestedQuestions: string[];

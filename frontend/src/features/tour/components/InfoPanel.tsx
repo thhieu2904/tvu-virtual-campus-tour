@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Film, ImageIcon, MapPin, Maximize2, Minimize2, X } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
 import ImageGallery from "./media/ImageGallery";
 import VideoPlayer from "./media/VideoPlayer";
@@ -116,47 +117,49 @@ export default function InfoPanel() {
 
       <motion.div
         layout
-        className={`absolute flex flex-col bg-black/50 backdrop-blur-3xl border border-white/20 rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.5)] overflow-hidden transition-all duration-500 ease-in-out ${
+        className={`absolute flex flex-col bg-[#101412]/60 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.34)] overflow-hidden transition-all duration-500 ease-in-out ${
           isExpanded ? "z-[60]" : "z-30"
         } ${
           isExpanded
             ? isOverlayOpen
               ? "top-1/2 -translate-y-1/2 left-[3%] right-[calc(5%+min(30vw,450px)+2vw)] h-[82vh]"
-              : "top-6 left-6 w-[440px] max-h-[80vh]"
-            : "top-6 left-6 w-[360px]"
+              : "top-5 left-5 w-[420px] max-h-[80vh]"
+            : "top-5 left-5 w-[320px]"
         }`}
         initial={{ opacity: 0, x: -40 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
       >
         {/* ── Header ── */}
-        <div className={`flex items-center justify-between bg-white/5 transition-colors ${isExpanded ? 'px-3.5 py-1.5 border-b border-white/10' : 'px-3.5 py-1.5'}`}>
+        <div className={`flex items-center justify-between bg-white/[0.06] transition-colors ${isExpanded ? 'px-3 py-2 border-b border-white/10' : 'px-3 py-2'}`}>
           <div className="flex items-center gap-2 min-w-0 cursor-pointer" onClick={() => !isExpanded ? setIsExpanded(true) : handleClose()}>
-            <span className="text-sm">📍</span>
-            <h3 className="text-sm font-bold text-white truncate max-w-[150px]">{location.name}</h3>
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-rose-300" strokeWidth={2.4} />
+            <h3 className="text-[13px] font-bold text-white truncate max-w-[150px]">{location.name}</h3>
             {hasMedia && (
-              <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-full font-medium shrink-0">
+              <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-white/70 rounded-full font-semibold shrink-0">
                 {locationMedia.length}
               </span>
             )}
           </div>
           <div className="flex items-center gap-1.5">
             {([
-              { key: "video" as PanelMode, icon: "🎬", count: videos.length },
-              { key: "info" as PanelMode, icon: "🖼️", count: images.length },
+              { key: "video" as PanelMode, icon: Film, count: videos.length, label: "Video" },
+              { key: "info" as PanelMode, icon: ImageIcon, count: images.length, label: "Hình ảnh" },
             ]).map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => { setMode(tab.key); setIsExpanded(true); }}
-                  className={`relative w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-all cursor-pointer border ${
+                title={tab.label}
+                aria-label={tab.label}
+                className={`relative w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer border ${
                   isExpanded && mode === tab.key
-                    ? "bg-white/20 text-white border-white/30 shadow-md"
-                    : "bg-transparent text-white/50 border-transparent hover:bg-white/10 hover:text-white"
+                    ? "bg-white/[0.18] text-white border-white/25 shadow-sm"
+                    : "bg-transparent text-white/55 border-transparent hover:bg-white/10 hover:text-white"
                 }`}
               >
-                {tab.icon}
+                <tab.icon className="h-3.5 w-3.5" strokeWidth={2.4} />
                 {tab.count > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 flex items-center justify-center bg-blue-500 text-white text-[8px] font-bold rounded-full">
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 flex items-center justify-center bg-[#2f6edb] text-white text-[8px] font-bold rounded-full">
                     {tab.count}
                   </span>
                 )}
@@ -170,16 +173,18 @@ export default function InfoPanel() {
                   title={isOverlayOpen ? "Thu nhỏ" : "Phóng to"}
                 >
                   {isOverlayOpen ? (
-                    <span className="block h-0.5 w-4 rounded-full bg-current" />
+                    <Minimize2 className="h-4 w-4" strokeWidth={2.2} />
                   ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                    <Maximize2 className="h-4 w-4" strokeWidth={2.2} />
                   )}
                 </button>
                 <button
                   onClick={handleClose}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white text-sm cursor-pointer"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white cursor-pointer"
+                  title="Đóng"
+                  aria-label="Đóng"
                 >
-                  ✕
+                  <X className="h-4 w-4" strokeWidth={2.2} />
                 </button>
               </>
             )}
@@ -188,7 +193,7 @@ export default function InfoPanel() {
 
         {/* ── Mini Slideshow (collapsed state) ── */}
         {!isExpanded && (
-          <div className="px-2.5 py-2">
+          <div className="px-2.5 pb-2.5 pt-1">
             {isMediaLoading ? (
               <div className="flex items-center justify-center py-6">
                 <motion.div

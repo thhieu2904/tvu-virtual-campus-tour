@@ -11,8 +11,11 @@ export default function MapEditorPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const didDrag = useRef(false);
-  const [mode, setMode] = useState<"select" | "addJunction" | "addDest" | "addEdge">("select");
+  const [mode, setMode] = useState<"select" | "addJunction" | "addDest" | "addEdge" | "addRefLine">("select");
   const [edgeStart, setEdgeStart] = useState<string | null>(null);
+  const [refLine, setRefLine] = useState<{x1: number, y1: number, x2: number, y2: number} | null>(null);
+  const [refLineStart, setRefLineStart] = useState<{x: number, y: number} | null>(null);
+  const [mousePos, setMousePos] = useState<{x: number, y: number} | null>(null);
   const [showEdges, setShowEdges] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [toast, setToast] = useState("");
@@ -150,17 +153,45 @@ export default function MapEditorPage() {
 
   // --- SVG handlers ---
   const handleSvgClick = useCallback((e: React.MouseEvent) => {
-    if (mode === "addJunction" || mode === "addDest") {
-      const p = toSvg(e.clientX, e.clientY);
-      addNode(p.x, p.y, mode === "addJunction" ? "junction" : "destination");
+    const p = toSvg(e.clientX, e.clientY);
+
+    if (mode === "addRefLine") {
+      if (!refLineStart) {
+        setRefLineStart(p);
+        showToast("Start point set. Click again for end point.");
+      } else {
+        setRefLine({ x1: refLineStart.x, y1: refLineStart.y, x2: p.x, y2: p.y });
+        setRefLineStart(null);
+        setMode("addJunction"); // Auto-switch to junction mode
+        showToast("Reference line set! Now adding junctions snapped to this line.");
+      }
       return;
     }
+
+    if (mode === "addJunction" || mode === "addDest") {
+      let finalP = p;
+      if (refLine) {
+        const { x1, y1, x2, y2 } = refLine;
+        const dx = x2 - x1, dy = y2 - y1;
+        const len2 = dx * dx + dy * dy;
+        if (len2 > 0) {
+          const t = ((p.x - x1) * dx + (p.y - y1) * dy) / len2;
+          finalP = {
+            x: Math.round((x1 + t * dx) * 100) / 100,
+            y: Math.round((y1 + t * dy) * 100) / 100
+          };
+        }
+      }
+      addNode(finalP.x, finalP.y, mode === "addJunction" ? "junction" : "destination");
+      return;
+    }
+
     // Only clear selection if clicking empty background (not after dragging)
     if (mode === "select") {
       setSelected(new Set());
       setEditNode(null);
     }
-  }, [mode, toSvg, addNode]);
+  }, [mode, toSvg, addNode, refLine, refLineStart]);
 
   const handleNodeMouseDown = useCallback((e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -187,11 +218,28 @@ export default function MapEditorPage() {
   }, [mode, edgeStart, addEdge, nodes]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const p = toSvg(e.clientX, e.clientY);
+    setMousePos(p);
+    
     if (!dragId) return;
     didDrag.current = true;
-    const p = toSvg(e.clientX, e.clientY);
-    setNodes(prev => prev.map(n => (n.id === dragId ? { ...n, x: p.x, y: p.y } : n)));
-  }, [dragId, toSvg]);
+    
+    let finalP = p;
+    if (refLine) {
+      const { x1, y1, x2, y2 } = refLine;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len2 = dx * dx + dy * dy;
+      if (len2 > 0) {
+        const t = ((p.x - x1) * dx + (p.y - y1) * dy) / len2;
+        finalP = {
+          x: Math.round((x1 + t * dx) * 100) / 100,
+          y: Math.round((y1 + t * dy) * 100) / 100
+        };
+      }
+    }
+
+    setNodes(prev => prev.map(n => (n.id === dragId ? { ...n, x: finalP.x, y: finalP.y } : n)));
+  }, [dragId, toSvg, refLine]);
 
   // Keyboard
   useEffect(() => {
@@ -232,14 +280,20 @@ export default function MapEditorPage() {
         <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <p style={labelStyle}>Mode</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {(["select", "addJunction", "addDest", "addEdge"] as const).map(m => (
-              <button key={m} onClick={() => { setMode(m); setEdgeStart(null); }}
+            {(["select", "addJunction", "addDest", "addEdge", "addRefLine"] as const).map(m => (
+              <button key={m} onClick={() => { setMode(m); setEdgeStart(null); if (m !== "addRefLine") setRefLineStart(null); }}
                 style={{ ...btnSm, background: mode === m ? "#3b82f6" : "rgba(255,255,255,0.05)", color: mode === m ? "#fff" : "rgba(255,255,255,0.7)" }}>
-                {m === "select" ? "⬆ Select" : m === "addJunction" ? "＋ Junction" : m === "addDest" ? "＋ Building" : "🔗 Edge"}
+                {m === "select" ? "⬆ Select" : m === "addJunction" ? "＋ Junction" : m === "addDest" ? "＋ Building" : m === "addEdge" ? "🔗 Edge" : "📏 Draw Line"}
               </button>
             ))}
           </div>
           {mode === "addEdge" && edgeStart && <p style={{ fontSize: "0.7rem", color: "#f59e0b", margin: "4px 0 0" }}>From: {edgeStart}</p>}
+          {refLine && (
+            <div style={{ marginTop: 8, padding: "6px", background: "rgba(168, 85, 247, 0.15)", borderRadius: 6, border: "1px solid #a855f7" }}>
+              <p style={{ margin: "0 0 4px", fontSize: "0.7rem", color: "#a855f7", fontWeight: "bold" }}>📏 Reference Line Active</p>
+              <button onClick={() => setRefLine(null)} style={{ ...btnSm, borderColor: "#a855f7", color: "#a855f7", background: "transparent" }}>✕ Clear Line</button>
+            </div>
+          )}
         </div>
 
         {/* View */}
@@ -256,6 +310,22 @@ export default function MapEditorPage() {
             <button onClick={alignX} style={btnSm} disabled={selected.size < 2}>↕ Align X</button>
             <button onClick={alignY} style={btnSm} disabled={selected.size < 2}>↔ Align Y</button>
             <button onClick={alignToLine} style={btnSm} disabled={selected.size < 3}>📐 Align to Line</button>
+            {refLine && (
+              <button onClick={() => {
+                setNodes(prev => prev.map(n => {
+                  if (!selected.has(n.id)) return n;
+                  const { x1, y1, x2, y2 } = refLine;
+                  const dx = x2 - x1, dy = y2 - y1;
+                  const len2 = dx * dx + dy * dy;
+                  if (len2 === 0) return n;
+                  const t = ((n.x - x1) * dx + (n.y - y1) * dy) / len2;
+                  return { ...n, x: Math.round((x1 + t * dx) * 100) / 100, y: Math.round((y1 + t * dy) * 100) / 100 };
+                }));
+                showToast(`Snapped ${selected.size} nodes to ref line`);
+              }} style={{ ...btnSm, borderColor: "#a855f7", color: "#a855f7" }} disabled={selected.size === 0}>
+                🧲 Snap to Line
+              </button>
+            )}
           </div>
           <p style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)", margin: "4px 0 0" }}>
             Isometric: select nodes along a road, first+last = anchors, middle nodes snap to that line
@@ -341,6 +411,17 @@ export default function MapEditorPage() {
             onMouseMove={handleMouseMove}
             onMouseUp={() => setDragId(null)}
             onMouseLeave={() => setDragId(null)}>
+
+            {/* Reference Line */}
+            {mode === "addRefLine" && refLineStart && mousePos && (
+              <line x1={refLineStart.x} y1={refLineStart.y} x2={mousePos.x} y2={mousePos.y}
+                stroke="#a855f7" strokeWidth="0.4" strokeDasharray="1 1" pointerEvents="none" />
+            )}
+            {refLine && (
+              <line x1={refLine.x1 - (refLine.x2 - refLine.x1) * 100} y1={refLine.y1 - (refLine.y2 - refLine.y1) * 100}
+                    x2={refLine.x2 + (refLine.x2 - refLine.x1) * 100} y2={refLine.y2 + (refLine.y2 - refLine.y1) * 100}
+                stroke="#a855f7" strokeWidth="0.3" strokeDasharray="1 0.5" pointerEvents="none" opacity={0.6} />
+            )}
 
             {/* Edges */}
             {showEdges && edges.map((e, i) => {

@@ -189,14 +189,14 @@ export default function Minimap() {
       {!expanded && (
         <motion.button
           onClick={() => setExpanded(true)}
-          className="absolute top-6 right-6 z-30 w-[168px] rounded-[24px] bg-black/35 backdrop-blur-2xl border border-white/30 p-2 shadow-[0_18px_55px_rgba(0,0,0,0.35)] overflow-hidden cursor-pointer hover:shadow-[0_22px_70px_rgba(0,0,0,0.45)] hover:border-white/60 transition-all flex flex-col"
-          whileHover={{ scale: 1.04 }}
+          className="absolute top-5 right-5 z-30 w-[148px] rounded-2xl bg-[#111512]/45 backdrop-blur-2xl border border-white/20 p-1.5 shadow-[0_14px_38px_rgba(0,0,0,0.3)] overflow-hidden cursor-pointer hover:shadow-[0_18px_48px_rgba(0,0,0,0.38)] hover:border-white/40 transition-all flex flex-col"
+          whileHover={{ scale: 1.025 }}
           whileTap={{ scale: 0.97 }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="w-full aspect-square bg-gray-100 relative overflow-hidden shrink-0 rounded-[16px] ring-2 ring-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
+          <div className="w-full aspect-square bg-gray-100 relative overflow-hidden shrink-0 rounded-xl ring-1 ring-white/80 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
             {/* Dynamic panning container: centers on current location */}
             {(() => {
               const SCALE = 2.2; // 220% zoom

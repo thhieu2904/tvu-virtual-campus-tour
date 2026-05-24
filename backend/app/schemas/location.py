@@ -19,6 +19,7 @@ class LocationNode(BaseModel):
     description: str
     introMessage: str
     intro_audio_url: Optional[str] = None
+    mascotName: Optional[str] = None
     mascotModelUrl: Optional[str] = None
     backgroundUrl: str
     suggestedQuestions: List[str]

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { Volume2, VolumeX } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
 import { useChatStore, _stopCurrentAudio } from "@/features/chat/store";
 import { useKioskIdleWatcher } from "@/hooks/useKioskIdleWatcher";
@@ -55,6 +56,9 @@ export default function TourPage() {
   const resetNetworkRetry = useTourStore((s) => s.resetNetworkRetry);
   const hasStarted = useTourStore((s) => s.hasStarted);
   const setHasStarted = useTourStore((s) => s.setHasStarted);
+  const isTTSEnabled = useChatStore((s) => s.isTTSEnabled);
+  const toggleTTS = useChatStore((s) => s.toggleTTS);
+  const mascotName = location?.mascotName?.trim() || "Đại sứ ảo";
 
   useEffect(() => {
     fetchLocations();
@@ -302,6 +306,32 @@ export default function TourPage() {
           animation={getAvatarAnimation() as any}
           modelUrl={resolveAvatarModelUrl(location?.mascotModelUrl)}
         />
+        {location && isAppReady && hasStarted && (
+          <div className="absolute bottom-[calc(-5vh+24px)] left-1/2 z-10 flex -translate-x-1/2 justify-center pointer-events-auto">
+            <div className="flex items-center gap-2 rounded-full border border-white/25 bg-black/45 py-1.5 pl-4 pr-1.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+              <div className="min-w-[92px] text-center">
+                <div className="truncate text-sm font-bold leading-tight">
+                  {mascotName}
+                </div>
+                <div className="truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-white/55">
+                  Đại sứ ảo
+                </div>
+              </div>
+              <button
+                onClick={toggleTTS}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-all hover:bg-white/20 active:scale-95"
+                aria-label={isTTSEnabled ? "Tắt tiếng Mascot" : "Bật tiếng Mascot"}
+                title={isTTSEnabled ? "Tắt tiếng Mascot" : "Bật tiếng Mascot"}
+              >
+                {isTTSEnabled ? (
+                  <Volume2 className="h-[18px] w-[18px]" />
+                ) : (
+                  <VolumeX className="h-[18px] w-[18px]" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* === UI Overlays (staggered entrance after isAppReady & hasStarted) === */}
