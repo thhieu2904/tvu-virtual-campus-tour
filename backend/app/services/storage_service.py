@@ -1,11 +1,13 @@
 """
 Storage Service — Cloudflare R2 file management (S3-compatible).
-Handles upload/download/delete for documents, media, and backgrounds.
 
 Folder structure on R2:
-  documents/{location-slug}/{timestamp}_{filename}
-  media/{location-slug}/{filename}
-  backgrounds/{location-slug}/{filename}
+  locations/{location-slug}/background.jpg
+  locations/{location-slug}/intro.wav
+  locations/{location-slug}/media/{filename}
+  documents/{timestamp}_{filename}
+  mascots/{mascot-slug}/model.glb
+  tts-cache/{hash}.{wav|mp3}
 """
 
 import asyncio
@@ -53,9 +55,9 @@ async def upload_file(
     Returns the object key (use get_public_url() to build full URL).
 
     Key format examples:
-    - documents/thu-vien/2026-04-30_quy-che-dao-tao.pdf
-    - media/khoa-cntt/anh-toan-canh.jpg
-    - backgrounds/sanh-chinh/panorama.jpg
+    - documents/2026-04-30_quy-che-dao-tao.pdf
+    - locations/khoa-cntt/media/anh-toan-canh.jpg
+    - locations/sanh-chinh/background.jpg
     """
     client = _get_s3_client()
 
@@ -121,28 +123,27 @@ async def file_exists(key: str) -> bool:
         raise
 
 
-def build_document_key(filename: str, location_slug: str | None = None) -> str:
-    """Build R2 key for a document file.
-
-    Example: documents/thu-vien/2026-04-30_quy-che.pdf
-             documents/general/2026-04-30_gioi-thieu-tvu.pdf
-    """
+def build_document_key(filename: str, *_args, **_kwargs) -> str:
+    """Build R2 key for a global document file."""
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    folder = location_slug or "general"
     safe_name = filename.replace(" ", "-").lower()
-    return f"documents/{folder}/{timestamp}_{safe_name}"
+    return f"documents/{timestamp}_{safe_name}"
 
 
 def build_media_key(filename: str, location_slug: str) -> str:
     """Build R2 key for a media file."""
     safe_name = filename.replace(" ", "-").lower()
-    return f"media/{location_slug}/{safe_name}"
+    return f"locations/{location_slug}/media/{safe_name}"
 
 
 def build_background_key(filename: str, location_slug: str) -> str:
     """Build R2 key for a 360° background image."""
-    safe_name = filename.replace(" ", "-").lower()
-    return f"backgrounds/{location_slug}/{safe_name}"
+    return f"locations/{location_slug}/background.jpg"
+
+
+def build_intro_key(location_slug: str, extension: str = "wav") -> str:
+    """Build R2 key for location intro audio."""
+    return f"locations/{location_slug}/intro.{extension}"
 
 
 def normalize_object_key(key_or_url: str) -> str:
@@ -170,7 +171,7 @@ def get_public_url(key: str) -> str:
     """Build the public URL for an R2 object."""
     settings = get_settings()
     if settings.R2_PUBLIC_URL:
-        # Ví dụ: https://tvu-tour.site/b7-thu-vien/audio/intro.wav
+        # Ví dụ: https://tvu-tour.site/locations/b7-thu-vien/intro.wav
         return f"{settings.R2_PUBLIC_URL}/{key}"
 
     return f"{settings.R2_ENDPOINT_URL}/{_get_bucket()}/{key}"

@@ -1,23 +1,31 @@
 {
   "7e145cbd71cfbdce11aa0e6577fde7c7": {
-    "answer": "Thư viện TVU mở cửa phục vụ bạn đọc xuyên suốt từ Thứ 2 đến Thứ 6. Đặc biệt, Tầng 1 và Không gian tự học thường mở cửa cả ngày và buổi tối để đáp ứng nhu cầu học tập của sinh viên đó bạn. 📚",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/6da01ea8052830013f7d24ea0c64bb48.wav",
+    "answer": "Thư viện mình tên chính thức là Trung tâm Học liệu và Hỗ trợ Học thuật (CELRAS) đó bạn. Thư viện phục vụ bạn đọc xuyên suốt từ Thứ 2 đến Thứ 6. Đặc biệt, tầng 1 và không gian tự học thường mở cửa cả ngày luôn, kể cả buổi tối để tụi mình tiện học bài á! 📚✨",
+    "audio_url": "https://tvu-tour.site/tts-cache/31c57ebdcc695cbf0ef03527b2b7c54a.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Thư viện mở cửa vào thời gian nào?",
     "location": "Thư viện TVU"
   },
   "26e8285be00c087724039000c782dd17": {
-    "answer": "Chào bạn, với vai trò là thủ thư Nhã Uyên, mình xin thông tin đến bạn rằng Thư viện TVU (Trung tâm Học liệu và Hỗ trợ Học thuật - CELRAS) có cung cấp nguồn tài liệu số hóa khổng lồ, đó chính là thư viện điện tử đó ạ. ✨\n\nSinh viên hoàn toàn có thể sử dụng thư viện điện tử tại đây. Ngoài ra, thư viện còn có hàng trăm máy tính cấu hình cao kết nối Internet tốc độ cao miễn phí để bạn thuận tiện trong việc học tập và nghiên cứu.",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/82ff847b803250ca32d75973a81b7a19.wav",
+    "answer": "Chào bạn! Tất nhiên là có rồi nè! 😍 Thư viện của trường mình có hẳn thư viện điện tử số hóa với nguồn tài liệu số hóa khổng lồ luôn đó. Bạn có thể thoải mái tìm kiếm và học tập nha!",
+    "audio_url": "https://tvu-tour.site/tts-cache/5b42d4fbe84b78bd94f59ec39db2977e.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Sinh viên có thể sử dụng thư viện điện tử không?",
     "location": "Thư viện TVU"
   },
+  "abccdca0f86cd14fc4c7e1f80a29884a": {
+    "answer": "Chào bạn, Đại học Trà Vinh có nhiều chính sách học bổng đa dạng lắm đó! ✨ Mình sẽ liệt kê một vài loại chính sách chính nhé:\n\n1.  **Học bổng Khuyến khích Học tập:** Dành cho các bạn có thành tích xuất sắc, chiếm khoảng 8% sĩ số mỗi lớp luôn.\n2.  **Học bổng từ Mạnh thường quân & Doanh nghiệp:** Trường kết nối với hơn 30 nhà tài trợ mỗi năm, từ cá nhân, doanh nghiệp lớn như Vietcombank, BIDV đến các tổ chức quốc tế nữa đó!\n3.  **Miễn học phí Sư phạm:** Đặc biệt, các bạn học ngành Sư phạm sẽ được miễn 100% học phí và còn được hỗ trợ 3.630.000 đồng/tháng chi phí sinh hoạt nữa cơ.\n4.  **Chính sách Miễn giảm & Hỗ trợ khác:** Ngoài ra, trường còn có chính sách miễn giảm học phí cho các đối tượng chính sách, hộ nghèo và đặc biệt là có học bổng dành riêng cho các bạn nữ theo học ngành Kỹ thuật – Công nghệ nữa nè!\n\nNếu bạn muốn biết chi tiết hơn về từng loại học bổng, mình có thể tìm hiểu thêm cho bạn nha! 😊",
+    "audio_url": "https://tvu-tour.site/tts-cache/d3fe3a3a0f255a65feaceb7186fe4b51.wav",
+    "tool_actions": [],
+    "audio_base64": null,
+    "question": "Trường có chính sách học bổng nào?",
+    "location": "Thư viện TVU"
+  },
   "b80311d16d7079f4ef33dca1c95d3620": {
-    "answer": "Mình đưa bạn sang Khoa Công nghệ Thông tin nhé!",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/982990c5c5dd2f51a22af33ca1b79f74.wav",
+    "answer": "Okeee, mình đưa bạn sang Khoa Công nghệ Thông tin (Tòa C7) nha! 🤩",
+    "audio_url": "https://tvu-tour.site/tts-cache/27001b11375abd9b8b6ca18d6d33cdb7.wav",
     "tool_actions": [
       {
         "name": "navigate_to",
@@ -31,48 +39,63 @@
     "location": "Thư viện TVU"
   },
   "4f2f1b3647643f25534e3ea8962bdeda": {
-    "answer": "À, ngành Công nghệ thông tin (CNTT) tại TVU chất lắm nha bạn! Chương trình này được xây dựng theo định hướng ứng dụng và đạt kiểm định chất lượng quốc tế ABET (Hoa Kỳ) đó.\n\nKhi học CNTT ở đây, bạn sẽ được trang bị kiến thức chuyên sâu về:\n*   Lập trình phát triển phần mềm\n*   Hệ thống mạng\n*   Quản trị cơ sở dữ liệu\n*   Các công nghệ mới nổi như AI, Big Data, Blockchain, IoT\n*   Và cả phát triển ứng dụng Web/Mobile nữa.\n\nĐặc biệt, có mô hình đào tạo Co-op (đào tạo gắn kết doanh nghiệp) giúp bạn cọ xát thực tế ngay từ khi còn đi học. Ngoài ra, còn có Câu lạc bộ Lập trình ITHUB, hội thảo và các cuộc thi chuyên ngành để bạn rèn luyện kỹ năng nữa. Học xong là bao chất, bao tự tin luôn! 😉",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/1daecd7143023c021edfa4f6364a3a04.wav",
+    "answer": "Chào bạn, về ngành Công nghệ thông tin ở Đại học Trà Vinh mình thì chương trình học rất đa dạng và được xây dựng theo định hướng ứng dụng, đạt kiểm định chất lượng quốc tế ABET (Hoa Kỳ) đó!\n\nBạn sẽ được học các lĩnh vực chuyên sâu như:\n*   **Lập trình phát triển phần mềm**\n*   **Hệ thống mạng**\n*   **Quản trị cơ sở dữ liệu**\n*   **Các công nghệ mới** như AI, Big Data, Blockchain, IoT\n*   Và cả **Phát triển ứng dụng Web/Mobile** nữa.\n\nChương trình Kỹ sư kéo dài 4 năm (8 học kỳ), khoảng 150 tín chỉ. Đặc biệt, có cả mô hình đào tạo Co-op giúp sinh viên được cọ xát thực tế ngay từ sớm luôn nha! Ngoài ra, bạn còn có thể rèn luyện qua Câu lạc bộ Lập trình ITHUB nữa đó! 😉",
+    "audio_url": "https://tvu-tour.site/tts-cache/3e4c9e393d047aa292e5a69f7347c95f.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Ngành Công nghệ thông tin học những gì?",
     "location": "Khoa CNTT"
   },
   "48c5a208af0cb0c0e48a8f462cc2eae9": {
-    "answer": "Chào bạn, học phí nhóm ngành Kỹ thuật – Công nghệ – Nông nghiệp – Ngôn ngữ là 20.000.000 VNĐ/năm nhé! Các ngành như Công nghệ Thông tin, Trí tuệ Nhân tạo, CN KT Ô tô... đều nằm trong nhóm này đó. 😉",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/55402e9ca89d61b3c7490fa5104f3c21.wav",
+    "answer": "Chào bạn! Đối với nhóm ngành Kỹ thuật – Công nghệ, học phí là 20.000.000 VNĐ/năm (áp dụng cho năm học 2024-2025) nha. Mức này cũng áp dụng cho các ngành như Công nghệ Thông tin, Trí tuệ Nhân tạo, CN KT Cơ khí, CN KT Ô tô, và nhiều ngành khác nữa đó! 😉",
+    "audio_url": "https://tvu-tour.site/tts-cache/b37084462d826736829af48378f1a94d.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Học phí nhóm ngành kỹ thuật là bao nhiêu?",
     "location": "Khoa CNTT"
   },
   "2225185d67e0f63da9d498056ccb718f": {
-    "answer": "Chào bạn! Về cơ hội việc làm ngành IT sau khi ra trường thì cực kỳ rộng mở luôn nhé! 🚀\n\nSinh viên ngành CNTT ở đây được đào tạo rất bài bản theo định hướng ứng dụng, với các kiến thức về Lập trình phát triển phần mềm, Hệ thống mạng, Quản trị cơ sở dữ liệu, cho đến các công nghệ hot như AI, Big Data, Blockchain, IoT và Phát triển ứng dụng Web/Mobile. Những kỹ năng này là \"hàng nóng\" trên thị trường lao động đó!\n\nĐặc biệt, trường còn có mô hình đào tạo Co-op (gắn kết doanh nghiệp) giúp sinh viên cọ xát thực tế ngay từ khi còn đi học. Điều này giúp các bạn có kinh nghiệm quý báu và dễ dàng tìm được việc làm phù hợp sau khi tốt nghiệp. Ngoài ra, việc tham gia CLB ITHUB và các cuộc thi cũng là điểm cộng lớn để phát triển kỹ năng và mở rộng mạng lưới đó! Yên tâm là ngành này không thiếu việc đâu nhé!",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/b39804a7e9590760602c52b6fe08f880.wav",
+    "answer": "À chào bạn, với ngành Công nghệ thông tin (CNTT) ở Trường mình thì cơ hội việc làm sau khi ra trường cực kỳ rộng mở luôn đó!\n\nChương trình đào tạo bên mình tập trung vào các lĩnh vực đang \"hot\" như: Lập trình phát triển phần mềm, Hệ thống mạng, Quản trị cơ sở dữ liệu, Công nghệ mới (AI, Big Data, Blockchain, IoT), và Phát triển ứng dụng Web/Mobile. Đặc biệt, có cả Mô hình đào tạo Co-op (đào tạo gắn kết doanh nghiệp) giúp sinh viên tụi mình được cọ xát thực tế ngay khi còn đi học. Nhờ vậy, khi ra trường, kinh nghiệm đã có sẵn rồi nên rất dễ tìm việc nha! 😉",
+    "audio_url": "https://tvu-tour.site/tts-cache/3d36d8e100770e53a14710ee484fef1e.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Cơ hội việc làm ngành IT sau khi ra trường?",
     "location": "Khoa CNTT"
   },
+  "1426e5ef7d3be9842d6673fed8934a65": {
+    "answer": "Okie, mình đưa bạn sang Giảng đường D5 nhé! ✨",
+    "audio_url": "https://tvu-tour.site/tts-cache/653d4d5fe0700f19e3fcfe224428ca4f.wav",
+    "tool_actions": [
+      {
+        "name": "navigate_to",
+        "args": {
+          "location_slug": "d5-giang-duong"
+        }
+      }
+    ],
+    "audio_base64": null,
+    "question": "Đưa mình sang Giảng đường D5",
+    "location": "Khoa CNTT"
+  },
   "4191fb61a51eacb31397ed66583fb694": {
-    "answer": "Chào mừng bạn đến với Đại học Trà Vinh (TVU)! ✨ Mình rất vui được giới thiệu về ngôi trường thân yêu của chúng mình.\n\nĐại học Trà Vinh là một cơ sở giáo dục đại học công lập, vừa được Chính phủ chính thức chuyển đổi từ Trường Đại học Trà Vinh thành Đại học Trà Vinh vào tháng 1 năm 2026. Điều này đã giúp TVU trở thành đại học thứ 13 của Việt Nam đó! 🥳\n\nVới phương châm \"Mang đến cơ hội học tập chất lượng cho cộng đồng\", TVU tự hào là một đại học tiên tiến, định hướng ứng dụng và hội nhập quốc tế sâu rộng. Năm 2026 cũng đánh dấu kỷ niệm 20 năm thành lập của trường nữa đấy!\n\nNếu bạn muốn biết thêm điều gì, cứ hỏi mình nhé! 😊",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/e8a2c218ac3362bde855e012da815ca3.wav",
+    "answer": "Chào bạn! 😊 Mình là ViVy, đại sứ sinh viên nữ của Đại học Trà Vinh nè. Rất vui được giới thiệu về trường mình nha!\n\nĐại học Trà Vinh (TVU) là một cơ sở giáo dục đại học công lập, vừa được chuyển đổi từ Trường Đại học Trà Vinh thành Đại học Trà Vinh theo Quyết định của Chính phủ vào tháng 01/2026 đó. Điều này giúp TVU trở thành đại học thứ 13 của Việt Nam, và là tỉnh đầu tiên có trường đại học trực thuộc chuyển thành đại học luôn! ✨\n\nTrường mình có phương châm \"Mang đến cơ hội học tập chất lượng cho cộng đồng\", luôn phát triển theo định hướng ứng dụng và hội nhập quốc tế sâu rộng. Năm 2026 này còn là dịp kỷ niệm 20 năm thành lập trường nữa đó (2006–2026)! TVU còn thuộc Top 200 đại học xanh, bền vững nhất thế giới và được vinh danh là đơn vị chuyển đổi số xuất sắc nhiều năm liền nữa. Thật tự hào phải không nào! 😍",
+    "audio_url": "https://tvu-tour.site/tts-cache/ae296a7b830d57e4d29caa14fcaa278c.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Giới thiệu tổng quan về Đại học Trà Vinh",
     "location": "Cổng chính TVU"
   },
   "08896c1b5f70e4356ab090fa6419d90a": {
-    "answer": "Chào bạn! ViVy rất vui được giải đáp nhé! 😊\n\nHiện tại, Đại học Trà Vinh có **59 ngành đào tạo bậc Đại học và 1 ngành Cao đẳng**. Ngoài ra, trường còn có đa dạng các chương trình khác nữa đó:\n*   10 ngành trình độ Tiến sĩ\n*   20 ngành trình độ Thạc sĩ\n*   9 chuyên khoa Cấp 1 và 1 chuyên khoa Cấp 2 (khối ngành Khoa học Sức khỏe)\n\nBạn thấy không, TVU rất đa ngành và đa cấp bậc để bạn thoải mái lựa chọn nhé! ✨",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/8d841f6bcb2778bd25db1d77cecd9929.wav",
+    "answer": "Chào bạn! ViVy rất vui được đồng hành cùng bạn nè! 😊\n\nĐại học Trà Vinh hiện đang đào tạo tới **59 ngành** bậc Đại học và thêm 1 ngành Cao đẳng đó bạn. Trường mình có rất nhiều lựa chọn để bạn khám phá và theo đuổi đam mê luôn đó! ✨",
+    "audio_url": "https://tvu-tour.site/tts-cache/46e0197a25a1f3c111ed80be0f7b5d74.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Trường có bao nhiêu ngành đào tạo?",
     "location": "Cổng chính TVU"
   },
   "7ec0276e3206eefce87e4025525ce19c": {
-    "answer": "Chào mừng các bạn tân sinh viên! 👋 Mình là ViVy, rất vui được hướng dẫn các bạn.\n\nĐể nhập học tại Đại học Trà Vinh, các bạn sẽ thực hiện các bước sau tại sảnh Khu Hiệu bộ:\n\n1.  **Nhận bìa hồ sơ và Giấy báo trúng tuyển.**\n2.  **Nộp hồ sơ:** Gồm các bản sao công chứng hoặc mang bản chính để đối chiếu.\n3.  **Đóng học phí** theo ngành trúng tuyển của mình.\n4.  **Đăng ký Bảo hiểm Y tế** (bắt buộc) và Bảo hiểm toàn diện (nếu có nhu cầu).\n5.  **Đăng ký kiểm tra năng lực Tiếng Anh đầu vào.**\n6.  **Đăng ký ở Ký túc xá** (nếu các bạn có nhu cầu).\n7.  Cuối cùng là **chụp ảnh và làm thẻ sinh viên** của mình nhé!\n\nNếu có bất kỳ thắc mắc nào, đừng ngần ngại hỏi mình nha! 😊",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/fb2a8dc95936d0ae3e1763b5262781b1.wav",
+    "answer": "Chào bạn! ViVy đây, mình rất vui được hướng dẫn bạn nè 🥰\n\nĐể nhập học tại TVU, các bạn tân sinh viên Khóa 2025 sẽ cần thực hiện các bước sau tại Sảnh Khu Hiệu bộ:\n\n1.  Đầu tiên, bạn sẽ nhận bìa hồ sơ và Giấy báo trúng tuyển của mình nhé.\n2.  Tiếp theo là nộp hồ sơ (nhớ là bản sao có công chứng hoặc mang bản chính để trường đối chiếu nha!).\n3.  Sau đó, bạn sẽ đóng học phí theo ngành mà mình đã trúng tuyển.\n4.  Đừng quên đăng ký Bảo hiểm Y tế (cái này bắt buộc đó bạn) và Bảo hiểm toàn diện nếu có nhu cầu nhé.\n5.  Kế đến là đăng ký kiểm tra năng lực Tiếng Anh đầu vào.\n6.  Nếu bạn muốn ở Ký túc xá, thì đăng ký luôn tại bước này nha.\n7.  Cuối cùng là chụp ảnh và làm thẻ sinh viên, thế là bạn chính thức là thành viên của đại gia đình TVU rồi đó! ✨\n\nChúc bạn có một khởi đầu thật suôn sẻ ở TVU nha! Nếu có gì thắc mắc cứ hỏi ViVy nhé 😉",
+    "audio_url": "https://tvu-tour.site/tts-cache/65e2a7e8087dd9a5518e2f6578364db9.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Hướng dẫn các bước nhập học cho tân sinh viên",
@@ -80,7 +103,7 @@
   },
   "df35977b6c5be87586b421fe327d8f94": {
     "answer": "Mình đưa bạn sang Thư viện nhé! 📚",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/c7d937040b189027339b0c1d6b957774.wav",
+    "audio_url": "https://tvu-tour.site/tts-cache/2bca6b660ff10ed7d69c359253cfa968.wav",
     "tool_actions": [
       {
         "name": "navigate_to",
@@ -94,19 +117,42 @@
     "location": "Cổng chính TVU"
   },
   "271120a512f574f37e754d92f10be439": {
-    "answer": "Giảng đường D5 là nơi thường xuyên tổ chức các sự kiện trọng đại của Nhà trường đó ạ! ✨ Đây là địa điểm lý tưởng cho Lễ Khai giảng, Lễ Tốt nghiệp và trao bằng, các Hội thảo khoa học quốc tế, cùng nhiều chương trình giao lưu văn hóa nghệ thuật quy mô lớn. Với hệ thống âm thanh, ánh sáng và màn hình chuyên nghiệp, D5 luôn sẵn sàng mang đến những trải nghiệm tuyệt vời nhất.",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/964b61e841b855a5c0bba302abfd7e89.wav",
+    "answer": "À, Giảng đường D5 này là nơi diễn ra các sự kiện siêu quan trọng của trường mình đó bạn! 🤗 Như Lễ Khai giảng hoành tráng nè, Lễ Tốt nghiệp ấm áp, hay các Hội thảo khoa học quốc tế và cả những chương trình giao lưu văn hóa nghệ thuật quy mô lớn nữa. Không gian ở đây được trang bị hiện đại lắm luôn! ✨",
+    "audio_url": "https://tvu-tour.site/tts-cache/7ed4ddedf5f4392ee53f70e5f36befe8.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Khu vực này thường tổ chức sự kiện gì?",
     "location": "Giảng đường D5"
   },
   "971e070a9cdad58ed53fa5eb306f1b3f": {
-    "answer": "Chào mừng quý vị đến với Hội trường D5! Đại học Trà Vinh có nhiều chính sách học bổng đa dạng để hỗ trợ sinh viên đó ạ.\n\nHiện tại, trường có các loại học bổng chính sau:\n1.  **Học bổng Khuyến khích Học tập:** Dành cho sinh viên có kết quả học tập xuất sắc trong mỗi học kỳ, với khoảng 8% sĩ số mỗi lớp được nhận.\n2.  **Học bổng Tài trợ từ Mạnh thường quân & Doanh nghiệp:** Trường kết nối với hơn 30 nhà tài trợ mỗi năm, bao gồm các cá nhân, doanh nghiệp và tổ chức trong và ngoài nước, cung cấp hàng trăm suất học bổng.\n3.  **Chính sách Miễn học phí Sư phạm:** Sinh viên các ngành Sư phạm được miễn 100% học phí và còn được hỗ trợ 3.630.000 đồng/tháng chi phí sinh hoạt theo Nghị định 116/2020/NĐ-CP.\n4.  **Chính sách Miễn giảm & Hỗ trợ khác:** Miễn giảm học phí cho các đối tượng chính sách, hộ nghèo, cận nghèo, đồng bào dân tộc thiểu số. Ngoài ra còn có học bổng đặc biệt cho sinh viên nữ ngành Kỹ thuật – Công nghệ và hỗ trợ vay vốn sinh viên.\n\nNếu quý vị cần biết thêm chi tiết về từng loại học bổng, mình có thể cung cấp thêm nhé!",
-    "audio_url": "https://26f1095e37186210d6331fff5c2ea866.r2.cloudflarestorage.com/tvu-tour-v1/global/cache/f386f074b6a44f672c29a3091bcfb434.wav",
+    "answer": "Chào bạn, mình là ViVy đây! Ở Đại học Trà Vinh mình có rất nhiều loại học bổng hấp dẫn lắm đó nha. 😍\n\nĐầu tiên là **Học bổng Khuyến khích Học tập** dành cho các bạn có thành tích học tập xuất sắc, cứ mỗi học kỳ là có cơ hội nhận học bổng này luôn. Khoảng 8% sĩ số mỗi lớp sẽ nhận được đó.\n\nTiếp theo là **Học bổng Tài trợ từ Mạnh thường quân & Doanh nghiệp**. Trường mình kết nối với hơn 30 nhà tài trợ lớn nhỏ, từ các cá nhân, gia đình, đến các ngân hàng lớn như Vietcombank, BIDV, hay cả các tổ chức quốc tế nữa. Tổng cộng có hàng trăm suất mỗi năm luôn.\n\nĐặc biệt, nếu bạn học Sư phạm thì sẽ được **miễn 100% học phí** và còn được hỗ trợ **3.630.000 đồng/tháng** chi phí sinh hoạt nữa đó. Nghe là mê liền phải không nè!\n\nNgoài ra, trường còn có chính sách miễn giảm học phí cho các bạn thuộc diện chính sách, hộ nghèo, cận nghèo, và đồng bào dân tộc thiểu số nữa. À, còn có **học bổng đặc biệt cho sinh viên nữ** học ngành Kỹ thuật – Công nghệ nữa nha!\n\nBạn thấy nhiều học bổng không nè? Nếu muốn biết thêm chi tiết về loại nào thì cứ hỏi mình nha! 😊",
+    "audio_url": "https://tvu-tour.site/tts-cache/409d93840377a19849e0d284a8c05b39.wav",
     "tool_actions": [],
     "audio_base64": null,
     "question": "Trường có những chính sách học bổng nào?",
+    "location": "Giảng đường D5"
+  },
+  "1da4e208530600e540c871491e5da00a": {
+    "answer": "Chào bạn! Trường mình đã thiết lập quan hệ hợp tác chính thức với hơn 100 đối tác quốc tế thuộc 18 quốc gia đó! 🎉 Một số nước tiêu biểu có thể kể đến như Canada, Hoa Kỳ, Pháp, Hà Lan, Bỉ, Philippines, Campuchia và còn nhiều nước khác nữa đó! Thật tuyệt vời đúng không? 😊",
+    "audio_url": "https://tvu-tour.site/tts-cache/5ec2c1a27cc227b743d6abfcf0045562.wav",
+    "tool_actions": [],
+    "audio_base64": null,
+    "question": "Trường có hợp tác quốc tế với nước nào?",
+    "location": "Giảng đường D5"
+  },
+  "913a832f3787d712982b94da0beca6b5": {
+    "answer": "Mình đưa bạn về Cổng chính nhé! ✨",
+    "audio_url": "https://tvu-tour.site/tts-cache/c12ed5cad331727428abc103a7f75c76.wav",
+    "tool_actions": [
+      {
+        "name": "navigate_to",
+        "args": {
+          "location_slug": "cong-chinh"
+        }
+      }
+    ],
+    "audio_base64": null,
+    "question": "Đưa mình về Cổng chính",
     "location": "Giảng đường D5"
   }
 }

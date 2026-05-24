@@ -47,8 +47,6 @@ async def start_ingestion(
     file_bytes: bytes,
     filename: str,
     title: str,
-    location_id: UUID | None,
-    location_slug: str | None = None,
 ) -> UUID:
     """
     Stage 1: Create document record in DB + upload file to R2.
@@ -64,7 +62,7 @@ async def start_ingestion(
     validate_file(filename, file_size)
 
     # Upload to R2
-    r2_key = storage_service.build_document_key(filename, location_slug)
+    r2_key = storage_service.build_document_key(filename)
     content_type = "application/pdf" if file_type == "pdf" else (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
@@ -78,7 +76,6 @@ async def start_ingestion(
             file_url=r2_key,
             file_type=file_type,
             file_size=file_size,
-            location_id=location_id,
         )
         await session.commit()
 
@@ -90,7 +87,6 @@ async def process_document_background(
     document_id: UUID,
     file_bytes: bytes,
     filename: str,
-    location_id: UUID | None,
 ):
     """
     Stage 2: Background task — extract → chunk → embed → store.
@@ -130,7 +126,7 @@ async def process_document_background(
             # Step 5: Store chunks + embeddings in pgvector
             logger.info(f"  💾 Step 5: Inserting {len(chunks)} chunks into DB")
             await document_repo.insert_chunks(
-                session, document_id, location_id, chunks, embeddings
+                session, document_id, None, chunks, embeddings
             )
 
             # Step 6: Mark as ready

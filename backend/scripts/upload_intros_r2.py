@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.database import async_session
 from app.db.tables import Location, Mascot
-from app.ai.tts_engine import synthesize
+from app.ai.tts_engine import CONTENT_TYPE_MP3, synthesize
 from app.services import storage_service
 
 async def upload_intros():
@@ -35,8 +35,8 @@ async def upload_intros():
                 print(f"⚠️ Skipping {loc.slug} - No intro message.")
                 continue
 
-            voice_name = "vi-VN-Standard-A"
-            voice_style = "Friendly and welcoming"
+            voice_name = "Leda"
+            voice_style = "soft, cheerful, and youthful like a college student"
             
             if loc.mascot:
                 voice_name = loc.mascot.voice_name
@@ -47,15 +47,17 @@ async def upload_intros():
                 # Gọi API TTS
                 tts_result = await synthesize(
                     text=loc.intro_message,
-                    voice_name=voice_name
+                    voice_name=voice_name,
+                    voice_style=voice_style,
                 )
                 
                 # Upload lên R2
-                r2_key = f"{loc.slug}/audio/intro.wav"
+                extension = "mp3" if tts_result.content_type == CONTENT_TYPE_MP3 else "wav"
+                r2_key = storage_service.build_intro_key(loc.slug, extension)
                 await storage_service.upload_file(
                     file_bytes=tts_result.audio_data,
                     key=r2_key,
-                    content_type="audio/wav"
+                    content_type=tts_result.content_type
                 )
                 
                 public_url = storage_service.get_public_url(r2_key)

@@ -37,7 +37,7 @@ for i, (key, value) in enumerate(data.items(), 1):
     filename = f'{loc}_{q}.wav'.replace(' ', '_')
     if url:
         print(f'Downloading {filename}...')
-        # Extract R2 key from URL (e.g. https://.../tvu-tour-v1/global/cache/abc.wav)
+        # Extract R2 key from URL (e.g. https://.../tvu-tour-v1/tts-cache/abc.wav)
         r2_key = url.split(f"{bucket}/")[-1]
         
         try:

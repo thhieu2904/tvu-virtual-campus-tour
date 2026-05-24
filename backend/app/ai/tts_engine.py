@@ -33,9 +33,9 @@ class TTSResult:
 CACHE_DIR = "data/tts_cache"
 
 
-def _cache_key(text: str, voice: str) -> str:
+def _cache_key(text: str, voice: str, voice_style: str = "") -> str:
     """Generate a stable cache key."""
-    return hashlib.sha256(f"{text}|{voice}".encode()).hexdigest()
+    return hashlib.sha256(f"{text}|{voice}|{voice_style}".encode()).hexdigest()
 
 
 def _get_cached(key: str) -> tuple[bytes, str] | None:
@@ -103,7 +103,8 @@ async def synthesize(
     settings = get_settings()
     voice = voice_name or settings.GEMINI_DEFAULT_VOICE
 
-    key = _cache_key(text, voice)
+    style = voice_style or ""
+    key = _cache_key(text, voice, style)
     cached = await asyncio.to_thread(_get_cached, key)
 
     if cached:
@@ -116,7 +117,10 @@ async def synthesize(
         )
 
     try:
-        prompt = f"Say in Vietnamese: {text}"
+        if style:
+            prompt = f"Say naturally in Vietnamese with a {style} tone: {text}"
+        else:
+            prompt = f"Say naturally in Vietnamese: {text}"
 
         result = await asyncio.to_thread(
             get_client().models.generate_content,

@@ -19,6 +19,8 @@ venv/
 # ===== Temp Scripts (may contain secrets) =====
 backend/_*.py
 backend/scratch/
+.tmp/
+backend/.tmp/
 # ===== Node.js =====
 node_modules/
 .next/

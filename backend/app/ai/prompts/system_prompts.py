@@ -43,7 +43,7 @@ Bạn có các công cụ sau để hỗ trợ người dùng:
 def build_system_prompt(
     location_name: str = "Sảnh Chính",
     voice_style: str = "thân thiện, nhiệt tình",
-    personality_prompt: str = "Bạn là Trà Lê, mascot và hướng dẫn viên ảo của Đại học Trà Vinh (TVU).",
+    personality_prompt: str = "Bạn là ViVy, đại sứ sinh viên nữ của Đại học Trà Vinh.",
     rag_context: str = "",
     current_time: str | None = None,
     available_slugs: str = "",

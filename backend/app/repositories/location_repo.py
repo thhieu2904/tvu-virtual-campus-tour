@@ -36,9 +36,10 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
     Fetch all locations with their links and suggested questions.
     Returns them structured exactly as the frontend LocationNode interface.
     """
-    # Eager load suggested_questions to avoid N+1 query problem
+    # Eager load related data to avoid N+1 query problem
     stmt = select(Location).options(
-        selectinload(Location.suggested_questions)
+        selectinload(Location.suggested_questions),
+        selectinload(Location.mascot),
     ).order_by(Location.sort_order)
     
     result = await db.execute(stmt)
@@ -78,6 +79,7 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
             "description": loc.description,
             "introMessage": loc.intro_message,
             "intro_audio_url": loc.intro_audio_url,
+            "mascotModelUrl": loc.mascot.model_3d_url if loc.mascot else None,
             "backgroundUrl": loc.background_url,
             "suggestedQuestions": [q.question for q in sorted_qs],
             "links": links_by_from.get(loc_id_str, [])

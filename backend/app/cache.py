@@ -140,6 +140,12 @@ class QACacheStore:
         with self.path.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
+        if isinstance(data, dict):
+            data = {
+                key: self._normalize_cached_response(value)
+                for key, value in data.items()
+            }
+
         with self._lock:
             self._items = data if isinstance(data, dict) else {}
             return len(self._items)
@@ -147,6 +153,18 @@ class QACacheStore:
     def __len__(self) -> int:
         with self._lock:
             return len(self._items)
+
+    def _normalize_cached_response(self, value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            return {}
+
+        normalized = dict(value)
+        audio_url = normalized.get("audio_url")
+        if isinstance(audio_url, str):
+            key = storage_service.normalize_object_key(audio_url)
+            if key.startswith("tts-cache/"):
+                normalized["audio_url"] = storage_service.get_public_url(key)
+        return normalized
 
 
 class TTSKeyCache:
@@ -168,7 +186,7 @@ class TTSKeyCache:
         with self._lock:
             self._keys.add(key)
 
-    async def load_from_r2(self, prefix: str = "global/cache/") -> int:
+    async def load_from_r2(self, prefix: str = "tts-cache/") -> int:
         client = storage_service._get_s3_client()
         bucket = storage_service._get_bucket()
         keys: set[str] = set()

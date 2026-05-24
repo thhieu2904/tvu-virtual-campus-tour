@@ -6,7 +6,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.tables import Document, Location, LocationLink, Mascot, Media, SuggestedQuestion
+from app.db.tables import Location, LocationLink, Mascot, Media, SuggestedQuestion
 from app.schemas.admin import (
     LocationLinksUpdateRequest,
     LocationQuestionsUpdateRequest,
@@ -18,7 +18,6 @@ from app.schemas.admin import (
 def serialize_location(
     loc: Location,
     *,
-    doc_count: int = 0,
     media_count: int = 0,
     question_count: int | None = None,
     link_count: int | None = None,
@@ -38,8 +37,8 @@ def serialize_location(
         "mascot_name": mascot_name or (loc.mascot.name if loc.mascot else None),
         "sort_order": loc.sort_order,
         "camera_config": loc.camera_config or {},
-        "doc_count": doc_count,
-        "document_count": doc_count,
+        "doc_count": 0,
+        "document_count": 0,
         "media_count": media_count,
         "question_count": question_count,
         "link_count": link_count,
@@ -48,11 +47,6 @@ def serialize_location(
 
 
 async def list_location_summaries(session: AsyncSession) -> list[dict]:
-    doc_count_sq = (
-        select(Document.location_id, func.count(Document.id).label("doc_count"))
-        .group_by(Document.location_id)
-        .subquery()
-    )
     media_count_sq = (
         select(Media.location_id, func.count(Media.id).label("media_count"))
         .group_by(Media.location_id)
@@ -73,13 +67,11 @@ async def list_location_summaries(session: AsyncSession) -> list[dict]:
         select(
             Location,
             Mascot.name.label("mascot_name"),
-            func.coalesce(doc_count_sq.c.doc_count, 0).label("doc_count"),
             func.coalesce(media_count_sq.c.media_count, 0).label("media_count"),
             func.coalesce(question_count_sq.c.question_count, 0).label("question_count"),
             func.coalesce(link_count_sq.c.link_count, 0).label("link_count"),
         )
         .outerjoin(Mascot, Location.mascot_id == Mascot.id)
-        .outerjoin(doc_count_sq, Location.id == doc_count_sq.c.location_id)
         .outerjoin(media_count_sq, Location.id == media_count_sq.c.location_id)
         .outerjoin(question_count_sq, Location.id == question_count_sq.c.location_id)
         .outerjoin(link_count_sq, Location.id == link_count_sq.c.from_location_id)
@@ -91,12 +83,11 @@ async def list_location_summaries(session: AsyncSession) -> list[dict]:
         serialize_location(
             loc,
             mascot_name=mascot_name,
-            doc_count=doc_count,
             media_count=media_count,
             question_count=question_count,
             link_count=link_count,
         )
-        for loc, mascot_name, doc_count, media_count, question_count, link_count in result.all()
+        for loc, mascot_name, media_count, question_count, link_count in result.all()
     ]
 
 

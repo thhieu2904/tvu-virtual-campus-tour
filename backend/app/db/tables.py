@@ -23,7 +23,7 @@ class Mascot(Base):
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False)
     model_3d_url = Column(Text, nullable=False)
-    voice_name = Column(String(100), nullable=False, default="Kore")
+    voice_name = Column(String(100), nullable=False, default="Leda")
     voice_style = Column(Text, nullable=False, default="")
     personality_prompt = Column(Text, nullable=False, default="")
     is_default = Column(Boolean, nullable=False, default=False)

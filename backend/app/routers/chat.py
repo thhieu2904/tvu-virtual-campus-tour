@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.ai import tts_engine
+from app.ai.tts_engine import CONTENT_TYPE_MP3, CONTENT_TYPE_WAV
 from app.cache import qa_cache_store, tts_key_cache
 from app.db.database import async_session, get_db
 from app.repositories import location_repo
@@ -81,37 +82,55 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_db)):
 
             # 3. MD5 Hash Answer cho TTS Cache
             # Lấy voice_name của mascot nếu có
-            voice_name = "default"
+            voice_name = "Leda"
             if request.location_id and location and location.mascot:
                 voice_name = location.mascot.voice_name
 
-            answer_hash = hashlib.md5(f"{answer_text}_{voice_name}".encode()).hexdigest()
-            r2_key = f"global/cache/{answer_hash}.wav"
+            style = voice_style or ""
+            answer_hash = hashlib.md5(f"{answer_text}_{voice_name}_{style}".encode()).hexdigest()
+            wav_r2_key = f"tts-cache/{answer_hash}.wav"
+            mp3_r2_key = f"tts-cache/{answer_hash}.mp3"
 
             try:
+                cached_r2_key = None
                 if tts_key_cache.loaded:
-                    is_cached = tts_key_cache.contains(r2_key)
+                    if tts_key_cache.contains(wav_r2_key):
+                        cached_r2_key = wav_r2_key
+                    elif tts_key_cache.contains(mp3_r2_key):
+                        cached_r2_key = mp3_r2_key
                 else:
-                    is_cached = await storage_service.file_exists(r2_key)
-                    if is_cached:
-                        tts_key_cache.add(r2_key)
+                    if await storage_service.file_exists(wav_r2_key):
+                        cached_r2_key = wav_r2_key
+                    elif await storage_service.file_exists(mp3_r2_key):
+                        cached_r2_key = mp3_r2_key
+                    if cached_r2_key:
+                        tts_key_cache.add(cached_r2_key)
 
-                if is_cached:
+                if cached_r2_key:
                     logger.info("🎯 Trúng TTS Cache MD5: %s", answer_hash)
-                    audio_url = storage_service.get_public_url(r2_key)
+                    audio_url = storage_service.get_public_url(cached_r2_key)
                 else:
                     logger.info("Miss TTS Cache, generating new audio...")
                     # Get voice config
-                    voice = "vi-VN-Standard-A"
+                    voice = "Leda"
                     if request.location_id and location and location.mascot:
                         voice = location.mascot.voice_name
 
-                    tts_result = await tts_engine.synthesize(text=answer_text, voice_name=voice)
+                    tts_result = await tts_engine.synthesize(
+                        text=answer_text,
+                        voice_name=voice,
+                        voice_style=voice_style,
+                    )
+                    if tts_result.content_type == CONTENT_TYPE_MP3:
+                        r2_key = mp3_r2_key
+                    else:
+                        r2_key = wav_r2_key
+
                     # Upload to R2
                     await storage_service.upload_file(
                         file_bytes=tts_result.audio_data,
                         key=r2_key,
-                        content_type="audio/wav"
+                        content_type=tts_result.content_type or CONTENT_TYPE_WAV
                     )
                     tts_key_cache.add(r2_key)
                     audio_url = storage_service.get_public_url(r2_key)

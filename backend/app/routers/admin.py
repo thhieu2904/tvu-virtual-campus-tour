@@ -219,7 +219,7 @@ async def regenerate_location_audio(location_id: str, session: AsyncSession = De
     result = await synthesize(loc.intro_message, voice_name=voice_name, voice_style=voice_style)
 
     extension = "mp3" if result.content_type == CONTENT_TYPE_MP3 else "wav"
-    r2_key = f"{loc.slug}/audio/intro.{extension}"
+    r2_key = storage_service.build_intro_key(loc.slug, extension)
     await storage_service.upload_file(result.audio_data, r2_key, result.content_type)
     loc.intro_audio_url = storage_service.get_public_url(r2_key)
     await session.commit()
@@ -278,7 +278,6 @@ async def ingest_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str = Form(...),
-    location_id: str | None = Form(None),
     session: AsyncSession = Depends(get_db),
 ):
     file_bytes = await file.read()
@@ -289,21 +288,10 @@ async def ingest_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    loc_uuid: UUID | None = None
-    loc_slug: str | None = None
-    if location_id:
-        location = await location_repo.get_by_id(session, location_id)
-        if not location:
-            raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
-        loc_uuid = location.id
-        loc_slug = location.slug
-
     doc_id = await ingest_service.start_ingestion(
         file_bytes=file_bytes,
         filename=filename,
         title=title,
-        location_id=loc_uuid,
-        location_slug=loc_slug,
     )
 
     background_tasks.add_task(
@@ -311,24 +299,20 @@ async def ingest_document(
         document_id=doc_id,
         file_bytes=file_bytes,
         filename=filename,
-        location_id=loc_uuid,
     )
     return IngestResponse(document_id=str(doc_id), status="pending")
 
 
 @router.get("/documents")
 async def list_documents(
-    location_id: str | None = None,
     status: str | None = None,
     search: str | None = None,
     page: int = 1,
     limit: int = 10,
     session: AsyncSession = Depends(get_db),
 ):
-    loc_uuid = _as_uuid(location_id, "location_id") if location_id else None
     return await document_repo.list_documents(
         session,
-        location_id=loc_uuid,
         status=status,
         search=search,
         page=max(page, 1),

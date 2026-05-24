@@ -109,9 +109,9 @@ async def process_query(
         # Step 1: Embed the user's question
         query_vector = await embed_query(message)
 
-        # Step 2: Vector search for relevant chunks
+        # Step 2: Vector search for relevant global chunks
         loc_uuid = UUID(location_id) if location_id else None
-        chunks = await _vector_search_with_cache(session, query_vector, loc_uuid)
+        chunks = await _vector_search_with_cache(session, query_vector, None)
 
         # Step 2b: Get available slugs for system prompt
         available_slugs = await _get_available_slugs(session)
@@ -251,9 +251,9 @@ async def process_query_stream(
         # Step 1: Embed
         query_vector = await embed_query(message)
 
-        # Step 2: Vector search
+        # Step 2: Vector search for relevant global chunks
         loc_uuid = UUID(location_id) if location_id else None
-        chunks = await _vector_search_with_cache(session, query_vector, loc_uuid)
+        chunks = await _vector_search_with_cache(session, query_vector, None)
 
         # Step 2b: Get available slugs
         available_slugs = await _get_available_slugs(session)

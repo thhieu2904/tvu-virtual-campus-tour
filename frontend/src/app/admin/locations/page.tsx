@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  MapPin, FileText, Image as ImageIcon, ToggleLeft, ToggleRight,
+  MapPin, Image as ImageIcon, ToggleLeft, ToggleRight,
   RefreshCw, Search, Star, Pencil, X, Plus, Trash2, Upload, Volume2,
 } from 'lucide-react'
 
@@ -15,7 +15,7 @@ interface LocationItem {
   id: string; name: string; slug: string; description: string
   intro_message: string; status: 'active' | 'inactive'; is_start_node: boolean
   intro_audio_url?: string | null; background_url: string; mascot_id: string | null
-  sort_order: number; doc_count: number; media_count: number; updated_at: string | null
+  sort_order: number; media_count: number; updated_at: string | null
 }
 
 interface LocationDetail extends LocationItem {
@@ -255,7 +255,6 @@ export default function LocationsPage() {
               <CardContent className="space-y-3">
                 {loc.description && <p className="text-sm text-muted-foreground line-clamp-2">{loc.description}</p>}
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {loc.doc_count} tài liệu</span>
                   <span className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> {loc.media_count} media</span>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t">

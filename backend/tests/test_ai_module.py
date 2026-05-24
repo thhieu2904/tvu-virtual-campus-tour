@@ -6,14 +6,16 @@ Uses unittest.mock to avoid real API calls.
 import asyncio
 import os
 import sys
-import tempfile
 import shutil
 import unittest
+import uuid
 from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
 from dataclasses import dataclass
 
 # Ensure the project root is in sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+TEST_TMP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".tmp"))
+os.makedirs(TEST_TMP_DIR, exist_ok=True)
 
 
 # ============================================================
@@ -24,7 +26,7 @@ class TestSystemPrompts(unittest.TestCase):
     def test_build_prompt_defaults(self):
         from app.ai.prompts.system_prompts import build_system_prompt
         prompt = build_system_prompt(current_time="2026-01-01 12:00:00")
-        self.assertIn("Trà Lê", prompt)
+        self.assertIn("ViVy", prompt)
         self.assertIn("Sảnh Chính", prompt)
         self.assertIn("2026-01-01 12:00:00", prompt)
         self.assertIn("Không có ngữ cảnh bổ sung.", prompt)
@@ -94,8 +96,8 @@ class TestChatEngineHelpers(unittest.TestCase):
         thinking_part.text = "Let me think..."
 
         answer_part = MagicMock()
-        thinking_part_has_thought = True
         answer_part.thought = False
+        answer_part.function_call = None
         answer_part.text = "The answer is 42."
 
         candidate = MagicMock()
@@ -105,10 +107,11 @@ class TestChatEngineHelpers(unittest.TestCase):
         result.candidates = [candidate]
         result.usage_metadata = None
 
-        answer, thinking, usage = _parse_response(result)
+        answer, thinking, usage, function_calls = _parse_response(result)
         self.assertEqual(answer, "The answer is 42.")
         self.assertEqual(thinking, "Let me think...")
         self.assertEqual(usage, {})
+        self.assertEqual(function_calls, [])
 
     def test_parse_response_empty_candidates(self):
         from app.ai.chat_engine import _parse_response
@@ -116,15 +119,17 @@ class TestChatEngineHelpers(unittest.TestCase):
         result.candidates = []
         result.usage_metadata = None
 
-        answer, thinking, usage = _parse_response(result)
+        answer, thinking, usage, function_calls = _parse_response(result)
         self.assertEqual(answer, "")
         self.assertIsNone(thinking)
+        self.assertEqual(function_calls, [])
 
     def test_parse_response_usage_metadata(self):
         from app.ai.chat_engine import _parse_response
 
         answer_part = MagicMock()
         answer_part.thought = False
+        answer_part.function_call = None
         answer_part.text = "Hello"
 
         candidate = MagicMock()
@@ -139,10 +144,11 @@ class TestChatEngineHelpers(unittest.TestCase):
         result.candidates = [candidate]
         result.usage_metadata = usage_meta
 
-        _, _, usage = _parse_response(result)
+        _, _, usage, function_calls = _parse_response(result)
         self.assertEqual(usage["prompt_tokens"], 10)
         self.assertEqual(usage["completion_tokens"], 5)
         self.assertEqual(usage["total_tokens"], 15)
+        self.assertEqual(function_calls, [])
 
 
 # ============================================================
@@ -151,7 +157,8 @@ class TestChatEngineHelpers(unittest.TestCase):
 class TestTTSCache(unittest.TestCase):
 
     def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_dir = os.path.join(TEST_TMP_DIR, f"case-{uuid.uuid4().hex}")
+        os.makedirs(self.tmp_dir, exist_ok=True)
         # Patch the CACHE_DIR to use temp directory
         import app.ai.tts_engine as tts_mod
         self._original_cache_dir = tts_mod.CACHE_DIR
@@ -179,16 +186,16 @@ class TestTTSCache(unittest.TestCase):
         key = _cache_key("nonexistent", "Kore")
         self.assertIsNone(_get_cached(key))
 
-    def test_cache_roundtrip_pcm(self):
-        from app.ai.tts_engine import _get_cached, _save_cache, _cache_key, CONTENT_TYPE_PCM
+    def test_cache_roundtrip_wav(self):
+        from app.ai.tts_engine import _get_cached, _save_cache, _cache_key, CONTENT_TYPE_WAV
         key = _cache_key("test", "Kore")
         data = b"\x00\x01\x02\x03"
-        _save_cache(key, data, CONTENT_TYPE_PCM)
+        _save_cache(key, data, CONTENT_TYPE_WAV)
         result = _get_cached(key)
         self.assertIsNotNone(result)
         audio, ct = result
         self.assertEqual(audio, data)
-        self.assertEqual(ct, CONTENT_TYPE_PCM)
+        self.assertEqual(ct, CONTENT_TYPE_WAV)
 
     def test_cache_roundtrip_mp3(self):
         from app.ai.tts_engine import _get_cached, _save_cache, _cache_key, CONTENT_TYPE_MP3
@@ -273,6 +280,7 @@ class TestChatEngine(unittest.TestCase):
 
         answer_part = MagicMock()
         answer_part.thought = False
+        answer_part.function_call = None
         answer_part.text = "Chào bạn!"
 
         candidate = MagicMock()
@@ -300,6 +308,7 @@ class TestChatEngine(unittest.TestCase):
 
         answer_part = MagicMock()
         answer_part.thought = False
+        answer_part.function_call = None
         answer_part.text = "Answer"
 
         candidate = MagicMock()
@@ -321,7 +330,8 @@ class TestChatEngine(unittest.TestCase):
 class TestTTSEngine(unittest.TestCase):
 
     def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_dir = os.path.join(TEST_TMP_DIR, f"case-{uuid.uuid4().hex}")
+        os.makedirs(self.tmp_dir, exist_ok=True)
         import app.ai.tts_engine as tts_mod
         self._original_cache_dir = tts_mod.CACHE_DIR
         tts_mod.CACHE_DIR = self.tmp_dir
@@ -334,7 +344,7 @@ class TestTTSEngine(unittest.TestCase):
     @patch("app.ai.tts_engine.get_client")
     @patch("app.ai.tts_engine.get_settings")
     def test_synthesize_gemini(self, mock_settings, mock_client):
-        from app.ai.tts_engine import synthesize, CONTENT_TYPE_PCM
+        from app.ai.tts_engine import synthesize, CONTENT_TYPE_WAV, _pcm_to_wav
 
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
@@ -352,9 +362,9 @@ class TestTTSEngine(unittest.TestCase):
         mock_client.return_value.models.generate_content.return_value = mock_result
 
         result = asyncio.run(synthesize("Hello"))
-        self.assertEqual(result.audio_data, fake_audio)
+        self.assertEqual(result.audio_data, _pcm_to_wav(fake_audio))
         self.assertEqual(result.provider, "gemini")
-        self.assertEqual(result.content_type, CONTENT_TYPE_PCM)
+        self.assertEqual(result.content_type, CONTENT_TYPE_WAV)
         self.assertFalse(result.cached)
 
     @patch("app.ai.tts_engine._edge_tts_fallback")
@@ -381,7 +391,7 @@ class TestTTSEngine(unittest.TestCase):
     @patch("app.ai.tts_engine.get_client")
     @patch("app.ai.tts_engine.get_settings")
     def test_synthesize_cache_hit(self, mock_settings, mock_client):
-        from app.ai.tts_engine import synthesize, _save_cache, _cache_key, CONTENT_TYPE_PCM
+        from app.ai.tts_engine import synthesize, _save_cache, _cache_key, CONTENT_TYPE_WAV
 
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
@@ -389,7 +399,7 @@ class TestTTSEngine(unittest.TestCase):
         )
         # Pre-fill cache
         key = _cache_key("cached text", "Kore")
-        _save_cache(key, b"\x01\x02\x03", CONTENT_TYPE_PCM)
+        _save_cache(key, b"\x01\x02\x03", CONTENT_TYPE_WAV)
 
         result = asyncio.run(synthesize("cached text"))
         self.assertTrue(result.cached)

@@ -15,14 +15,15 @@ export type AvatarAnimation = 'HeadNod' | 'StandingUp' | 'Thankful' | 'Texting';
 
 interface AvatarModelProps {
   animation: AvatarAnimation;
+  modelUrl?: string;
 }
 
 // ─── Inner 3D Model (memoized to avoid unnecessary re-renders) ───
-const AvatarModel = memo(function AvatarModel({ animation }: AvatarModelProps) {
+const AvatarModel = memo(function AvatarModel({ animation, modelUrl }: AvatarModelProps) {
   const group = useRef<THREE.Group>(null!);
   const prevAnimation = useRef<AvatarAnimation | null>(null);
 
-  const { scene, animations } = useGLTF('/models/character.glb');
+  const { scene, animations } = useGLTF(modelUrl || '/models/character.glb');
   const { actions, names } = useAnimations(animations, group);
 
   // Tune materials for toon-style VRM model
@@ -110,9 +111,10 @@ useGLTF.preload('/models/character.glb');
 // ─── Main Avatar3D Wrapper ──────────────────────────────────
 interface Avatar3DProps {
   animation: AvatarAnimation;
+  modelUrl?: string;
 }
 
-function Avatar3D({ animation }: Avatar3DProps) {
+function Avatar3D({ animation, modelUrl }: Avatar3DProps) {
   return (
     <div className="w-full h-full relative">
       <Canvas
@@ -138,7 +140,7 @@ function Avatar3D({ animation }: Avatar3DProps) {
         <pointLight position={[2, 4, -3]} intensity={0.3} color="#ffd700" />
         <Environment preset="city" background={false} />
         <Suspense fallback={null}>
-          <AvatarModel animation={animation} />
+          <AvatarModel animation={animation} modelUrl={modelUrl} />
         </Suspense>
       </Canvas>
     </div>

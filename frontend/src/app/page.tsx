@@ -11,6 +11,29 @@ import InfoPanel from "@/features/tour/components/InfoPanel";
 import ChatOverlay from "@/features/chat/components/ChatOverlay";
 import Avatar3D from "@/features/tour/components/Avatar3D";
 
+function resolveAvatarModelUrl(modelUrl?: string | null) {
+  if (!modelUrl) return undefined;
+  if (modelUrl.startsWith("http://") || modelUrl.startsWith("https://")) {
+    return modelUrl;
+  }
+  if (modelUrl.startsWith("/models/")) {
+    return modelUrl;
+  }
+  if (modelUrl.startsWith("models/")) {
+    return `/${modelUrl}`;
+  }
+  return undefined;
+}
+
+function resolveR2Url(url?: string | null) {
+  if (!url) return "";
+  // Proxy R2 URLs during local dev to bypass CORS issues for WebGL textures (Pannellum)
+  if (url.startsWith("https://tvu-tour.site/")) {
+    return url.replace("https://tvu-tour.site/", "/r2/");
+  }
+  return url;
+}
+
 export default function TourPage() {
   const [isResetting, setIsResetting] = useState(false);
   const fetchLocations = useTourStore((s) => s.fetchLocations);
@@ -257,7 +280,7 @@ export default function TourPage() {
       {/* === Layer 0: 360° Panorama Background === */}
       {location && (
         <PanoramaViewer
-          imageUrl={location.backgroundUrl}
+          imageUrl={resolveR2Url(location.backgroundUrl)}
           isTransitioning={isTransitioning}
           links={location.links}
           onNavigate={setPendingMapAnimationSlug}
@@ -272,7 +295,10 @@ export default function TourPage() {
           location && !isLoading ? "opacity-100" : "opacity-0"
         } ${isOverlayActive ? "opacity-40 scale-95 blur-[1px]" : "scale-100"}`}
       >
-        <Avatar3D animation={getAvatarAnimation() as any} />
+        <Avatar3D
+          animation={getAvatarAnimation() as any}
+          modelUrl={resolveAvatarModelUrl(location?.mascotModelUrl)}
+        />
       </div>
 
       {/* === UI Overlays (staggered entrance after isAppReady & hasStarted) === */}

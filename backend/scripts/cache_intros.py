@@ -37,8 +37,8 @@ async def cache_intros():
 
         for loc in locations:
             # Fetch mascot directly or fallback to default
-            voice_name = "vi-VN-Standard-A"
-            voice_style = "Friendly and welcoming"
+            voice_name = "Leda"
+            voice_style = "soft, cheerful, and youthful like a college student"
             
             if loc.mascot:
                 voice_name = loc.mascot.voice_name

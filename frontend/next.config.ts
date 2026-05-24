@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      {
+        source: "/r2/:path*",
+        destination: "https://tvu-tour.site/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

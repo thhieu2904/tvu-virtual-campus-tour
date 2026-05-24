@@ -46,7 +46,7 @@ export default function MascotsPage() {
     try {
       const formData = new FormData()
       formData.append('name', editForm.name || '')
-      formData.append('voice_name', editForm.voice_name || 'Kore')
+      formData.append('voice_name', editForm.voice_name || 'Leda')
       formData.append('voice_style', editForm.voice_style || '')
       formData.append('personality_prompt', editForm.personality_prompt || '')
       await adminApi.uploadPut(`/mascots/${editId}`, formData)
@@ -101,7 +101,7 @@ export default function MascotsPage() {
                       <div>
                         <label className="text-sm font-medium">Voice Name (Google TTS)</label>
                         <Input value={editForm.voice_name || ''} onChange={e => setEditForm({ ...editForm, voice_name: e.target.value })}
-                          placeholder="VD: Kore, Aoede, Puck" />
+                          placeholder="VD: Leda, Puck" />
                       </div>
                       <div>
                         <label className="text-sm font-medium">Voice Style</label>

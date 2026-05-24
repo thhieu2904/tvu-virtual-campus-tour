@@ -26,8 +26,8 @@ async def vector_search(
     Find most relevant document chunks using cosine similarity (pgvector).
 
     Location filtering:
-    - location_id provided: search chunks for that location + global chunks (location_id IS NULL)
-    - location_id = None: search ALL chunks (used at Sảnh Chính / global context)
+    - location_id provided: search chunks for that location + global chunks (legacy support)
+    - location_id = None: search ALL chunks (current global-document behavior)
 
     Returns list of dicts with: id, document_id, content, chunk_index, metadata, similarity
     """

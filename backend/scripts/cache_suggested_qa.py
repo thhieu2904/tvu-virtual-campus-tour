@@ -36,7 +36,8 @@ async def cache_qa():
         
         for loc in locations:
             print(f"\n📍 Đang xử lý khu vực: {loc.name} (Mascot: {loc.mascot.name if loc.mascot else 'None'})")
-            voice = loc.mascot.voice_name if loc.mascot else "vi-VN-Standard-A"
+            voice = loc.mascot.voice_name if loc.mascot else "Leda"
+            voice_style = loc.mascot.voice_style if loc.mascot else "soft, cheerful, and youthful like a college student"
             
             for sq in sorted(loc.suggested_questions, key=lambda q: q.sort_order):
                 print(f"  ❓ Câu hỏi: {sq.question}")
@@ -72,22 +73,34 @@ async def cache_qa():
                 print(f"    ✅ Đã có Text: {answer_text[:50]}...")
                 
                 # 2. Sinh Audio & Upload
-                answer_hash = hashlib.md5(f"{answer_text}_{voice}".encode()).hexdigest()
-                r2_key = f"global/cache/{answer_hash}.wav"
+                style = voice_style or ""
+                answer_hash = hashlib.md5(f"{answer_text}_{voice}_{style}".encode()).hexdigest()
+                wav_r2_key = f"tts-cache/{answer_hash}.wav"
+                mp3_r2_key = f"tts-cache/{answer_hash}.mp3"
                 
                 audio_url = None
                 
-                is_cached = await storage_service.file_exists(r2_key)
-                if is_cached:
-                    audio_url = storage_service.get_public_url(r2_key)
+                cached_r2_key = None
+                if await storage_service.file_exists(wav_r2_key):
+                    cached_r2_key = wav_r2_key
+                elif await storage_service.file_exists(mp3_r2_key):
+                    cached_r2_key = mp3_r2_key
+
+                if cached_r2_key:
+                    audio_url = storage_service.get_public_url(cached_r2_key)
                     print("    ✅ File audio đã có trên R2 (Cache trúng)")
                 else:
                     try:
-                        tts_result = await tts_engine.synthesize(text=answer_text, voice_name=voice)
+                        tts_result = await tts_engine.synthesize(
+                            text=answer_text,
+                            voice_name=voice,
+                            voice_style=voice_style,
+                        )
+                        r2_key = mp3_r2_key if tts_result.content_type == tts_engine.CONTENT_TYPE_MP3 else wav_r2_key
                         await storage_service.upload_file(
                             file_bytes=tts_result.audio_data,
                             key=r2_key,
-                            content_type="audio/wav"
+                            content_type=tts_result.content_type
                         )
                         audio_url = storage_service.get_public_url(r2_key)
                         print("    ✅ Đã tạo mới và upload Audio lên R2")

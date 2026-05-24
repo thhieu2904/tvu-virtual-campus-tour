@@ -21,7 +21,6 @@ async def insert_document(
     file_url: str,
     file_type: str,
     file_size: int,
-    location_id: UUID | None,
 ) -> UUID:
     """Insert a new document record. Returns document_id (UUID)."""
     doc = Document(
@@ -29,7 +28,7 @@ async def insert_document(
         file_url=file_url,
         file_type=file_type,
         file_size=file_size,
-        location_id=location_id,
+        location_id=None,
         status="pending",
     )
     session.add(doc)
@@ -116,7 +115,6 @@ async def get_by_id(session: AsyncSession, document_id: UUID) -> Document | None
 
 async def list_documents(
     session: AsyncSession,
-    location_id: UUID | None = None,
     status: str | None = None,
     search: str | None = None,
     page: int = 1,
@@ -125,8 +123,6 @@ async def list_documents(
     """List documents with filtering and pagination."""
     query = select(Document).order_by(Document.created_at.desc())
 
-    if location_id:
-        query = query.where(Document.location_id == location_id)
     if status:
         query = query.where(Document.status == status)
     if search:

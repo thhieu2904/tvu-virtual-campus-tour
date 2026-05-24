@@ -18,8 +18,6 @@ interface DocumentItem {
   error_message: string | null; created_at: string | null
 }
 
-interface LocationOption { id: string; name: string; slug: string }
-
 const statusConfig = {
   pending: { icon: Clock, label: 'Chờ xử lý', variant: 'secondary' as const },
   processing: { icon: Loader2, label: 'Đang xử lý', variant: 'outline' as const },
@@ -46,10 +44,8 @@ export default function DocumentsPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadTitle, setUploadTitle] = useState('')
-  const [uploadLocationId, setUploadLocationId] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
-  const [locations, setLocations] = useState<LocationOption[]>([])
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true); setError(null)
@@ -66,13 +62,6 @@ export default function DocumentsPage() {
     const timer = setTimeout(() => fetchDocuments(), search ? 300 : 0)
     return () => clearTimeout(timer)
   }, [fetchDocuments])
-
-  // Fetch locations for dropdown
-  useEffect(() => {
-    adminApi.get<{ locations: LocationOption[] }>('/locations')
-      .then(data => setLocations(data.locations))
-      .catch(() => {})
-  }, [])
 
   // Poll processing documents
   useEffect(() => {
@@ -112,7 +101,6 @@ export default function DocumentsPage() {
       const formData = new FormData()
       formData.append('file', uploadFile)
       formData.append('title', uploadTitle.trim())
-      if (uploadLocationId) formData.append('location_id', uploadLocationId)
 
       const result = await adminApi.upload<{ document_id: string; status: string }>('/ingest', formData)
       setUploadStatus(`Upload thành công! ID: ${result.document_id}. Đang xử lý...`)
@@ -120,7 +108,7 @@ export default function DocumentsPage() {
       // Reset form
       setTimeout(() => {
         setShowUpload(false); setUploadFile(null); setUploadTitle('')
-        setUploadLocationId(''); setUploadStatus(null)
+        setUploadStatus(null)
         fetchDocuments()
       }, 2000)
     } catch (err) {
@@ -176,15 +164,6 @@ export default function DocumentsPage() {
                   <input type="file" accept=".pdf,.docx" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
                 </label>
               </div>
-              <div>
-                <label className="text-sm font-medium">Gán vào Location (tùy chọn)</label>
-                <select className="w-full rounded-md border bg-transparent px-3 py-2 text-sm mt-1"
-                  value={uploadLocationId} onChange={e => setUploadLocationId(e.target.value)}>
-                  <option value="">— Toàn hệ thống (global) —</option>
-                  {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-                </select>
-              </div>
-
               {uploadStatus && (
                 <div className={`rounded-md p-3 text-sm ${uploadStatus.includes('Lỗi') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                   {uploadStatus}

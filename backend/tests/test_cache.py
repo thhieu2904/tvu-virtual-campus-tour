@@ -2,12 +2,14 @@
 
 import os
 import sys
-import tempfile
 import time
 import unittest
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+TEST_TMP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".tmp"))
+os.makedirs(TEST_TMP_DIR, exist_ok=True)
 
 
 class TestCacheHelpers(unittest.TestCase):
@@ -48,13 +50,14 @@ class TestCacheHelpers(unittest.TestCase):
     def test_qa_cache_store_loads_json(self):
         from app.cache import QACacheStore
 
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "qa_cache.json"
-            path.write_text('{"abc": {"answer": "ok"}}', encoding="utf-8")
+        tmp = Path(TEST_TMP_DIR) / f"case-{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        path = tmp / "qa_cache.json"
+        path.write_text('{"abc": {"answer": "ok"}}', encoding="utf-8")
 
-            store = QACacheStore(path)
-            self.assertEqual(store.reload(), 1)
-            self.assertEqual(store.get("abc"), {"answer": "ok"})
+        store = QACacheStore(path)
+        self.assertEqual(store.reload(), 1)
+        self.assertEqual(store.get("abc"), {"answer": "ok"})
 
 
 if __name__ == "__main__":
