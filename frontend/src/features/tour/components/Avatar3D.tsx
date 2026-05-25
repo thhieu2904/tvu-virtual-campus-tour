@@ -6,9 +6,10 @@
  */
 
 import { useRef, useEffect, Suspense, memo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { useGLTF, useAnimations, Environment } from '@react-three/drei';
 import * as THREE from 'three';
+import { attachWebGLContextRecovery } from '@/shared/lib/webglRecovery';
 
 // ─── Animation names ────────────────────────────────────────
 export type AvatarAnimation = 'HeadNod' | 'StandingUp' | 'Thankful' | 'Texting';
@@ -108,6 +109,16 @@ const AvatarModel = memo(function AvatarModel({ animation, modelUrl }: AvatarMod
 // Preload the GLB
 useGLTF.preload('/models/character.glb');
 
+function WebGLRecoveryListener() {
+  const gl = useThree((state) => state.gl);
+
+  useEffect(() => {
+    return attachWebGLContextRecovery(gl.domElement, 'avatar canvas');
+  }, [gl]);
+
+  return null;
+}
+
 // ─── Main Avatar3D Wrapper ──────────────────────────────────
 interface Avatar3DProps {
   animation: AvatarAnimation;
@@ -134,6 +145,7 @@ function Avatar3D({ animation, modelUrl }: Avatar3DProps) {
         dpr={[1, 1.5]}
         style={{ background: 'transparent' }}
       >
+        <WebGLRecoveryListener />
         <ambientLight intensity={0.8} />
         <directionalLight position={[3, 6, 4]} intensity={1.2} color="#ffffff" />
         <pointLight position={[-3, 3, 3]} intensity={0.4} color="#a8c8ff" />

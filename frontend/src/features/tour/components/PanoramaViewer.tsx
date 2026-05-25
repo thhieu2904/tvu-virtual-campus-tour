@@ -14,6 +14,65 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crosshair, Minus, Plus } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
+import { attachWebGLContextRecovery } from "@/shared/lib/webglRecovery";
+
+const PANNELLUM_CSS_URL = "/lib/pannellum/pannellum.css";
+const PANNELLUM_SCRIPT_URL = "/lib/pannellum/pannellum.js";
+let pannellumLoadPromise: Promise<void> | null = null;
+
+type PannellumViewerInstance = {
+  destroy?: () => void;
+  getHfov?: () => number;
+  lookAt?: (pitch: number, yaw: number, hfov: number, duration?: number) => void;
+  on: (event: "load" | "error", handler: () => void) => void;
+  setHfov?: (hfov: number, duration?: number) => void;
+  setPitch?: (pitch: number, duration?: number) => void;
+  setYaw?: (yaw: number, duration?: number) => void;
+};
+
+type PannellumGlobal = {
+  viewer: (
+    container: HTMLElement,
+    config: Record<string, unknown>,
+  ) => PannellumViewerInstance;
+};
+
+declare global {
+  interface Window {
+    pannellum?: PannellumGlobal;
+  }
+}
+
+function loadPannellumScript() {
+  if (window.pannellum) return Promise.resolve();
+  if (pannellumLoadPromise) return pannellumLoadPromise;
+
+  pannellumLoadPromise = new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      `script[src$="${PANNELLUM_SCRIPT_URL}"]`,
+    );
+
+    const handleError = () => {
+      pannellumLoadPromise = null;
+      reject(new Error("Failed to load Pannellum"));
+    };
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", handleError, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = PANNELLUM_SCRIPT_URL;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = handleError;
+    document.head.appendChild(script);
+  });
+
+  return pannellumLoadPromise;
+}
 
 interface PanoramaViewerProps {
   imageUrl: string;
@@ -37,13 +96,17 @@ export default function PanoramaViewer({
   onLoad,
 }: PanoramaViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<any>(null);
+  const viewerRef = useRef<PannellumViewerInstance | null>(null);
+  const webglRecoveryCleanupRef = useRef<(() => void) | null>(null);
   const onLoadRef = useRef(onLoad);
-  onLoadRef.current = onLoad;
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   
   const locations = useTourStore((s) => s.locations);
+
+  useEffect(() => {
+    onLoadRef.current = onLoad;
+  }, [onLoad]);
 
   const adjustZoom = (delta: number) => {
     const viewer = viewerRef.current;
@@ -78,22 +141,12 @@ export default function PanoramaViewer({
       if (!document.querySelector('link[href*="pannellum"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href =
-          "https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css";
+        link.href = PANNELLUM_CSS_URL;
         document.head.appendChild(link);
       }
 
       // Import JS
-      if (!(window as any).pannellum) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src =
-            "https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js";
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error("Failed to load Pannellum"));
-          document.head.appendChild(script);
-        });
-      }
+      await loadPannellumScript();
 
       initViewer();
     };
@@ -105,7 +158,9 @@ export default function PanoramaViewer({
       // Destroy previous viewer
       if (viewerRef.current) {
         try {
-          viewerRef.current.destroy();
+          webglRecoveryCleanupRef.current?.();
+          webglRecoveryCleanupRef.current = null;
+          viewerRef.current.destroy?.();
         } catch {
           // ignore
         }
@@ -113,7 +168,7 @@ export default function PanoramaViewer({
       }
 
       // Create new viewer (same config as reference project)
-      const pannellum = (window as any).pannellum;
+      const pannellum = window.pannellum;
       if (!pannellum || !containerRef.current) return;
 
       viewerRef.current = pannellum.viewer(containerRef.current, {
@@ -140,14 +195,27 @@ export default function PanoramaViewer({
         setHasError(true);
         setIsLoaded(true);
       });
+
+      webglRecoveryCleanupRef.current?.();
+      webglRecoveryCleanupRef.current = attachWebGLContextRecovery(
+        containerRef.current,
+        "panorama viewer",
+      );
     };
 
-    loadPannellum();
+    loadPannellum().catch((error) => {
+      console.error(error);
+      setHasError(true);
+      setIsLoaded(true);
+    });
 
     return () => {
+      webglRecoveryCleanupRef.current?.();
+      webglRecoveryCleanupRef.current = null;
+
       if (viewerRef.current) {
         try {
-          viewerRef.current.destroy();
+          viewerRef.current.destroy?.();
         } catch {
           // ignore
         }
