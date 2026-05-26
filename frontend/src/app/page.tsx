@@ -11,19 +11,24 @@ import Minimap from "@/features/tour/components/Minimap";
 import InfoPanel from "@/features/tour/components/InfoPanel";
 import ChatOverlay from "@/features/chat/components/ChatOverlay";
 import Avatar3D from "@/features/tour/components/Avatar3D";
+import { useAvatarAnimationController } from "@/features/tour/hooks/useAvatarAnimationController";
+
+const DEFAULT_MASCOT_MODEL_URL = "/mascots/kaito/model.glb";
 
 function resolveAvatarModelUrl(modelUrl?: string | null) {
-  if (!modelUrl) return undefined;
-  if (modelUrl.startsWith("http://") || modelUrl.startsWith("https://")) {
-    return modelUrl;
+  if (!modelUrl) return DEFAULT_MASCOT_MODEL_URL;
+  const trimmed = modelUrl.trim();
+  if (!trimmed) return DEFAULT_MASCOT_MODEL_URL;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
   }
-  if (modelUrl.startsWith("/models/")) {
-    return modelUrl;
+  if (trimmed.startsWith("/")) {
+    return trimmed;
   }
-  if (modelUrl.startsWith("models/")) {
-    return `/${modelUrl}`;
+  if (trimmed.includes("..")) {
+    return DEFAULT_MASCOT_MODEL_URL;
   }
-  return undefined;
+  return `/${trimmed}`;
 }
 
 function resolveR2Url(url?: string | null) {
@@ -89,19 +94,15 @@ export default function TourPage() {
     setPanoramaReady(true);
   }, [setPanoramaReady]);
 
-  // Map AI chat state to 3D Mascot animations
-  const getAvatarAnimation = () => {
-    if (!hasStarted) return "HeadNod"; // Chờ ở trạng thái gật gù nhẹ khi chưa Start
-    switch (avatarState) {
-      case "thinking":
-        return "Texting"; // AI is loading/thinking
-      case "speaking":
-        return "HeadNod"; // AI is streaming text
-      case "idle":
-      default:
-        return "Thankful"; // AI is done (bows/smiles once, then auto-returns to HeadNod)
-    }
-  };
+  const {
+    animation: avatarAnimation,
+    handleAnimationComplete: handleAvatarAnimationComplete,
+  } = useAvatarAnimationController({
+    hasStarted,
+    avatarState,
+    isResetting,
+    locationSlug: location?.slug || null,
+  });
 
   // ── Kiosk Gesture Lock (chỉ bật khi KIOSK_MODE) ──
   useEffect(() => {
@@ -161,7 +162,7 @@ export default function TourPage() {
       // Fade out black overlay
       setTimeout(() => setIsResetting(false), 500);
     }, 500); // Wait for fade-to-black
-  }, []);
+  }, [setHasStarted]);
 
   const { isWarning, warningSecondsLeft, dismissWarning } = useKioskIdleWatcher(
     {
@@ -303,8 +304,9 @@ export default function TourPage() {
         }`}
       >
         <Avatar3D
-          animation={getAvatarAnimation() as any}
+          animation={avatarAnimation}
           modelUrl={resolveAvatarModelUrl(location?.mascotModelUrl)}
+          onAnimationComplete={handleAvatarAnimationComplete}
         />
         {location && isAppReady && hasStarted && (
           <div className="absolute bottom-[calc(-5vh+24px)] left-1/2 z-10 flex -translate-x-1/2 justify-center pointer-events-auto">

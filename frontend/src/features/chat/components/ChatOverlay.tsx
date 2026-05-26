@@ -56,9 +56,10 @@ export default function ChatOverlay() {
 
   // Continuous Session: location intro logic
   const navigatedByAgent = useTourStore((s) => s.navigatedByAgent);
+  const isTransitioning = useTourStore((s) => s.isTransitioning);
 
   useEffect(() => {
-    if (!location || isLoading || !isAppReady) return;
+    if (!location || isLoading || !isAppReady || isTransitioning || activeOverlay === "map") return;
 
     const isFirstLoad = prevSlugRef.current === null;
     const slugChanged = prevSlugRef.current !== location.slug;
@@ -100,7 +101,7 @@ export default function ChatOverlay() {
         playPrecachedAudio(location.intro_audio_url);
       }
     }
-  }, [location?.slug, isLoading, isAppReady, isTTSEnabled]);
+  }, [location?.slug, isLoading, isAppReady, isTTSEnabled, isTransitioning, activeOverlay]);
 
   // Tự động cuộn xuống cuối (Transcript)
   useEffect(() => {

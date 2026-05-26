@@ -95,8 +95,10 @@ function _flushToolCalls() {
         const slug = toolCall.args.location_slug as string;
         if (slug && slug !== tourStore.currentLocationSlug) {
           hasNavigation = true;
-          // Set pendingNavigation → Minimap picks this up and runs map animation
-          tourStore.setPendingNavigation(slug);
+          // Delay map transition by 3 seconds so the mascot can perform the Thankful bow and speak their guiding sentence before flying away
+          setTimeout(() => {
+            tourStore.setPendingNavigation(slug);
+          }, 3000);
         }
         break;
       }
