@@ -1,0 +1,45 @@
+name: Continuous Deployment to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: SSH and Deploy via Docker
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "🚀 Starting deployment to VPS..."
+            
+            # Navigate to the project directory (Default: /root/tvu-virtual-campus-tour)
+            # If the directory doesn't exist, clone it first
+            PROJECT_DIR=${{ secrets.SSH_TARGET_DIR || '/root/tvu-virtual-campus-tour' }}
+            
+            if [ ! -d "$PROJECT_DIR" ]; then
+              echo "Directory $PROJECT_DIR not found, cloning repository..."
+              git clone https://github.com/thhieu2904/tvu-virtual-campus-tour.git "$PROJECT_DIR"
+            fi
+            
+            cd "$PROJECT_DIR"
+            
+            echo "📥 Fetching latest code from main..."
+            git checkout main
+            git pull origin main
+            
+            echo "📦 Building and starting Backend container in background..."
+            cd backend
+            docker compose up -d --build
+            
+            echo "✅ Deployment completed successfully!"
