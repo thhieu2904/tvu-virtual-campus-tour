@@ -38,10 +38,12 @@ async def upload_intros():
 
             voice_name = "Leda"
             voice_style = "soft, cheerful, and youthful like a college student"
+            personality_prompt = ""
             
             if loc.mascot:
                 voice_name = loc.mascot.voice_name
                 voice_style = loc.mascot.voice_style
+                personality_prompt = loc.mascot.personality_prompt
             
             print(f"⏳ Generating audio for: {loc.name} ({loc.slug}) with voice {voice_name}")
             try:
@@ -50,6 +52,7 @@ async def upload_intros():
                     text=loc.intro_message,
                     voice_name=voice_name,
                     voice_style=voice_style,
+                    personality_prompt=personality_prompt,
                 )
                 
                 # Upload lên R2

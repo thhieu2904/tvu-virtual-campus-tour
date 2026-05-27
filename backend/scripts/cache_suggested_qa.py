@@ -38,6 +38,7 @@ async def cache_qa():
             print(f"\n📍 Đang xử lý khu vực: {loc.name} (Mascot: {loc.mascot.name if loc.mascot else 'None'})")
             voice = loc.mascot.voice_name if loc.mascot else "Leda"
             voice_style = loc.mascot.voice_style if loc.mascot else "soft, cheerful, and youthful like a college student"
+            personality_prompt = loc.mascot.personality_prompt if loc.mascot else ""
             
             for sq in sorted(loc.suggested_questions, key=lambda q: q.sort_order):
                 print(f"  ❓ Câu hỏi: {sq.question}")
@@ -74,7 +75,9 @@ async def cache_qa():
                 
                 # 2. Sinh Audio & Upload
                 style = voice_style or ""
-                answer_hash = hashlib.md5(f"{answer_text}_{voice}_{style}".encode()).hexdigest()
+                answer_hash = hashlib.md5(
+                    f"{tts_engine.TTS_PROMPT_VERSION}_{answer_text}_{voice}_{style}_{personality_prompt}".encode()
+                ).hexdigest()
                 wav_r2_key = f"tts-cache/{answer_hash}.wav"
                 mp3_r2_key = f"tts-cache/{answer_hash}.mp3"
                 
@@ -95,6 +98,7 @@ async def cache_qa():
                             text=answer_text,
                             voice_name=voice,
                             voice_style=voice_style,
+                            personality_prompt=personality_prompt,
                         )
                         r2_key = mp3_r2_key if tts_result.content_type == tts_engine.CONTENT_TYPE_MP3 else wav_r2_key
                         await storage_service.upload_file(

@@ -9,6 +9,7 @@ import sys
 import shutil
 import unittest
 import uuid
+from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
 from dataclasses import dataclass
 
@@ -162,11 +163,14 @@ class TestTTSCache(unittest.TestCase):
         # Patch the CACHE_DIR to use temp directory
         import app.ai.tts_engine as tts_mod
         self._original_cache_dir = tts_mod.CACHE_DIR
+        self._original_runtime_cache_dir = tts_mod.RUNTIME_CACHE_DIR
         tts_mod.CACHE_DIR = self.tmp_dir
+        tts_mod.RUNTIME_CACHE_DIR = Path(self.tmp_dir) / "runtime"
 
     def tearDown(self):
         import app.ai.tts_engine as tts_mod
         tts_mod.CACHE_DIR = self._original_cache_dir
+        tts_mod.RUNTIME_CACHE_DIR = self._original_runtime_cache_dir
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def test_cache_key_deterministic(self):
@@ -179,6 +183,12 @@ class TestTTSCache(unittest.TestCase):
         from app.ai.tts_engine import _cache_key
         k1 = _cache_key("hello", "Kore")
         k2 = _cache_key("hello", "Aoede")
+        self.assertNotEqual(k1, k2)
+
+    def test_cache_key_varies_by_persona(self):
+        from app.ai.tts_engine import _cache_key
+        k1 = _cache_key("hello", "Puck", "friendly", "Bạn là Kaito, hướng dẫn viên nam.")
+        k2 = _cache_key("hello", "Puck", "friendly", "Bạn là ViVy, đại sứ sinh viên nữ.")
         self.assertNotEqual(k1, k2)
 
     def test_cache_miss(self):
@@ -207,6 +217,27 @@ class TestTTSCache(unittest.TestCase):
         audio, ct = result
         self.assertEqual(audio, data)
         self.assertEqual(ct, CONTENT_TYPE_MP3)
+
+    def test_runtime_cache_roundtrip(self):
+        from app.ai.tts_engine import CONTENT_TYPE_WAV, get_runtime_cached, resolve_runtime_cache_file, save_runtime_cache
+
+        filename = save_runtime_cache("a" * 32, b"wave-data", CONTENT_TYPE_WAV)
+        self.assertEqual(filename, f"{'a' * 32}.wav")
+
+        cached = get_runtime_cached("a" * 32)
+        self.assertIsNotNone(cached)
+        path, content_type, cached_filename = cached
+        self.assertEqual(path.read_bytes(), b"wave-data")
+        self.assertEqual(content_type, CONTENT_TYPE_WAV)
+        self.assertEqual(cached_filename, filename)
+
+        resolved = resolve_runtime_cache_file(filename)
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved[0], path)
+        self.assertEqual(resolve_runtime_cache_file("../bad.wav"), None)
+        self.assertEqual(get_runtime_cached("../bad"), None)
+        with self.assertRaises(ValueError):
+            save_runtime_cache("../bad", b"bad", CONTENT_TYPE_WAV)
 
 
 # ============================================================
@@ -385,10 +416,18 @@ class TestTTSEngine(unittest.TestCase):
         fake_mp3 = b"\xff\xfb" * 50
         mock_edge.return_value = fake_mp3
 
-        result = asyncio.run(synthesize("Hello"))
+        result = asyncio.run(
+            synthesize(
+                "Hello",
+                voice_name="Puck",
+                voice_style="friendly",
+                personality_prompt="Bạn là Kaito, hướng dẫn viên nam.",
+            )
+        )
         self.assertEqual(result.audio_data, fake_mp3)
         self.assertEqual(result.provider, "edge-tts")
         self.assertEqual(result.content_type, CONTENT_TYPE_MP3)
+        mock_edge.assert_called_once_with("Hello", "vi-VN-NamMinhNeural")
 
     @patch("app.ai.tts_engine.get_client")
     @patch("app.ai.tts_engine.get_settings")

@@ -217,7 +217,13 @@ async def regenerate_location_audio(location_id: str, session: AsyncSession = De
 
     voice_name = loc.mascot.voice_name if loc.mascot else None
     voice_style = loc.mascot.voice_style if loc.mascot else None
-    result = await synthesize(loc.intro_message, voice_name=voice_name, voice_style=voice_style)
+    personality_prompt = loc.mascot.personality_prompt if loc.mascot else None
+    result = await synthesize(
+        loc.intro_message,
+        voice_name=voice_name,
+        voice_style=voice_style,
+        personality_prompt=personality_prompt,
+    )
 
     extension = "mp3" if result.content_type == CONTENT_TYPE_MP3 else "wav"
     r2_key = storage_service.build_intro_key(loc.slug, extension)

@@ -8,6 +8,8 @@ import hashlib
 import asyncio
 import struct
 from dataclasses import dataclass
+from pathlib import Path
+import re
 from google.genai import types
 import edge_tts
 
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Audio content types
 CONTENT_TYPE_WAV = "audio/wav"    # Gemini output: converted to WAV 24kHz 16-bit mono
 CONTENT_TYPE_MP3 = "audio/mpeg"   # Edge TTS output: MP3
+TTS_PROMPT_VERSION = "tts-persona-v2"
 
 
 @dataclass
@@ -31,11 +34,29 @@ class TTSResult:
 
 
 CACHE_DIR = "data/tts_cache"
+RUNTIME_CACHE_DIR = Path("data/runtime_tts_cache")
+_RUNTIME_CACHE_KEY_RE = re.compile(r"^[0-9a-f]{32}$")
+_RUNTIME_CACHE_FILENAME_RE = re.compile(r"^[0-9a-f]{32}\.(wav|mp3)$")
 
 
-def _cache_key(text: str, voice: str, voice_style: str = "") -> str:
+def _extension_for_content_type(content_type: str) -> str:
+    return "mp3" if content_type == CONTENT_TYPE_MP3 else "wav"
+
+
+def _content_type_for_extension(extension: str) -> str:
+    return CONTENT_TYPE_MP3 if extension == "mp3" else CONTENT_TYPE_WAV
+
+
+def _cache_key(
+    text: str,
+    voice: str,
+    voice_style: str = "",
+    personality_prompt: str = "",
+) -> str:
     """Generate a stable cache key."""
-    return hashlib.sha256(f"{text}|{voice}|{voice_style}".encode()).hexdigest()
+    return hashlib.sha256(
+        f"{TTS_PROMPT_VERSION}|{text}|{voice}|{voice_style}|{personality_prompt}".encode()
+    ).hexdigest()
 
 
 def _get_cached(key: str) -> tuple[bytes, str] | None:
@@ -58,6 +79,68 @@ def _save_cache(key: str, audio: bytes, content_type: str):
     ext = ".wav" if content_type == CONTENT_TYPE_WAV else ".mp3"
     with open(os.path.join(CACHE_DIR, f"{key}{ext}"), "wb") as f:
         f.write(audio)
+
+
+def save_runtime_cache(cache_key: str, audio: bytes, content_type: str) -> str:
+    """Persist chat-runtime audio locally and return the cache filename."""
+    if not _RUNTIME_CACHE_KEY_RE.fullmatch(cache_key):
+        raise ValueError("Invalid runtime cache key")
+
+    RUNTIME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    extension = _extension_for_content_type(content_type)
+    filename = f"{cache_key}.{extension}"
+    (RUNTIME_CACHE_DIR / filename).write_bytes(audio)
+    return filename
+
+
+def get_runtime_cached(cache_key: str) -> tuple[Path, str, str] | None:
+    """Return (path, content_type, filename) for local chat-runtime audio."""
+    if not _RUNTIME_CACHE_KEY_RE.fullmatch(cache_key):
+        return None
+
+    for extension in ("wav", "mp3"):
+        filename = f"{cache_key}.{extension}"
+        path = RUNTIME_CACHE_DIR / filename
+        if path.is_file():
+            return path, _content_type_for_extension(extension), filename
+    return None
+
+
+def resolve_runtime_cache_file(filename: str) -> tuple[Path, str] | None:
+    """Safely resolve a runtime cache filename for serving over HTTP."""
+    if not _RUNTIME_CACHE_FILENAME_RE.fullmatch(filename):
+        return None
+
+    path = RUNTIME_CACHE_DIR / filename
+    if not path.is_file():
+        return None
+
+    extension = filename.rsplit(".", 1)[1]
+    return path, _content_type_for_extension(extension)
+
+
+def _edge_voice_for(voice: str, personality_prompt: str = "") -> str:
+    """Map Gemini mascot voices to Vietnamese Edge fallback voices."""
+    persona = personality_prompt.lower()
+    if voice == "Puck" or "nam" in persona or "anh sinh viên" in persona:
+        return "vi-VN-NamMinhNeural"
+    return "vi-VN-HoaiMyNeural"
+
+
+def _speaker_guard(voice: str, personality_prompt: str = "") -> str:
+    persona = personality_prompt.strip()
+    normalized = persona.lower()
+    gender_hint = ""
+    if voice == "Puck" or "nam" in normalized or "anh sinh viên" in normalized:
+        gender_hint = "The speaker is male; keep a clearly masculine Vietnamese voice."
+    elif voice == "Leda" or "nữ" in normalized or "cô bạn" in normalized:
+        gender_hint = "The speaker is female; keep a clearly feminine Vietnamese voice."
+
+    if persona and gender_hint:
+        return f"Speaker persona: {persona} {gender_hint}"
+    if persona:
+        return f"Speaker persona: {persona}"
+    return gender_hint
 
 
 async def _edge_tts_fallback(text: str, voice: str = "vi-VN-HoaiMyNeural") -> bytes:
@@ -92,6 +175,7 @@ async def synthesize(
     text: str,
     voice_name: str | None = None,
     voice_style: str | None = None,
+    personality_prompt: str | None = None,
 ) -> TTSResult:
     """
     Synthesize speech from text.
@@ -108,7 +192,8 @@ async def synthesize(
     use_local_cache = getattr(settings, "TTS_LOCAL_CACHE_ENABLED", False) is True
 
     style = voice_style or ""
-    key = _cache_key(text, voice, style)
+    persona = personality_prompt or ""
+    key = _cache_key(text, voice, style, persona)
     cached = await asyncio.to_thread(_get_cached, key) if use_local_cache else None
 
     if cached:
@@ -122,12 +207,14 @@ async def synthesize(
 
     try:
         tone_instruction = f"Tone: {style}." if style else "Tone: natural Vietnamese."
+        speaker_instruction = _speaker_guard(voice, persona)
         prompt = (
             "Read the following Vietnamese text as a single continuous speaker. "
             f"Use the prebuilt voice '{voice}' consistently from the first word to the last word. "
             "Keep the same speaker identity, timbre, pitch, pace, and energy throughout. "
             "Do not switch voices, do not imitate another speaker, do not add dialogue, "
             "and do not change persona mid-sentence. "
+            f"{speaker_instruction} "
             f"{tone_instruction}\n\n"
             f"Text: {text}"
         )
@@ -163,7 +250,8 @@ async def synthesize(
     except Exception as e:
         logger.warning("Gemini TTS failed (%s). Falling back to Edge TTS.", e)
         try:
-            audio_data = await _edge_tts_fallback(text)
+            edge_voice = _edge_voice_for(voice, persona)
+            audio_data = await _edge_tts_fallback(text, edge_voice)
             if use_local_cache:
                 await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_MP3)
             return TTSResult(

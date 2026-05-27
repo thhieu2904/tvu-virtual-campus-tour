@@ -39,10 +39,12 @@ async def cache_intros():
             # Fetch mascot directly or fallback to default
             voice_name = "Leda"
             voice_style = "soft, cheerful, and youthful like a college student"
+            personality_prompt = ""
             
             if loc.mascot:
                 voice_name = loc.mascot.voice_name
                 voice_style = loc.mascot.voice_style
+                personality_prompt = loc.mascot.personality_prompt
             
             file_path = FRONTEND_AUDIO_DIR / f"{loc.slug}.wav"
             
@@ -61,7 +63,8 @@ async def cache_intros():
                 tts_result = await synthesize(
                     text=loc.intro_message,
                     voice_name=voice_name,
-                    voice_style=voice_style
+                    voice_style=voice_style,
+                    personality_prompt=personality_prompt,
                 )
                 
                 # Lưu file
