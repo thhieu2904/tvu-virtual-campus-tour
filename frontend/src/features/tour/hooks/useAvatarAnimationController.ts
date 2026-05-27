@@ -251,6 +251,11 @@ export function useAvatarAnimationController({
 
       activeOneShotRef.current = null;
       
+      if (completedAnimation === "Talking") {
+        requestAnimation("Idle", { force: true });
+        return;
+      }
+
       if (avatarState === "speaking") {
         requestAnimation("Talking", { force: true });
       } else if (avatarState === "thinking") {

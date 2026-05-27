@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { useTourStore } from "@/features/tour/store";
 import { ChatMessage } from "./types";
+import {
+  CHAT_CONNECTION_ERROR_MESSAGE,
+  getRandomWaitingMessage,
+  isWaitingMessage,
+} from "./messages";
 
 // ── Constants ──
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -154,6 +159,13 @@ function _flushImmediateVisualToolCalls() {
   }
 }
 
+function appendConnectionError(content: string) {
+  if (!content || isWaitingMessage(content)) {
+    return CHAT_CONNECTION_ERROR_MESSAGE;
+  }
+  return `${content}\n\n${CHAT_CONNECTION_ERROR_MESSAGE}`;
+}
+
 // ── Store ──
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -226,7 +238,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       messages: state.messages.map((msg) => {
         if (msg.id === messageId) {
-          const currentContent = msg.content === "Đang kiểm tra dữ liệu, bạn đợi xíu nhé... 🤔" ? "" : msg.content;
+          const currentContent = isWaitingMessage(msg.content) ? "" : msg.content;
           return { ...msg, content: currentContent + chunk };
         }
         return msg;
@@ -243,7 +255,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Optimistic UI update
     const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: message };
     const botMsgId = (Date.now() + 1).toString();
-    const botMsg: ChatMessage = { id: botMsgId, role: "assistant", content: "Đang kiểm tra dữ liệu, bạn đợi xíu nhé... 🤔", isStreaming: true };
+    const botMsg: ChatMessage = {
+      id: botMsgId,
+      role: "assistant",
+      content: getRandomWaitingMessage(),
+      isStreaming: true,
+    };
 
     set({ messages: [...messages, userMsg, botMsg], isLoading: true, error: null });
 
@@ -385,12 +402,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       } catch (err: any) {
         console.error("Chat error:", err);
-        get()._appendChunk(botMsgId, " Xin lỗi, hiện tại mình không thể kết nối tới máy chủ. Vui lòng thử lại sau.");
         set((state) => ({
           isLoading: false,
           error: err.message,
           messages: state.messages.map((msg) =>
-            msg.id === botMsgId ? { ...msg, isStreaming: false } : msg
+            msg.id === botMsgId
+              ? {
+                  ...msg,
+                  content: appendConnectionError(msg.content),
+                  isStreaming: false,
+                }
+              : msg
           ),
         }));
         useTourStore.getState().setAvatarState("idle");
@@ -465,8 +487,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     } catch (err: any) {
       console.error("Chat error:", err);
-      get()._appendChunk(botMsgId, " Xin lỗi, hiện tại mình không thể kết nối tới máy chủ. Vui lòng thử lại sau.");
-      set({ error: err.message });
+      set((state) => ({
+        error: err.message,
+        messages: state.messages.map((msg) =>
+          msg.id === botMsgId
+            ? { ...msg, content: appendConnectionError(msg.content) }
+            : msg
+        ),
+      }));
     } finally {
       set((state) => ({
         isLoading: false,

@@ -24,7 +24,6 @@ const DEFAULT_MODEL_URL = '/mascots/kaito/model.glb';
 const CROSSFADE_SECONDS = 0.45;
 const LOOPING_ANIMATIONS = new Set<AvatarAnimation>([
   'Idle',
-  'Talking',
 ]);
 const CLIP_FALLBACKS: Record<AvatarAnimation, string[]> = {
   Idle: ['Idle', 'HeadNod'],

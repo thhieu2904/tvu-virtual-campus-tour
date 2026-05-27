@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { useTourStore } from "@/features/tour/store";
 import { useChatStore, playPrecachedAudio } from "../store";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
+import { isWaitingMessage } from "../messages";
 
 function TypingIndicator() {
   return (
@@ -189,11 +190,11 @@ export default function ChatOverlay() {
                       >
                         {msg.content}
                       </ReactMarkdown>
-                      {msg.isStreaming && msg.content.includes("Đang kiểm tra dữ liệu") && <TypingIndicator />}
+                      {msg.isStreaming && isWaitingMessage(msg.content) && <TypingIndicator />}
                     </div>
                     {/* Fade-out Overlay for Kiosk touch scrolling hint */}
                     <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
-                    {msg.isStreaming && !msg.content.includes("Đang kiểm tra dữ liệu") && (
+                    {msg.isStreaming && !isWaitingMessage(msg.content) && (
                       <motion.span
                         className="inline-block w-1.5 h-4 ml-1.5 bg-white/70 align-middle"
                         animate={{ opacity: [1, 0] }}
@@ -431,7 +432,7 @@ export default function ChatOverlay() {
                     >
                       <span className="whitespace-pre-wrap">
                         {msg.content}
-                        {msg.isStreaming && msg.content.includes("Đang kiểm tra dữ liệu") && <TypingIndicator />}
+                        {msg.isStreaming && isWaitingMessage(msg.content) && <TypingIndicator />}
                       </span>
                     </div>
                   </div>
