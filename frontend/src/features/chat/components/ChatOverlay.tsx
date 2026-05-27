@@ -7,6 +7,16 @@ import { useTourStore } from "@/features/tour/store";
 import { useChatStore, playPrecachedAudio } from "../store";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 
+function TypingIndicator() {
+  return (
+    <span className="inline-flex items-center ml-1.5 gap-1 align-middle">
+      <span className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+      <span className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+      <span className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-bounce"></span>
+    </span>
+  );
+}
+
 export default function ChatOverlay() {
   const location = useTourStore((s) => s.currentLocation());
   const isAppReady = useTourStore((s) => s.isAppReady);
@@ -179,10 +189,11 @@ export default function ChatOverlay() {
                       >
                         {msg.content}
                       </ReactMarkdown>
+                      {msg.isStreaming && msg.content.includes("Đang kiểm tra dữ liệu") && <TypingIndicator />}
                     </div>
                     {/* Fade-out Overlay for Kiosk touch scrolling hint */}
                     <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
-                    {msg.isStreaming && (
+                    {msg.isStreaming && !msg.content.includes("Đang kiểm tra dữ liệu") && (
                       <motion.span
                         className="inline-block w-1.5 h-4 ml-1.5 bg-white/70 align-middle"
                         animate={{ opacity: [1, 0] }}
@@ -418,7 +429,10 @@ export default function ChatOverlay() {
                           : "bg-white/10 text-white/90 rounded-tl-sm"
                       }`}
                     >
-                      <span className="whitespace-pre-wrap">{msg.content}</span>
+                      <span className="whitespace-pre-wrap">
+                        {msg.content}
+                        {msg.isStreaming && msg.content.includes("Đang kiểm tra dữ liệu") && <TypingIndicator />}
+                      </span>
                     </div>
                   </div>
                 );

@@ -349,6 +349,7 @@ class TestTTSEngine(unittest.TestCase):
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
             GEMINI_TTS_MODEL="gemini-2.5-flash-preview-tts",
+            TTS_LOCAL_CACHE_ENABLED=False,
         )
         fake_audio = b"\x00" * 100
         inline_data = MagicMock()
@@ -376,6 +377,7 @@ class TestTTSEngine(unittest.TestCase):
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
             GEMINI_TTS_MODEL="gemini-2.5-flash-preview-tts",
+            TTS_LOCAL_CACHE_ENABLED=False,
         )
         # Gemini raises error → trigger fallback
         mock_client.return_value.models.generate_content.side_effect = Exception("429 quota")
@@ -396,6 +398,7 @@ class TestTTSEngine(unittest.TestCase):
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
             GEMINI_TTS_MODEL="gemini-2.5-flash-preview-tts",
+            TTS_LOCAL_CACHE_ENABLED=True,
         )
         # Pre-fill cache
         key = _cache_key("cached text", "Kore")

@@ -95,17 +95,21 @@ async def synthesize(
 ) -> TTSResult:
     """
     Synthesize speech from text.
-    Strategy (3-layer):
-      1. Check disk cache.
+    Strategy:
+      1. Optionally check local disk cache when explicitly enabled.
       2. Try Gemini TTS → PCM output.
       3. Fallback to Edge TTS → MP3 output.
+
+    Chat/runtime R2 cache is handled by the caller. Local disk cache is
+    disabled by default so production deployments do not grow app storage.
     """
     settings = get_settings()
     voice = voice_name or settings.GEMINI_DEFAULT_VOICE
+    use_local_cache = getattr(settings, "TTS_LOCAL_CACHE_ENABLED", False) is True
 
     style = voice_style or ""
     key = _cache_key(text, voice, style)
-    cached = await asyncio.to_thread(_get_cached, key)
+    cached = await asyncio.to_thread(_get_cached, key) if use_local_cache else None
 
     if cached:
         audio_data, content_type = cached
@@ -147,7 +151,8 @@ async def synthesize(
         audio_data = result.candidates[0].content.parts[0].inline_data.data
         audio_data = _pcm_to_wav(audio_data)
         
-        await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_WAV)
+        if use_local_cache:
+            await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_WAV)
         return TTSResult(
             audio_data=audio_data,
             content_type=CONTENT_TYPE_WAV,
@@ -159,7 +164,8 @@ async def synthesize(
         logger.warning("Gemini TTS failed (%s). Falling back to Edge TTS.", e)
         try:
             audio_data = await _edge_tts_fallback(text)
-            await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_MP3)
+            if use_local_cache:
+                await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_MP3)
             return TTSResult(
                 audio_data=audio_data,
                 content_type=CONTENT_TYPE_MP3,

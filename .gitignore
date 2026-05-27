@@ -2,6 +2,8 @@
 /plan
 .mp4
 assets/*
+key/*
+vps_key
 
 
 # ===== Python =====

@@ -49,15 +49,26 @@ export function playPrecachedAudio(url: string) {
   const audio = new Audio(url);
   _currentAudioUrl = url;
   _currentAudio = audio;
-  
-  useTourStore.getState().setAvatarState("speaking");
-  
-  audio.onended = () => {
-    _stopCurrentAudio();
+
+  audio.onplaying = () => {
+    if (_currentAudio === audio) {
+      useTourStore.getState().setAvatarState("speaking");
+    }
   };
-  audio.play().catch(e => {
+  audio.onended = () => {
+    if (_currentAudio === audio) {
+      _stopCurrentAudio();
+    }
+  };
+  audio.play().then(() => {
+    if (_currentAudio === audio) {
+      useTourStore.getState().setAvatarState("speaking");
+    }
+  }).catch(e => {
     console.error("Failed to play precached audio:", e);
-    useTourStore.getState().setAvatarState("idle");
+    if (_currentAudio === audio) {
+      useTourStore.getState().setAvatarState("idle");
+    }
   });
 }
 
@@ -284,7 +295,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         // Chạy logic Tool Call sau khi phát xong audio
         let audioFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-        const handleAudioEnded = () => {
+        const handleAudioEnded = (audio?: HTMLAudioElement) => {
+          if (audio && _currentAudio !== audio) return;
           if (audioFallbackTimer) {
             clearTimeout(audioFallbackTimer);
             audioFallbackTimer = null;
@@ -294,32 +306,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
             _flushToolCalls();
           }
         };
-        const startAudioFallbackTimer = () => {
+        const startAudioFallbackTimer = (audio: HTMLAudioElement) => {
           const textLength = typeof data.answer === "string" ? data.answer.length : 0;
           const timeoutMs = Math.min(Math.max(textLength * 120, 10000), 30000);
           audioFallbackTimer = setTimeout(() => {
             console.warn("Audio playback timeout — flushing queued tool calls");
-            handleAudioEnded();
+            handleAudioEnded(audio);
           }, timeoutMs);
         };
 
         // Play audio if available
         if (data.audio_url) {
           _currentAudioUrl = data.audio_url;
-          _currentAudio = new Audio(data.audio_url);
-          useTourStore.getState().setAvatarState("speaking");
-          _currentAudio.onended = handleAudioEnded;
-          _currentAudio.onerror = () => {
-            console.error("Audio playback load error:", data.audio_url);
-            handleAudioEnded();
+          const audio = new Audio(data.audio_url);
+          _currentAudio = audio;
+          audio.onplaying = () => {
+            if (_currentAudio === audio) {
+              useTourStore.getState().setAvatarState("speaking");
+            }
           };
-          _currentAudio.onstalled = () => {
+          audio.onended = () => handleAudioEnded(audio);
+          audio.onerror = () => {
+            console.error("Audio playback load error:", data.audio_url);
+            handleAudioEnded(audio);
+          };
+          audio.onstalled = () => {
             console.warn("Audio playback stalled:", data.audio_url);
           };
-          startAudioFallbackTimer();
-          _currentAudio.play().catch(e => {
+          startAudioFallbackTimer(audio);
+          audio.play().then(() => {
+            if (_currentAudio === audio) {
+              useTourStore.getState().setAvatarState("speaking");
+            }
+          }).catch(e => {
             console.error("Audio playback error:", e);
-            handleAudioEnded();
+            handleAudioEnded(audio);
           });
         }
         else if (data.audio_base64) {
@@ -330,20 +351,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
           _currentAudioUrl = url;
           _currentAudio = audio;
 
-          useTourStore.getState().setAvatarState("speaking");
-
-          audio.onended = handleAudioEnded;
+          audio.onplaying = () => {
+            if (_currentAudio === audio) {
+              useTourStore.getState().setAvatarState("speaking");
+            }
+          };
+          audio.onended = () => handleAudioEnded(audio);
           audio.onerror = () => {
             console.error("Audio blob playback load error");
-            handleAudioEnded();
+            handleAudioEnded(audio);
           };
           audio.onstalled = () => {
             console.warn("Audio blob playback stalled");
           };
-          startAudioFallbackTimer();
-          audio.play().catch(e => {
+          startAudioFallbackTimer(audio);
+          audio.play().then(() => {
+            if (_currentAudio === audio) {
+              useTourStore.getState().setAvatarState("speaking");
+            }
+          }).catch(e => {
             console.error("Audio blob playback error:", e);
-            handleAudioEnded();
+            handleAudioEnded(audio);
           });
         } else {
           // No audio (TTS failed) → go idle and flush tools immediately
@@ -387,8 +415,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!res.ok) {
         throw new Error("API responded with an error");
       }
-
-      useTourStore.getState().setAvatarState("speaking");
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No reader available");

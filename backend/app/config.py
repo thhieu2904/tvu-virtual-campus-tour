@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     GEMINI_TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
     GEMINI_EMBEDDING_DIMENSIONS: int = 768
     GEMINI_DEFAULT_VOICE: str = "Leda"
+    TTS_LOCAL_CACHE_ENABLED: bool = False
 
     # === Supabase (PostgreSQL + pgvector) ===
     SUPABASE_URL: str = ""

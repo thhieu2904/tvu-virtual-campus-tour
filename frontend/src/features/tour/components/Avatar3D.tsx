@@ -6,8 +6,9 @@
  */
 
 import { useRef, useEffect, Suspense, memo } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { useGLTF, useAnimations, Environment } from '@react-three/drei';
+import { useTourStore } from '@/features/tour/store';
 import * as THREE from 'three';
 import { attachWebGLContextRecovery } from '@/shared/lib/webglRecovery';
 
@@ -20,8 +21,10 @@ export type AvatarAnimation =
   | 'Thankful';
 
 const DEFAULT_MODEL_URL = '/mascots/kaito/model.glb';
+const CROSSFADE_SECONDS = 0.45;
 const LOOPING_ANIMATIONS = new Set<AvatarAnimation>([
   'Idle',
+  'Talking',
 ]);
 const CLIP_FALLBACKS: Record<AvatarAnimation, string[]> = {
   Idle: ['Idle', 'HeadNod'],
@@ -49,9 +52,15 @@ const AvatarModel = memo(function AvatarModel({
 }: AvatarModelProps) {
   const group = useRef<THREE.Group>(null!);
   const prevClipName = useRef<string | null>(null);
+  const mouthTargetsRef = useRef<Array<{ mesh: THREE.Mesh; index: number }>>([]);
+  const onAnimationCompleteRef = useRef(onAnimationComplete);
 
   const { scene, animations } = useGLTF(modelUrl || DEFAULT_MODEL_URL);
   const { actions, names } = useAnimations(animations, group);
+
+  useEffect(() => {
+    onAnimationCompleteRef.current = onAnimationComplete;
+  }, [onAnimationComplete]);
 
   // Tune materials for toon-style VRM model
   useEffect(() => {
@@ -81,6 +90,66 @@ const AvatarModel = memo(function AvatarModel({
     });
   }, [scene]);
 
+  // Find all mouth morph targets (outer lips, teeth, inside mouth meshes)
+  useEffect(() => {
+    const targets: Array<{ mesh: THREE.Mesh; index: number }> = [];
+    scene.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh && mesh.morphTargetDictionary) {
+        const keys = Object.keys(mesh.morphTargetDictionary);
+        const mouthKey = keys.find(
+          (k) =>
+            k === 'mouth_a' ||
+            k === 'Fcl_MTH_A' ||
+            k === 'aa' ||
+            k === 'A' ||
+            k.toLowerCase() === 'viseme_a' ||
+            k.toLowerCase().includes('mouth_a')
+        );
+        if (mouthKey !== undefined) {
+          const index = mesh.morphTargetDictionary[mouthKey];
+          targets.push({ mesh, index });
+          console.log(`[Avatar3D] Found mouth morph target: "${mouthKey}" at index ${index} on mesh "${mesh.name}"`);
+        }
+      }
+    });
+    mouthTargetsRef.current = targets;
+  }, [scene]);
+
+  const avatarState = useTourStore((s) => s.avatarState);
+
+  // Procedural Lip Sync Animation Driven by Speak State
+  useFrame((state) => {
+    if (mouthTargetsRef.current.length === 0) return;
+
+    const isSpeaking = avatarState === 'speaking';
+    const time = state.clock.getElapsedTime();
+    let targetInfluence = 0;
+
+    if (isSpeaking) {
+      // Calm, cartoon-style soft lip sync formula:
+      // Slow down syllable frequency (6.5) and modulate with soft phrasing (2.0)
+      const syllable = Math.abs(Math.sin(time * 6.5));
+      const phrasing = 0.4 + 0.6 * Math.abs(Math.cos(time * 2.0));
+      targetInfluence = syllable * phrasing * 0.75; // Pleasant max opening of 0.75
+    } else {
+      targetInfluence = 0;
+    }
+
+    // Apply smooth mouth opening/closing to all mouth meshes (outer lips, teeth, etc.)
+    for (const target of mouthTargetsRef.current) {
+      const { mesh, index } = target;
+      if (!mesh.morphTargetInfluences) continue;
+
+      const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+        currentInfluence,
+        targetInfluence,
+        0.25
+      );
+    }
+  });
+
   // Switch animation with smooth crossfade. Three.js animation actions are imperative objects.
   // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
@@ -98,32 +167,41 @@ const AvatarModel = memo(function AvatarModel({
     // eslint-disable-next-line react-hooks/immutability
     target.clampWhenFinished = !shouldLoop;
 
-    // If the animation is already playing (e.g., from an internal auto-transition), don't reset it
+    // If the animation is already playing, keep the current action and listener intact.
     if (prevClipName.current === clipName && target.isRunning()) {
       return;
     }
 
-    // Crossfade
+    target.enabled = true;
+    target
+      .reset()
+      .setEffectiveTimeScale(1)
+      .setEffectiveWeight(1)
+      .fadeIn(CROSSFADE_SECONDS)
+      .play();
+
     if (prevClipName.current && prevClipName.current !== clipName) {
       const prev = actions[prevClipName.current];
-      if (prev) prev.fadeOut(0.5);
+      if (prev) {
+        prev.enabled = true;
+        prev.fadeOut(CROSSFADE_SECONDS);
+      }
     }
 
-    target.reset().fadeIn(0.4).play();
     prevClipName.current = clipName;
 
     // Let the controller decide the next state when a one-shot clip ends.
     if (!shouldLoop) {
       const onFinished = (e: { action: THREE.AnimationAction }) => {
         if (e.action === target) {
-          onAnimationComplete?.(animation);
+          onAnimationCompleteRef.current?.(animation);
         }
       };
       const mixer = target.getMixer();
       mixer.addEventListener('finished', onFinished);
       return () => mixer.removeEventListener('finished', onFinished);
     }
-  }, [animation, actions, names, onAnimationComplete]);
+  }, [animation, actions, names]);
 
   return (
     <group ref={group} dispose={null} position={[0, -0.9, 0]}>

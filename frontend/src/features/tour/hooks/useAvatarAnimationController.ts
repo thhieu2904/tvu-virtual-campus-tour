@@ -103,13 +103,16 @@ export function useAvatarAnimationController({
       const current = animationRef.current;
       if (current === next) return;
 
-      if (
+      const thinkingVisibleAt = thinkingVisibleAtRef.current;
+      const shouldRespectThinkingMinimum = Boolean(
         current === "Thinking" &&
         next !== "Thinking" &&
-        thinkingVisibleAtRef.current &&
-        !options.force
-      ) {
-        const elapsed = Date.now() - thinkingVisibleAtRef.current;
+        thinkingVisibleAt &&
+        (!options.force || next === "Talking"),
+      );
+
+      if (shouldRespectThinkingMinimum) {
+        const elapsed = Date.now() - thinkingVisibleAt!;
         const remaining = MIN_THINKING_VISIBLE_MS - elapsed;
 
         if (remaining > 0) {
@@ -215,7 +218,7 @@ export function useAvatarAnimationController({
         }
       }
 
-      requestAnimation("Talking", { force: true });
+      requestAnimation("Talking");
       return;
     }
 
@@ -250,6 +253,9 @@ export function useAvatarAnimationController({
       
       if (avatarState === "speaking") {
         requestAnimation("Talking", { force: true });
+      } else if (avatarState === "thinking") {
+        // Keep the clamped thinking pose, do not reset to Idle!
+        return;
       } else {
         requestAnimation("Idle", { force: true });
       }
