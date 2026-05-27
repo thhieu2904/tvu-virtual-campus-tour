@@ -7,7 +7,7 @@
 
 import { useRef, useEffect, Suspense, memo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { useGLTF, useAnimations, Environment } from '@react-three/drei';
+import { useGLTF, useAnimations } from '@react-three/drei';
 import { useTourStore } from '@/features/tour/store';
 import * as THREE from 'three';
 import { attachWebGLContextRecovery } from '@/shared/lib/webglRecovery';
@@ -32,9 +32,38 @@ const CLIP_FALLBACKS: Record<AvatarAnimation, string[]> = {
   Talking: ['Talking', 'HeadNod', 'Texting'],
   Thankful: ['Thankful'],
 };
+const MOUTH_OPEN_TARGETS = [
+  'Fcl_MTH_A',
+  'mouth_a',
+  'aa',
+  'A',
+  'viseme_a',
+];
+const SMILE_TARGETS = [
+  'Fcl_MTH_Fun',
+  'Fcl_MTH_Joy',
+];
+const SMILE_UP_TARGETS = [
+  'Fcl_MTH_Up',
+];
+
+type MorphTargetBinding = {
+  mesh: THREE.Mesh;
+  index: number;
+};
 
 function resolveClipName(animation: AvatarAnimation, names: string[]) {
   return CLIP_FALLBACKS[animation].find((name) => names.includes(name));
+}
+
+function findMorphTargetKey(keys: string[], candidates: string[]) {
+  for (const candidate of candidates) {
+    const exact = keys.find((key) => key === candidate);
+    if (exact) return exact;
+  }
+
+  const lowerCandidates = candidates.map((candidate) => candidate.toLowerCase());
+  return keys.find((key) => lowerCandidates.includes(key.toLowerCase()));
 }
 
 interface AvatarModelProps {
@@ -51,7 +80,9 @@ const AvatarModel = memo(function AvatarModel({
 }: AvatarModelProps) {
   const group = useRef<THREE.Group>(null!);
   const prevClipName = useRef<string | null>(null);
-  const mouthTargetsRef = useRef<Array<{ mesh: THREE.Mesh; index: number }>>([]);
+  const mouthOpenTargetsRef = useRef<MorphTargetBinding[]>([]);
+  const smileTargetsRef = useRef<MorphTargetBinding[]>([]);
+  const smileUpTargetsRef = useRef<MorphTargetBinding[]>([]);
   const onAnimationCompleteRef = useRef(onAnimationComplete);
 
   const { scene, animations } = useGLTF(modelUrl || DEFAULT_MODEL_URL);
@@ -91,59 +122,110 @@ const AvatarModel = memo(function AvatarModel({
 
   // Find all mouth morph targets (outer lips, teeth, inside mouth meshes)
   useEffect(() => {
-    const targets: Array<{ mesh: THREE.Mesh; index: number }> = [];
+    const mouthOpenTargets: MorphTargetBinding[] = [];
+    const smileTargets: MorphTargetBinding[] = [];
+    const smileUpTargets: MorphTargetBinding[] = [];
+
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh && mesh.morphTargetDictionary) {
         const keys = Object.keys(mesh.morphTargetDictionary);
-        const mouthKey = keys.find(
-          (k) =>
-            k === 'mouth_a' ||
-            k === 'Fcl_MTH_A' ||
-            k === 'aa' ||
-            k === 'A' ||
-            k.toLowerCase() === 'viseme_a' ||
-            k.toLowerCase().includes('mouth_a')
-        );
-        if (mouthKey !== undefined) {
-          const index = mesh.morphTargetDictionary[mouthKey];
-          targets.push({ mesh, index });
-          console.log(`[Avatar3D] Found mouth morph target: "${mouthKey}" at index ${index} on mesh "${mesh.name}"`);
+
+        const mouthKey = findMorphTargetKey(keys, MOUTH_OPEN_TARGETS);
+        if (mouthKey) {
+          mouthOpenTargets.push({
+            mesh,
+            index: mesh.morphTargetDictionary[mouthKey],
+          });
+        }
+
+        const smileKey = findMorphTargetKey(keys, SMILE_TARGETS);
+        if (smileKey) {
+          smileTargets.push({
+            mesh,
+            index: mesh.morphTargetDictionary[smileKey],
+          });
+        }
+
+        const smileUpKey = findMorphTargetKey(keys, SMILE_UP_TARGETS);
+        if (smileUpKey) {
+          smileUpTargets.push({
+            mesh,
+            index: mesh.morphTargetDictionary[smileUpKey],
+          });
         }
       }
     });
-    mouthTargetsRef.current = targets;
+
+    mouthOpenTargetsRef.current = mouthOpenTargets;
+    smileTargetsRef.current = smileTargets;
+    smileUpTargetsRef.current = smileUpTargets;
   }, [scene]);
 
   const avatarState = useTourStore((s) => s.avatarState);
 
-  // Procedural Lip Sync Animation Driven by Speak State
+  // Procedural lip sync and expression blending. Three.js morph influences are imperative runtime arrays.
   useFrame((state) => {
-    if (mouthTargetsRef.current.length === 0) return;
-
     const isSpeaking = avatarState === 'speaking';
     const time = state.clock.getElapsedTime();
-    let targetInfluence = 0;
+    let mouthOpenInfluence = 0;
 
     if (isSpeaking) {
       // Calm, cartoon-style soft lip sync formula:
       // Slow down syllable frequency (6.5) and modulate with soft phrasing (2.0)
       const syllable = Math.abs(Math.sin(time * 6.5));
       const phrasing = 0.4 + 0.6 * Math.abs(Math.cos(time * 2.0));
-      targetInfluence = syllable * phrasing * 0.75; // Pleasant max opening of 0.75
-    } else {
-      targetInfluence = 0;
+      mouthOpenInfluence = syllable * phrasing * 0.75; // Pleasant max opening of 0.75
     }
 
-    // Apply smooth mouth opening/closing to all mouth meshes (outer lips, teeth, etc.)
-    for (const target of mouthTargetsRef.current) {
+    const smileInfluence =
+      animation === 'Greeting' || animation === 'Thankful'
+        ? 0.24
+        : isSpeaking
+          ? 0.12
+          : 0.16;
+    const smileUpInfluence =
+      animation === 'Greeting' || animation === 'Thankful'
+        ? 0.08
+        : isSpeaking
+          ? 0.04
+          : 0.055;
+
+    for (const target of mouthOpenTargetsRef.current) {
       const { mesh, index } = target;
       if (!mesh.morphTargetInfluences) continue;
 
       const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      // eslint-disable-next-line react-hooks/immutability
       mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
         currentInfluence,
-        targetInfluence,
+        mouthOpenInfluence,
+        0.25
+      );
+    }
+
+    for (const target of smileTargetsRef.current) {
+      const { mesh, index } = target;
+      if (!mesh.morphTargetInfluences) continue;
+
+      const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      // eslint-disable-next-line react-hooks/immutability
+      mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+        currentInfluence,
+        smileInfluence,
+        0.12
+      );
+    }
+
+    for (const target of smileUpTargetsRef.current) {
+      const { mesh, index } = target;
+      if (!mesh.morphTargetInfluences) continue;
+
+      const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      // eslint-disable-next-line react-hooks/immutability
+      mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+        currentInfluence,
+        smileUpInfluence,
         0.25
       );
     }
