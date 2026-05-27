@@ -101,6 +101,56 @@ def _parse_response(result) -> tuple[str, str | None, dict, list[dict]]:
     thinking_text = "".join(thinking_parts).strip() or None
     answer_text = "".join(answer_parts).strip()
 
+    # Robust fallback: Parse text-based tool calls if they were generated as raw text
+    if answer_text and ("default_api." in answer_text or "tool_code" in answer_text):
+        import re
+        import json
+        
+        # Match print(default_api.tool_name(args...)) or default_api.tool_name(args...)
+        pattern = r"(?:print\()?(?:default_api\.)?(\w+)\(([^)]*)\)\)?"
+        matches = re.finditer(pattern, answer_text)
+        
+        seen_keys = set()
+        for match in matches:
+            tool_name = match.group(1)
+            args_str = match.group(2)
+            
+            # Avoid matching standard explanations in thought blocks
+            if tool_name in ["navigate_to", "show_media", "toggle_map", "search_documents"]:
+                # Parse keyword arguments
+                args = {}
+                arg_pattern = r"(\w+)\s*=\s*(?:['\"]([^'\"]*)['\"]|([^\s,]+))"
+                arg_matches = re.finditer(arg_pattern, args_str)
+                for am in arg_matches:
+                    key = am.group(1)
+                    val = am.group(2) if am.group(2) is not None else am.group(3)
+                    if val.lower() == 'true':
+                        val = True
+                    elif val.lower() == 'false':
+                        val = False
+                    args[key] = val
+                
+                # Deduplicate tool calls
+                key = (tool_name, json.dumps(args, sort_keys=True))
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    function_calls.append({
+                        "name": tool_name,
+                        "args": args
+                    })
+        
+        # Clean answer_text to remove tool_code, print(default_api...), thought, and explanations
+        lines = answer_text.split("\n")
+        cleaned_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped in ["tool_code", "thought"] or stripped.startswith("print(default_api.") or stripped.startswith("default_api."):
+                continue
+            if "The user wants to" in line or "tool call" in line or "appropriate" in line:
+                continue
+            cleaned_lines.append(line)
+        answer_text = "\n".join(cleaned_lines).strip()
+
     usage_dict = {}
     usage = getattr(result, "usage_metadata", None)
     if usage:
