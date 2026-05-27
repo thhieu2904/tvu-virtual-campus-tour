@@ -124,6 +124,12 @@ export default function ChatOverlay() {
     if (messages.length > 0) {
       setShowSubtitle(true);
       const lastMsg = messages[messages.length - 1];
+
+      // Bỏ qua việc đặt timer ẩn đi nếu đang hiển thị câu chờ
+      if (lastMsg.isStreaming && isWaitingMessage(lastMsg.content)) {
+        return;
+      }
+
       // Tính thời gian hiển thị: 8s cơ bản + 50ms cho mỗi ký tự. Max 30s.
       const duration = Math.min(
         30000,

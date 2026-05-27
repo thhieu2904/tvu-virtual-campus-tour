@@ -4,6 +4,7 @@
 assets/*
 key/*
 vps_key
+backend/data/runtime_tts_cache/*    
 
 
 # ===== Python =====
