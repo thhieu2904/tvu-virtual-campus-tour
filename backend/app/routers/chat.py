@@ -27,6 +27,23 @@ router = APIRouter()
 
 
 def _runtime_audio_url(api_request: Request, filename: str) -> str:
+    path = api_request.url_for("get_runtime_tts_audio", filename=filename).path
+
+    # Browser pages served over HTTPS cannot play http:// backend audio URLs.
+    # When the API is reached through the Next.js HTTPS origin, return a
+    # same-origin URL so the existing /api rewrite proxies the audio safely.
+    origin = api_request.headers.get("origin", "").rstrip("/")
+    if origin.startswith("https://"):
+        return f"{origin}{path}"
+
+    forwarded_proto = api_request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    forwarded_host = (
+        api_request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+        or api_request.headers.get("host", "")
+    )
+    if forwarded_proto == "https" and forwarded_host:
+        return f"https://{forwarded_host}{path}"
+
     return str(api_request.url_for("get_runtime_tts_audio", filename=filename))
 
 
