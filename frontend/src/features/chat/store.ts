@@ -10,6 +10,7 @@ import {
 // ── Constants ──
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const MAX_HISTORY_FOR_AI = 20; // Max messages sent to Gemini for context
+const THINKING_STATE_DELAY_MS = 1100;
 
 // ── Types ──
 interface ChatState {
@@ -166,6 +167,10 @@ function appendConnectionError(content: string) {
   return `${content}\n\n${CHAT_CONNECTION_ERROR_MESSAGE}`;
 }
 
+function getErrorMessage(err: unknown) {
+  return err instanceof Error ? err.message : "Unexpected error";
+}
+
 // ── Store ──
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -248,6 +253,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   sendMessage: async (message: string, locationId?: string) => {
     const { sessionId, messages, isTTSEnabled } = get();
+    let thinkingTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleThinkingState = () => {
+      if (thinkingTimer) return;
+      thinkingTimer = setTimeout(() => {
+        useTourStore.getState().setAvatarState("thinking");
+        thinkingTimer = null;
+      }, THINKING_STATE_DELAY_MS);
+    };
+    const cancelThinkingState = () => {
+      if (thinkingTimer) {
+        clearTimeout(thinkingTimer);
+        thinkingTimer = null;
+      }
+    };
 
     // Dừng âm thanh cũ ngay khi có request mới
     _stopCurrentAudio();
@@ -264,8 +283,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ messages: [...messages, userMsg, botMsg], isLoading: true, error: null });
 
-    // Avatar: thinking while waiting for response
-    useTourStore.getState().setAvatarState("thinking");
+    // Fast cache hits should feel immediate; only show thinking for slower requests.
+    scheduleThinkingState();
 
     // Gather history (last N messages for AI context)
     const history = messages.slice(-MAX_HISTORY_FOR_AI).map((m) => ({
@@ -291,6 +310,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!res.ok) throw new Error("API responded with an error");
 
         const data = await res.json();
+        cancelThinkingState();
+        const toolActions: ToolCall[] = Array.isArray(data.tool_actions) ? data.tool_actions : [];
 
         // Update bot message with full text at once
         set((state) => ({
@@ -303,12 +324,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
 
         // Queue tool calls from response
-        if (data.tool_actions) {
-          for (const tc of data.tool_actions) {
+        if (toolActions.length > 0) {
+          for (const tc of toolActions) {
             _queueToolCall(tc);
           }
           _flushImmediateVisualToolCalls();
         }
+
+        const shouldYieldAudioToImmediateVideo =
+          !_hasNavigation(toolActions) &&
+          toolActions.some((tc) => tc.name === "show_media" && tc.args.media_type === "video");
 
         // Chạy logic Tool Call sau khi phát xong audio
         let audioFallbackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -319,7 +344,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             audioFallbackTimer = null;
           }
           _stopCurrentAudio();
-          if (data.tool_actions && data.tool_actions.length > 0) {
+          if (toolActions.length > 0) {
             _flushToolCalls();
           }
         };
@@ -331,6 +356,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             handleAudioEnded(audio);
           }, timeoutMs);
         };
+
+        if (shouldYieldAudioToImmediateVideo) {
+          useTourStore.getState().setAvatarState("idle");
+          return;
+        }
 
         // Play audio if available
         if (data.audio_url) {
@@ -402,17 +432,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
           // No audio (TTS failed) → go idle and flush tools immediately
           useTourStore.getState().setAvatarState("idle");
           setTimeout(() => {
-            if (data.tool_actions && data.tool_actions.length > 0) {
+            if (toolActions.length > 0) {
               _flushToolCalls();
             }
           }, 500);
         }
 
-      } catch (err: any) {
+      } catch (err: unknown) {
+        cancelThinkingState();
         console.error("Chat error:", err);
         set((state) => ({
           isLoading: false,
-          error: err.message,
+          error: getErrorMessage(err),
           messages: state.messages.map((msg) =>
             msg.id === botMsgId
               ? {
@@ -493,10 +524,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      cancelThinkingState();
       console.error("Chat error:", err);
       set((state) => ({
-        error: err.message,
+        error: getErrorMessage(err),
         messages: state.messages.map((msg) =>
           msg.id === botMsgId
             ? { ...msg, content: appendConnectionError(msg.content) }
@@ -504,6 +536,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ),
       }));
     } finally {
+      cancelThinkingState();
       set((state) => ({
         isLoading: false,
         messages: state.messages.map((msg) =>

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { _stopCurrentAudio } from "@/features/chat/store";
 
 interface VideoPlayerProps {
   url: string;
@@ -31,6 +32,7 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const areControlsVisible = showControls || !isPlaying;
 
   const handleMetadataLoaded = useCallback(() => {
     const video = videoRef.current;
@@ -52,6 +54,7 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
+      _stopCurrentAudio();
       video.play();
       setIsPlaying(true);
     } else {
@@ -113,6 +116,7 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
   useEffect(() => {
     if (autoPlay && hasLoaded && videoRef.current) {
       const video = videoRef.current;
+      _stopCurrentAudio();
       video.muted = false;
       setIsMuted(false);
 
@@ -129,11 +133,6 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
       });
     }
   }, [autoPlay, hasLoaded]);
-
-  // Always show controls when paused
-  useEffect(() => {
-    if (!isPlaying) setShowControls(true);
-  }, [isPlaying]);
 
   return (
     <motion.div
@@ -202,7 +201,7 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
 
         {/* Custom Glassmorphism Controls */}
         <AnimatePresence>
-          {showControls && hasLoaded && (
+          {areControlsVisible && hasLoaded && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

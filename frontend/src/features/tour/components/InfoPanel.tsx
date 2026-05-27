@@ -233,9 +233,6 @@ export default function InfoPanel() {
                         loading="lazy"
                       />
                     )}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2.5">
-                      <p className="text-[11px] text-white/90 font-medium truncate">{currentMiniItem.caption}</p>
-                    </div>
                     <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-black/50 text-[9px] text-white/70 font-medium">
                       {(miniSlideIndex % locationMedia.length) + 1}/{locationMedia.length}
                     </div>

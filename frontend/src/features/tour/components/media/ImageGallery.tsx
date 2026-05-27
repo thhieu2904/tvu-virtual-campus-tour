@@ -77,12 +77,6 @@ export default function ImageGallery({
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               loading="lazy"
             />
-            {/* Hover overlay with caption */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <p className="absolute bottom-2 left-2 right-2 text-[11px] text-white/90 font-medium truncate">
-                {img.caption}
-              </p>
-            </div>
           </motion.div>
         ))}
       </div>
@@ -111,15 +105,6 @@ export default function ImageGallery({
                 alt={images[lightboxIndex].caption}
                 className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain"
               />
-              {/* Caption bar */}
-              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent rounded-b-2xl">
-                <p className="text-sm text-white font-medium">
-                  {images[lightboxIndex].caption}
-                </p>
-                <p className="text-xs text-white/50 mt-0.5">
-                  {lightboxIndex + 1} / {images.length}
-                </p>
-              </div>
             </motion.div>
 
             {/* Nav buttons */}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useTourStore } from "@/features/tour/store";
 import { useChatStore, playPrecachedAudio } from "../store";
@@ -34,6 +35,14 @@ export default function ChatOverlay() {
     isTTSEnabled,
   } = useChatStore();
   const [input, setInput] = useState("");
+  const [dismissedSubtitleId, setDismissedSubtitleId] = useState<string | null>(null);
+
+  const handleSend = (text: string) => {
+    if (!text.trim() || isLoading) return;
+    // All messages go through AI Agent — it decides whether to navigate, show media, etc.
+    sendMessage(text, location?.id);
+    setInput("");
+  };
 
   const handleSpeechResult = (text: string) => {
     handleSend(text);
@@ -48,8 +57,6 @@ export default function ChatOverlay() {
   } = useSpeechRecognition(handleSpeechResult);
 
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
-  const [showSubtitle, setShowSubtitle] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const prevSlugRef = useRef<string | null>(null);
 
@@ -66,7 +73,6 @@ export default function ChatOverlay() {
   }, [initSession]);
 
   // Continuous Session: location intro logic
-  const navigatedByAgent = useTourStore((s) => s.navigatedByAgent);
   const isTransitioning = useTourStore((s) => s.isTransitioning);
 
   useEffect(() => {
@@ -119,11 +125,26 @@ export default function ChatOverlay() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTranscriptOpen]);
 
+  // KIOSK OPTIMIZATION: keep one assistant subtitle active to prevent stacked bubbles.
+  const latestAssistantIndex = messages.findLastIndex((msg) => msg.role === "assistant");
+  const latestAssistantMessage =
+    latestAssistantIndex >= 0 ? messages[latestAssistantIndex] : null;
+  const pairedUserMessage =
+    latestAssistantIndex > 0 && messages[latestAssistantIndex - 1]?.role === "user"
+      ? messages[latestAssistantIndex - 1]
+      : null;
+  const displayMessages = [
+    ...(pairedUserMessage ? [pairedUserMessage] : []),
+    ...(latestAssistantMessage ? [latestAssistantMessage] : []),
+  ];
+  const activeSubtitleId = latestAssistantMessage?.id ?? pairedUserMessage?.id ?? null;
+  const isSubtitleVisible =
+    Boolean(activeSubtitleId) && dismissedSubtitleId !== activeSubtitleId;
+
   // Auto-hide Subtitles
   useEffect(() => {
-    if (messages.length > 0) {
-      setShowSubtitle(true);
-      const lastMsg = messages[messages.length - 1];
+    if (latestAssistantMessage) {
+      const lastMsg = latestAssistantMessage;
 
       // Bỏ qua việc đặt timer ẩn đi nếu đang hiển thị câu chờ
       if (lastMsg.isStreaming && isWaitingMessage(lastMsg.content)) {
@@ -135,31 +156,24 @@ export default function ChatOverlay() {
         30000,
         Math.max(8000, (lastMsg.content?.length || 0) * 50),
       );
-      const timer = setTimeout(() => setShowSubtitle(false), duration);
+      const timer = setTimeout(() => {
+        setDismissedSubtitleId(lastMsg.id);
+      }, duration);
       return () => clearTimeout(timer);
     }
-  }, [messages]);
+  }, [latestAssistantMessage]);
 
-  const handleSend = (text: string) => {
-    if (!text.trim() || isLoading) return;
-    // All messages go through AI Agent — it decides whether to navigate, show media, etc.
-    sendMessage(text, location?.id);
-    setInput("");
-  };
-
-  // KIOSK OPTIMIZATION: Chỉ hiển thị 2 tin nhắn gần nhất (1 câu hỏi, 1 câu trả lời) dưới dạng Subtitle
-  const displayMessages = messages.slice(-2);
   const suggestedQuestions = location?.suggestedQuestions || [];
 
-  // Hide subtitles and suggestions when map overlay is fullscreen
-  const isMapActive = activeOverlay === "map";
+  // Hide subtitles and suggestions when a fullscreen visual overlay is active.
+  const isVisualOverlayActive = activeOverlay === "map" || activeOverlay === "info";
 
   return (
     <>
       {/* === DYNAMIC SUBTITLES (Speech Bubbles) === */}
       <AnimatePresence>
-        {showSubtitle &&
-          !isMapActive &&
+        {isSubtitleVisible &&
+          !isVisualOverlayActive &&
           displayMessages.map((msg) => {
             if (msg.role === "assistant") {
               return (
@@ -171,7 +185,20 @@ export default function ChatOverlay() {
                   className="fixed right-[30%] top-[15%] w-[420px] max-w-[40vw] z-50 pointer-events-auto origin-bottom-right"
                 >
                   <div className="relative bg-black/70 backdrop-blur-3xl text-white px-6 py-4 rounded-[28px] rounded-br-xl border border-white/20 shadow-2xl flex flex-col max-h-[55vh] overflow-hidden">
-                    <div className="overflow-y-auto pr-2 pb-6 flex-1 whitespace-pre-wrap text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="absolute top-3 right-3 z-20 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (activeSubtitleId) setDismissedSubtitleId(activeSubtitleId);
+                        }}
+                        className="h-8 w-8 rounded-full bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-colors flex items-center justify-center"
+                        title="Ẩn phụ đề"
+                        aria-label="Ẩn phụ đề"
+                      >
+                        <X className="h-4 w-4" strokeWidth={2.3} />
+                      </button>
+                    </div>
+                    <div className="overflow-y-auto pr-12 pb-6 flex-1 whitespace-pre-wrap text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <ReactMarkdown
                         components={{
                           p: ({ node, ...props }) => (
@@ -242,7 +269,7 @@ export default function ChatOverlay() {
       {/* === BOTTOM CONTROLS WRAPPER === */}
       <div className="fixed bottom-11 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-40 w-full max-w-3xl pointer-events-none">
         {/* === QUICK ACTIONS (SUGGESTED QUESTIONS) === */}
-        {suggestedQuestions.length > 0 && !isMapActive && (
+        {suggestedQuestions.length > 0 && !isVisualOverlayActive && (
           <div className="flex max-w-[660px] flex-wrap justify-center gap-2 pointer-events-auto px-4">
             {suggestedQuestions.map((q, idx) => (
               <motion.button
