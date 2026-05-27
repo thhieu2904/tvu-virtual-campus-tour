@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
         source: "/r2/:path*",
         destination: "https://tvu-tour.site/:path*",
       },
+      {
+        source: "/api/:path*",
+        destination: "http://152.42.226.201:8000/api/:path*",
+      },
     ];
   },
 };

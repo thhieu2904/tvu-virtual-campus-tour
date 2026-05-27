@@ -17,7 +17,7 @@ class AdminApi {
   constructor() {
     // Determine backend URL based on environment
     // Use NEXT_PUBLIC_API_URL if defined, otherwise fallback to localhost
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
   }
 
   /**

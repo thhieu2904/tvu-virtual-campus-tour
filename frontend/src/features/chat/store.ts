@@ -3,7 +3,7 @@ import { useTourStore } from "@/features/tour/store";
 import { ChatMessage } from "./types";
 
 // ── Constants ──
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const MAX_HISTORY_FOR_AI = 20; // Max messages sent to Gemini for context
 
 // ── Types ──
