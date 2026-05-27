@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useTourStore } from "@/features/tour/store";
-import { useChatStore, playPrecachedAudio } from "../store";
+import { useChatStore, playPrecachedAudio, _stopCurrentAudio } from "../store";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { isWaitingMessage } from "../messages";
 
@@ -376,8 +376,15 @@ export default function ChatOverlay() {
           {browserSupportsSpeechRecognition && (
             <button
               onClick={() => {
-                if (isListening) stopListening();
-                else startListening();
+                if (isListening) {
+                  stopListening();
+                } else {
+                  // Nếu Mascot đang phát giọng nói dở dang, ngắt lời ngay lập tức để người dùng nói
+                  if (avatarState === "speaking") {
+                    _stopCurrentAudio();
+                  }
+                  startListening();
+                }
               }}
               className={`w-15 h-15 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
                 isListening
