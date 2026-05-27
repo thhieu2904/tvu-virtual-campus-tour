@@ -341,6 +341,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (_currentAudio === audio) {
               useTourStore.getState().setAvatarState("speaking");
             }
+            if (audioFallbackTimer) {
+              clearTimeout(audioFallbackTimer);
+              audioFallbackTimer = null;
+            }
           };
           audio.onended = () => handleAudioEnded(audio);
           audio.onerror = () => {
@@ -371,6 +375,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           audio.onplaying = () => {
             if (_currentAudio === audio) {
               useTourStore.getState().setAvatarState("speaking");
+            }
+            if (audioFallbackTimer) {
+              clearTimeout(audioFallbackTimer);
+              audioFallbackTimer = null;
             }
           };
           audio.onended = () => handleAudioEnded(audio);
