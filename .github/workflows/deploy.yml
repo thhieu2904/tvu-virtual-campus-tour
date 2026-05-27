@@ -16,16 +16,16 @@ jobs:
       - name: SSH and Deploy via Docker
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             echo "🚀 Starting deployment to VPS..."
             
             # Navigate to the project directory (Default: /root/tvu-virtual-campus-tour)
             # If the directory doesn't exist, clone it first
-            PROJECT_DIR=${{ secrets.SSH_TARGET_DIR || '/root/tvu-virtual-campus-tour' }}
+            PROJECT_DIR=${{ secrets.VPS_TARGET_DIR || '/root/tvu-virtual-campus-tour' }}
             
             if [ ! -d "$PROJECT_DIR" ]; then
               echo "Directory $PROJECT_DIR not found, cloning repository..."
