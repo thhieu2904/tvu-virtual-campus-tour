@@ -50,6 +50,9 @@ desktop.ini
 *.log
 npm-debug.log*
 
+# ===== Runtime Cache =====
+backend/data/tts_cache/
+
 # ===== Build =====
 *.tsbuildinfo
 next-env.d.ts
