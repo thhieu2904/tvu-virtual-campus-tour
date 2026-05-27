@@ -10,6 +10,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import uuid
 from google.genai import types
 import edge_tts
 
@@ -89,7 +90,14 @@ def save_runtime_cache(cache_key: str, audio: bytes, content_type: str) -> str:
     RUNTIME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     extension = _extension_for_content_type(content_type)
     filename = f"{cache_key}.{extension}"
-    (RUNTIME_CACHE_DIR / filename).write_bytes(audio)
+    target_path = RUNTIME_CACHE_DIR / filename
+    temp_path = RUNTIME_CACHE_DIR / f".{filename}.{uuid.uuid4().hex}.tmp"
+    try:
+        temp_path.write_bytes(audio)
+        os.replace(temp_path, target_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink(missing_ok=True)
     return filename
 
 

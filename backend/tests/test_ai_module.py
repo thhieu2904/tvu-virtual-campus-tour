@@ -230,6 +230,7 @@ class TestTTSCache(unittest.TestCase):
         self.assertEqual(path.read_bytes(), b"wave-data")
         self.assertEqual(content_type, CONTENT_TYPE_WAV)
         self.assertEqual(cached_filename, filename)
+        self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
         resolved = resolve_runtime_cache_file(filename)
         self.assertIsNotNone(resolved)
