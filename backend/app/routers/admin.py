@@ -566,6 +566,17 @@ async def list_mascots(session: AsyncSession = Depends(get_db)):
         .outerjoin(location_count_sq, Mascot.id == location_count_sq.c.mascot_id)
         .order_by(Mascot.created_at)
     )
+
+    # Fetch location names per mascot for the admin UI
+    loc_result = await session.execute(
+        select(Location.mascot_id, Location.name)
+        .where(Location.mascot_id.is_not(None))
+        .order_by(Location.name)
+    )
+    location_names_map: dict[str, list[str]] = {}
+    for mascot_id, loc_name in loc_result.all():
+        location_names_map.setdefault(str(mascot_id), []).append(loc_name)
+
     return {
         "mascots": [
             {
@@ -578,6 +589,7 @@ async def list_mascots(session: AsyncSession = Depends(get_db)):
                 "personality_prompt": mascot.personality_prompt,
                 "is_default": mascot.is_default,
                 "location_count": location_count,
+                "location_names": location_names_map.get(str(mascot.id), []),
                 "updated_at": mascot.updated_at.isoformat() if mascot.updated_at else None,
             }
             for mascot, location_count in result.all()
