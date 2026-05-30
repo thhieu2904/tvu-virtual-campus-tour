@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AdminNotice, AdminPageHeader } from '../_components/admin-ui'
 import { Bot, RefreshCw, Save } from 'lucide-react'
 
 interface MascotItem {
@@ -32,7 +33,9 @@ export default function MascotsPage() {
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchMascots() }, [fetchMascots])
+  useEffect(() => {
+    void Promise.resolve().then(fetchMascots)
+  }, [fetchMascots])
 
   const startEdit = (m: MascotItem) => {
     setEditId(m.id)
@@ -59,18 +62,18 @@ export default function MascotsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Mascots</h1>
-          <p className="text-muted-foreground mt-1">Quản lý nhân vật AI 3D — avatar hướng dẫn viên.</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchMascots} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Đại sứ ảo"
+        description="Quản lý mascot 3D, giọng đọc và personality prompt dùng trong trải nghiệm hỏi đáp."
+        actions={
+          <Button variant="outline" size="sm" onClick={fetchMascots} disabled={loading}>
+            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Refresh
+          </Button>
+        }
+      />
 
-      {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">{error}</div>}
-      {saveSuccess && <div className="rounded-md bg-green-50 p-3 text-sm text-green-600">Lưu thành công!</div>}
+      {error && <AdminNotice tone="danger">{error}</AdminNotice>}
+      {saveSuccess && <AdminNotice tone="success">Lưu thành công!</AdminNotice>}
 
       {loading && mascots.length === 0 ? (
         <Card className="animate-pulse"><CardContent className="p-6"><div className="h-32 rounded bg-muted" /></CardContent></Card>

@@ -50,6 +50,8 @@ export default function TourPage() {
   const setAppReady = useTourStore((s) => s.setAppReady);
   const isPanoramaReady = useTourStore((s) => s.isPanoramaReady);
   const setPanoramaReady = useTourStore((s) => s.setPanoramaReady);
+  const isAvatarReady = useTourStore((s) => s.isAvatarReady);
+  const setAvatarReady = useTourStore((s) => s.setAvatarReady);
   const setPendingMapAnimationSlug = useTourStore(
     (s) => s.setPendingMapAnimationSlug,
   );
@@ -64,25 +66,29 @@ export default function TourPage() {
   const isTTSEnabled = useChatStore((s) => s.isTTSEnabled);
   const toggleTTS = useChatStore((s) => s.toggleTTS);
   const mascotName = location?.mascotName?.trim() || "Đại sứ ảo";
+  const avatarModelUrl = resolveAvatarModelUrl(location?.mascotModelUrl);
 
   useEffect(() => {
     fetchLocations();
   }, [fetchLocations]);
 
-  // Event-based startup: panorama fires onLoad → setPanoramaReady → setAppReady
+  // Event-based startup: panorama + avatar model must both be ready before the tour starts.
   useEffect(() => {
-    if (!isLoading && location && isPanoramaReady && !isAppReady) {
+    if (!isLoading && location && isPanoramaReady && isAvatarReady && !isAppReady) {
       setAppReady(true);
     }
-  }, [isLoading, location, isPanoramaReady, isAppReady, setAppReady]);
+  }, [isLoading, location, isPanoramaReady, isAvatarReady, isAppReady, setAppReady]);
 
-  // Safety timeout: force ready if panorama doesn't fire onLoad after 8s
+  // Safety timeout: force ready if a third-party asset event never fires.
   useEffect(() => {
     if (!isLoading && location && !isAppReady) {
       const safety = setTimeout(() => {
         if (!useTourStore.getState().isAppReady) {
           console.warn("[Page] Safety timeout — forcing app ready");
-          useTourStore.getState().setAppReady(true);
+          const state = useTourStore.getState();
+          state.setPanoramaReady(true);
+          state.setAvatarReady(true);
+          state.setAppReady(true);
         }
       }, 8000);
       return () => clearTimeout(safety);
@@ -94,11 +100,22 @@ export default function TourPage() {
     setPanoramaReady(true);
   }, [setPanoramaReady]);
 
+  const handleAvatarModelLoading = useCallback(() => {
+    setAvatarReady(false);
+    // NOTE: Do NOT reset isAppReady here — the loading gate should only block on INITIAL load.
+    // During navigation, the map overlay already covers the transition.
+  }, [setAvatarReady]);
+
+  const handleAvatarModelLoaded = useCallback(() => {
+    setAvatarReady(true);
+  }, [setAvatarReady]);
+
   const {
     animation: avatarAnimation,
     handleAnimationComplete: handleAvatarAnimationComplete,
   } = useAvatarAnimationController({
     hasStarted,
+    isReady: isAppReady,
     avatarState,
     isResetting,
     locationSlug: location?.slug || null,
@@ -279,6 +296,23 @@ export default function TourPage() {
         />
       )}
 
+      {/* === Global Asset Loading Gate === */}
+      {hasStarted && location && !isAppReady && !isNetworkError && !isFatalError && (
+        <div className="absolute inset-0 z-[90] flex items-center justify-center bg-[#08142b] text-white">
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-4 h-12 w-12 rounded-full border-4 border-white/15 border-t-[#8eb2f0] animate-spin" />
+            <p className="text-base font-semibold">Đang chuẩn bị không gian tham quan</p>
+            <p className="mt-1 text-sm text-white/55">
+              {isPanoramaReady
+                ? "Đang tải đại sứ ảo..."
+                : isAvatarReady
+                  ? "Đang tải ảnh 360°..."
+                  : "Đang tải ảnh 360° và đại sứ ảo..."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* === Layer 0: 360° Panorama Background === */}
       {location && (
         <PanoramaViewer
@@ -294,7 +328,7 @@ export default function TourPage() {
       {/* Luôn render để tránh lỗi WebGL Context Lost khi unmount */}
       <div
         className={`absolute right-[5%] bottom-[5%] top-[10%] w-[30%] max-w-[450px] pointer-events-none transition-all duration-700 ${
-          location && !isLoading ? "opacity-100" : "opacity-0"
+          location && isAppReady ? "opacity-100" : "opacity-0"
         } ${
           activeOverlay === "info"
             ? "z-[70] scale-100"
@@ -305,7 +339,9 @@ export default function TourPage() {
       >
         <Avatar3D
           animation={avatarAnimation}
-          modelUrl={resolveAvatarModelUrl(location?.mascotModelUrl)}
+          modelUrl={avatarModelUrl}
+          onModelLoading={handleAvatarModelLoading}
+          onModelLoaded={handleAvatarModelLoaded}
           onAnimationComplete={handleAvatarAnimationComplete}
         />
         {location && isAppReady && hasStarted && (

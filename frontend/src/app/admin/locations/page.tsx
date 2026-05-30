@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AdminNotice, AdminPageHeader } from '../_components/admin-ui'
 import {
   MapPin, Image as ImageIcon, ToggleLeft, ToggleRight,
   RefreshCw, Search, Star, Pencil, X, Plus, Trash2, Upload, Volume2,
@@ -126,26 +127,28 @@ export default function LocationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Locations</h1>
-          <p className="text-muted-foreground mt-1">
-            Quản lý các địa điểm trên bản đồ khuôn viên.
-            <Badge variant="outline" className="ml-2 mr-1">{activeCount} active</Badge>
+      <AdminPageHeader
+        title="Địa điểm tham quan"
+        description="Quản lý nội dung giới thiệu, ảnh 360°, câu hỏi gợi ý và trạng thái hiển thị trên bản đồ khuôn viên."
+        meta={
+          <>
+            <Badge variant="outline">{activeCount} active</Badge>
             <Badge variant="secondary">{inactiveCount} inactive</Badge>
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
-      </div>
+          </>
+        }
+        actions={
+          <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading}>
+            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Refresh
+          </Button>
+        }
+      />
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input placeholder="Tìm kiếm..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+      {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
       {/* Edit Dialog */}
       {editingId && editData && (

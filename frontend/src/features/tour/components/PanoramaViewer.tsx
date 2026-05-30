@@ -194,6 +194,7 @@ export default function PanoramaViewer({
       viewerRef.current.on("error", () => {
         setHasError(true);
         setIsLoaded(true);
+        onLoadRef.current?.();
       });
 
       webglRecoveryCleanupRef.current?.();
@@ -207,6 +208,7 @@ export default function PanoramaViewer({
       console.error(error);
       setHasError(true);
       setIsLoaded(true);
+      onLoadRef.current?.();
     });
 
     return () => {

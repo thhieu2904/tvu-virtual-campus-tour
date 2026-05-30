@@ -69,6 +69,7 @@ function findMorphTargetKey(keys: string[], candidates: string[]) {
 interface AvatarModelProps {
   animation: AvatarAnimation;
   modelUrl?: string;
+  onModelLoaded?: () => void;
   onAnimationComplete?: (animation: AvatarAnimation) => void;
 }
 
@@ -76,10 +77,12 @@ interface AvatarModelProps {
 const AvatarModel = memo(function AvatarModel({
   animation,
   modelUrl,
+  onModelLoaded,
   onAnimationComplete,
 }: AvatarModelProps) {
   const group = useRef<THREE.Group>(null!);
   const prevClipName = useRef<string | null>(null);
+  const hasNotifiedLoaded = useRef(false);
   const mouthOpenTargetsRef = useRef<MorphTargetBinding[]>([]);
   const smileTargetsRef = useRef<MorphTargetBinding[]>([]);
   const smileUpTargetsRef = useRef<MorphTargetBinding[]>([]);
@@ -87,6 +90,17 @@ const AvatarModel = memo(function AvatarModel({
 
   const { scene, animations } = useGLTF(modelUrl || DEFAULT_MODEL_URL);
   const { actions, names } = useAnimations(animations, group);
+
+  useEffect(() => {
+    if (hasNotifiedLoaded.current) return;
+
+    const frame = requestAnimationFrame(() => {
+      hasNotifiedLoaded.current = true;
+      onModelLoaded?.();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [onModelLoaded, scene, animations]);
 
   useEffect(() => {
     onAnimationCompleteRef.current = onAnimationComplete;
@@ -309,10 +323,22 @@ function WebGLRecoveryListener() {
 interface Avatar3DProps {
   animation: AvatarAnimation;
   modelUrl?: string;
+  onModelLoading?: () => void;
+  onModelLoaded?: () => void;
   onAnimationComplete?: (animation: AvatarAnimation) => void;
 }
 
-function Avatar3D({ animation, modelUrl, onAnimationComplete }: Avatar3DProps) {
+function Avatar3D({
+  animation,
+  modelUrl,
+  onModelLoading,
+  onModelLoaded,
+  onAnimationComplete,
+}: Avatar3DProps) {
+  useEffect(() => {
+    onModelLoading?.();
+  }, [modelUrl, onModelLoading]);
+
   return (
     <div className="w-full h-full relative">
       <Canvas
@@ -344,6 +370,7 @@ function Avatar3D({ animation, modelUrl, onAnimationComplete }: Avatar3DProps) {
             key={modelUrl || 'default'}
             animation={animation}
             modelUrl={modelUrl}
+            onModelLoaded={onModelLoaded}
             onAnimationComplete={onAnimationComplete}
           />
         </Suspense>

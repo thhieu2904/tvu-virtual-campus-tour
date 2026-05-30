@@ -155,3 +155,16 @@ html {
 body {
   -webkit-tap-highlight-color: transparent;  /* Bỏ highlight xanh khi tap */
 }
+
+.admin-shell,
+.admin-shell * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.admin-shell button,
+.admin-shell [role="button"],
+.admin-shell nav a {
+  -webkit-user-select: none;
+  user-select: none;
+}

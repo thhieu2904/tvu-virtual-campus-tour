@@ -8,6 +8,7 @@ type RawAvatarState = "idle" | "thinking" | "speaking";
 
 interface UseAvatarAnimationControllerArgs {
   hasStarted: boolean;
+  isReady?: boolean;
   avatarState: RawAvatarState;
   isResetting?: boolean;
   locationSlug?: string | null;
@@ -22,6 +23,7 @@ const ONE_SHOT_FALLBACK_MS: Partial<Record<AvatarAnimation, number>> = {
 
 export function useAvatarAnimationController({
   hasStarted,
+  isReady = true,
   avatarState,
   isResetting = false,
   locationSlug = null,
@@ -130,24 +132,27 @@ export function useAvatarAnimationController({
 
   // Trigger Greeting on first start
   useEffect(() => {
-    if (isResetting || !hasStarted) {
+    const canAnimate = hasStarted && isReady && !isResetting;
+
+    if (!canAnimate) {
       clearPendingThinking();
       clearPendingTransition();
       activeOneShotRef.current = null;
-      prevHasStartedRef.current = hasStarted;
+      prevHasStartedRef.current = canAnimate;
       requestAnimation("Idle", { force: true });
       return;
     }
 
-    if (!prevHasStartedRef.current && hasStarted) {
+    if (!prevHasStartedRef.current && canAnimate) {
       requestAnimation("Greeting", { force: true, oneShot: true });
     }
 
-    prevHasStartedRef.current = hasStarted;
+    prevHasStartedRef.current = canAnimate;
   }, [
     clearPendingThinking,
     clearPendingTransition,
     hasStarted,
+    isReady,
     isResetting,
     requestAnimation,
   ]);
@@ -159,6 +164,8 @@ export function useAvatarAnimationController({
       return;
     }
 
+    if (!isReady) return;
+
     if (
       locationSlug &&
       prevLocationSlugRef.current &&
@@ -168,13 +175,13 @@ export function useAvatarAnimationController({
     }
 
     prevLocationSlugRef.current = locationSlug;
-  }, [locationSlug, hasStarted, isResetting, requestAnimation]);
+  }, [locationSlug, hasStarted, isReady, isResetting, requestAnimation]);
 
   // Watch avatarState
   useEffect(() => {
     clearPendingThinking();
 
-    if (!hasStarted || isResetting) return;
+    if (!hasStarted || !isReady || isResetting) return;
 
     if (avatarState === "thinking") {
       pendingThinkingTimerRef.current = setTimeout(() => {
@@ -228,6 +235,7 @@ export function useAvatarAnimationController({
     avatarState,
     clearPendingThinking,
     hasStarted,
+    isReady,
     isResetting,
     requestAnimation,
   ]);

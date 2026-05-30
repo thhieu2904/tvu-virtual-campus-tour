@@ -5,6 +5,7 @@ import { adminApi } from '@/lib/admin-api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { AdminNotice, AdminPageHeader } from '../_components/admin-ui'
 import { MapPin, Monitor, RefreshCw, Save, Settings, Timer, Volume2 } from 'lucide-react'
 
 interface KioskConfig {
@@ -63,18 +64,18 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-1">Cấu hình chung cho hệ thống Kiosk.</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchConfig} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Cấu hình kiosk"
+        description="Thiết lập timeout, màn hình bắt đầu và mặc định âm thanh cho môi trường kiosk."
+        actions={
+          <Button variant="outline" size="sm" onClick={fetchConfig} disabled={loading}>
+            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Refresh
+          </Button>
+        }
+      />
 
-      {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">{error}</div>}
-      {saved && <div className="rounded-md bg-green-50 p-3 text-sm text-green-600">Đã lưu cấu hình.</div>}
+      {error && <AdminNotice tone="danger">{error}</AdminNotice>}
+      {saved && <AdminNotice tone="success">Đã lưu cấu hình.</AdminNotice>}
 
       <Card>
         <CardHeader>

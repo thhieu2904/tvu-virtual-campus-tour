@@ -95,7 +95,7 @@ export default function Minimap() {
         }
         setNavTarget(null);
         setAnimProgress(0);
-      }, 500);
+      }, 50);
       return () => clearTimeout(timer);
     }
   }, [

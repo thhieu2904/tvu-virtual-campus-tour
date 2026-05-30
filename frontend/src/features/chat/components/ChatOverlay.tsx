@@ -93,6 +93,7 @@ export default function ChatOverlay() {
           content: location.introMessage,
         },
       ]);
+      useTourStore.getState().addVisitedLocation(location.slug);
 
       // Phát âm thanh nếu đang bật tiếng và app đã start (tránh phát lén lúc Reset)
       if (
@@ -103,19 +104,33 @@ export default function ChatOverlay() {
         playPrecachedAudio(location.intro_audio_url);
       }
     } else {
-      // User tự bấm map hoặc AI điều hướng → append intro nhẹ
-      addMessage({
-        id: `nav-${location.slug}-${Date.now()}`,
-        role: "assistant",
-        content: `📍 ${location.introMessage}`,
-      });
-      // Phát âm thanh
-      if (
-        isTTSEnabled &&
-        location.intro_audio_url &&
-        useTourStore.getState().hasStarted
-      ) {
-        playPrecachedAudio(location.intro_audio_url);
+      const isRevisit = useTourStore.getState().visitedLocations.has(location.slug);
+      
+      // Nếu đã đến rồi -> Chào ngắn gọn, KHÔNG phát audio
+      if (isRevisit) {
+        addMessage({
+          id: `nav-${location.slug}-${Date.now()}`,
+          role: "assistant",
+          content: `📍 Chào mừng bạn quay lại ${location.name}.`,
+        });
+      } else {
+        // User tự bấm map hoặc AI điều hướng → append intro đầy đủ
+        addMessage({
+          id: `nav-${location.slug}-${Date.now()}`,
+          role: "assistant",
+          content: `📍 ${location.introMessage}`,
+        });
+        
+        useTourStore.getState().addVisitedLocation(location.slug);
+        
+        // Phát âm thanh
+        if (
+          isTTSEnabled &&
+          location.intro_audio_url &&
+          useTourStore.getState().hasStarted
+        ) {
+          playPrecachedAudio(location.intro_audio_url);
+        }
       }
     }
   }, [location?.slug, isLoading, isAppReady, isTTSEnabled, isTransitioning, activeOverlay]);
@@ -225,6 +240,14 @@ export default function ChatOverlay() {
                       </ReactMarkdown>
                       {msg.isStreaming && isWaitingMessage(msg.content) && <TypingIndicator />}
                     </div>
+                    {/* Edge TTS fallback indicator */}
+                    {msg.ttsProvider === "edge-tts" && (
+                      <div className="absolute bottom-2 left-4 z-20">
+                        <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 text-[10px] font-medium border border-orange-400/20">
+                          ⚠ Fallback Voice
+                        </span>
+                      </div>
+                    )}
                     {/* Fade-out Overlay for Kiosk touch scrolling hint */}
                     <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
                     {msg.isStreaming && !isWaitingMessage(msg.content) && (

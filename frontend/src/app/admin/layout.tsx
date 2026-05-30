@@ -12,7 +12,7 @@ import {
   LogOut,
   Menu,
   Settings,
-  Bot
+  Bot,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -22,12 +22,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 const navigation = [
-  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Locations', href: '/admin/locations', icon: MapPin },
-  { name: 'Knowledge Base', href: '/admin/documents', icon: FileText },
-  { name: 'Media Gallery', href: '/admin/media', icon: ImageIcon },
-  { name: 'Mascots', href: '/admin/mascots', icon: Bot },
-  { name: 'Settings', href: '/admin/settings', icon: Settings },
+  { name: 'Tổng quan', href: '/admin', icon: LayoutDashboard },
+  { name: 'Địa điểm', href: '/admin/locations', icon: MapPin },
+  { name: 'Danh mục tài liệu', href: '/admin/documents', icon: FileText },
+  { name: 'Thư viện media', href: '/admin/media', icon: ImageIcon },
+  { name: 'Đại sứ ảo', href: '/admin/mascots', icon: Bot },
+  { name: 'Cấu hình kiosk', href: '/admin/settings', icon: Settings },
 ]
 
 export default function AdminLayout({
@@ -71,26 +71,26 @@ export default function AdminLayout({
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen w-full flex-col bg-muted/40">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
+      <div className="admin-shell flex min-h-screen w-full flex-col bg-[#f6f8fb]">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border/80 bg-background/95 px-4 backdrop-blur sm:static sm:h-auto sm:bg-transparent sm:px-6 sm:py-4">
           <Sheet>
             <SheetTrigger render={
               <Button size="icon" variant="outline" className="sm:hidden" />
             }>
               <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle Menu</span>
+              <span className="sr-only">Mở menu quản trị</span>
             </SheetTrigger>
             <SheetContent side="left" className="sm:max-w-xs">
-              <SheetTitle className="text-xl font-bold mb-4">TVU Admin</SheetTitle>
+              <SheetTitle className="mb-4 text-xl font-bold">Quản trị TVU Tour</SheetTitle>
               <SheetDescription className="sr-only">
                 Menu điều hướng quản trị nội dung hệ thống Kiosk
               </SheetDescription>
-              <nav className="grid gap-6 text-lg font-medium">
+              <nav className="grid gap-3 text-base font-medium">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center gap-4 px-2.5 ${
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 ${
                       pathname === item.href
                         ? 'text-foreground'
                         : 'text-muted-foreground hover:text-foreground'
@@ -104,10 +104,19 @@ export default function AdminLayout({
             </SheetContent>
           </Sheet>
           
-          <div className="flex w-full items-center justify-between sm:justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
-            <div className="hidden font-semibold text-lg sm:flex items-center gap-2 mr-auto text-primary">
-              <Bot className="h-6 w-6" />
-              TVU Virtual Campus Tour Admin
+          <div className="flex w-full items-center justify-between gap-4 sm:justify-end md:ml-auto md:gap-2 lg:gap-4">
+            <div className="mr-auto hidden items-center gap-3 sm:flex">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-sm">
+                TVU
+              </div>
+              <div>
+                <div className="text-base font-semibold leading-tight text-primary">
+                  Bảng quản trị TVU Tour
+                </div>
+                <div className="text-xs font-medium text-muted-foreground">
+                  Trung tâm quản trị nội dung tham quan ảo
+                </div>
+              </div>
             </div>
             
             <DropdownMenu>
@@ -117,10 +126,10 @@ export default function AdminLayout({
                 <Avatar className="h-8 w-8">
                   <AvatarFallback>{email ? email.substring(0, 2).toUpperCase() : 'AD'}</AvatarFallback>
                 </Avatar>
-                <span className="sr-only">Toggle user menu</span>
+                <span className="sr-only">Mở menu tài khoản</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuLabel>Tài khoản quản trị</DropdownMenuLabel>
                 {email && (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
                     {email}
@@ -129,7 +138,7 @@ export default function AdminLayout({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Logout
+                  Đăng xuất
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -137,15 +146,23 @@ export default function AdminLayout({
         </header>
         
         <div className="flex flex-1 w-full flex-col sm:flex-row">
-          <aside className="hidden w-64 flex-col border-r bg-background sm:flex">
-            <nav className="grid gap-2 items-start px-4 text-sm font-medium pt-4">
+          <aside className="hidden w-[280px] flex-col border-r border-border/80 bg-background sm:flex">
+            <div className="px-5 py-5">
+              <div className="rounded-lg border border-primary/15 bg-primary/5 p-4">
+                <p className="text-xs font-semibold uppercase text-primary">Trung tâm điều phối</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Quản trị dữ liệu học liệu, địa điểm và trải nghiệm kiosk.
+                </p>
+              </div>
+            </div>
+            <nav className="grid items-start gap-1 px-4 text-sm font-medium">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all ${
-                    pathname === item.href
-                      ? 'bg-primary text-primary-foreground'
+                    pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href))
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:bg-muted hover:text-primary'
                   }`}
                 >

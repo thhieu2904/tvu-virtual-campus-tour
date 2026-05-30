@@ -312,13 +312,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const data = await res.json();
         cancelThinkingState();
         const toolActions: ToolCall[] = Array.isArray(data.tool_actions) ? data.tool_actions : [];
+        const ttsProvider: string | null = data.tts_provider ?? null;
+
+        if (ttsProvider === "edge-tts") {
+          console.warn("⚠️ TTS fallback: using Edge TTS (Microsoft) instead of Gemini");
+        }
 
         // Update bot message with full text at once
         set((state) => ({
           isLoading: false,
           messages: state.messages.map((msg) =>
             msg.id === botMsgId
-              ? { ...msg, content: data.answer || "", isStreaming: false }
+              ? { ...msg, content: data.answer || "", isStreaming: false, ttsProvider }
               : msg
           ),
         }));

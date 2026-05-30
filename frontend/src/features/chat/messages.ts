@@ -1,8 +1,5 @@
 export const WAITING_MESSAGES = [
-  "Mình đang tra cứu thông tin, bạn chờ một chút nhé...",
-  "Mình đang kiểm tra dữ liệu để trả lời chính xác hơn...",
-  "Để mình tìm thông tin phù hợp nhất cho bạn nhé...",
-  "Mình đang đối chiếu dữ liệu, sẽ trả lời ngay sau ít giây...",
+  "",
 ];
 
 export const CHAT_CONNECTION_ERROR_MESSAGE =
@@ -14,5 +11,5 @@ export function getRandomWaitingMessage() {
 }
 
 export function isWaitingMessage(content?: string | null) {
-  return Boolean(content && WAITING_MESSAGES.includes(content));
+  return WAITING_MESSAGES.includes(content ?? "");
 }

@@ -48,16 +48,20 @@ interface TourState {
   isLoading: boolean;
   isAppReady: boolean;              // Gates UI display after initial 3D/panorama load
   isPanoramaReady: boolean;          // Panorama 360° has actually rendered (event-based)
+  isAvatarReady: boolean;            // Avatar GLB has loaded and can animate
   isTransitioning: boolean;
   hasStarted: boolean;               // True when user clicks 'Start' on the overlay
   avatarState: "idle" | "thinking" | "speaking";
   activeOverlay: "none" | "info" | "map";
   navigatedByAgent: boolean;
 
-  // === Sequential Navigation (AI Agent) ===
+  // Sequential navigation
   pendingNavigation: string | null;                                       // Slug AI wants to navigate to
   pendingMediaFocus: { mediaId: string | null; tab: "video" | "info" } | null; // Deferred media focus
   pendingMapAnimationSlug: string | null;
+
+  // Revisit Intelligence
+  visitedLocations: Set<string>; // Set of slugs the user has already visited in this session
 
   // === Network Recovery ===
   networkRetryCount: number;
@@ -80,6 +84,7 @@ interface TourState {
   setLoading: (loading: boolean) => void;
   setAppReady: (ready: boolean) => void;
   setPanoramaReady: (ready: boolean) => void;
+  setAvatarReady: (ready: boolean) => void;
   setHasStarted: (started: boolean) => void;
   setAvatarState: (state: "idle" | "thinking" | "speaking") => void;
   setActiveOverlay: (overlay: "none" | "info" | "map") => void;
@@ -88,6 +93,7 @@ interface TourState {
   setPendingMediaFocus: (focus: { mediaId: string | null; tab: "video" | "info" } | null) => void;
   clearPendingNavigation: () => void;
   setPendingMapAnimationSlug: (slug: string | null) => void;
+  addVisitedLocation: (slug: string) => void;
   resetNetworkRetry: () => void;
 }
 
@@ -99,6 +105,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   isLoading: false,
   isAppReady: false,
   isPanoramaReady: false,
+  isAvatarReady: false,
   isTransitioning: false,
   hasStarted: false,
   avatarState: "idle",
@@ -109,6 +116,9 @@ export const useTourStore = create<TourState>((set, get) => ({
   pendingNavigation: null,
   pendingMediaFocus: null,
   pendingMapAnimationSlug: null,
+
+  // Revisit Intelligence
+  visitedLocations: new Set<string>(),
 
   // Network Recovery
   networkRetryCount: 0,
@@ -150,6 +160,8 @@ export const useTourStore = create<TourState>((set, get) => ({
         locations, 
         currentLocationSlug: startSlug,
         isLoading: false,
+        isAppReady: false,
+        isPanoramaReady: false,
         isNetworkError: false,
         isFatalError: false,
         networkRetryCount: 0
@@ -209,22 +221,39 @@ export const useTourStore = create<TourState>((set, get) => ({
     const target = locations.find((l) => l.slug === slug);
     if (!target || target.status === "inactive") return;
 
-    // Transition animation: fade out → swap data → fade in
-    set({ isTransitioning: true, isPanoramaReady: false, navigatedByAgent: source === "agent" });
+    // Transition animation: fade out → swap data → wait until the new panorama reports ready.
+    // NOTE: Do NOT reset isAppReady here — the map overlay already covers the transition visually.
+    // The loading gate (isAppReady=false) should only block UI on INITIAL load.
+    set({
+      isTransitioning: true,
+      isPanoramaReady: false,
+      navigatedByAgent: source === "agent",
+    });
 
     setTimeout(() => {
       set({
         currentLocationSlug: slug,
-        isTransitioning: false,
       });
       // Auto-fetch media for new location
       get().fetchLocationMedia(slug);
     }, 600); // Match CSS transition duration
+
+    setTimeout(() => {
+      const state = get();
+      if (state.currentLocationSlug === slug && !state.isPanoramaReady) {
+        console.warn("[TourStore] Navigation safety timeout — releasing transition");
+        set({ isPanoramaReady: true, isTransitioning: false, isAppReady: true });
+      }
+    }, 8000);
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
   setAppReady: (ready) => set({ isAppReady: ready }),
-  setPanoramaReady: (ready) => set({ isPanoramaReady: ready }),
+  setPanoramaReady: (ready) => set({
+    isPanoramaReady: ready,
+    ...(ready ? { isTransitioning: false, isAppReady: true } : {}),
+  }),
+  setAvatarReady: (ready) => set({ isAvatarReady: ready }),
   setHasStarted: (started) => set({ hasStarted: started }),
   setAvatarState: (state) => set({ avatarState: state }),
   setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
@@ -240,5 +269,11 @@ export const useTourStore = create<TourState>((set, get) => ({
   setFocusedMedia: (mediaId, preferredTab) => set({
     focusedMediaId: mediaId,
     ...(preferredTab ? { preferredMediaTab: preferredTab } : {}),
+  }),
+
+  addVisitedLocation: (slug: string) => set((state) => {
+    const newVisited = new Set(state.visitedLocations);
+    newVisited.add(slug);
+    return { visitedLocations: newVisited };
   }),
 }));
