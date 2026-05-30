@@ -199,7 +199,7 @@ export default function ChatOverlay() {
                   exit={{ opacity: 0, scale: 0.8, y: 10 }}
                   className="fixed right-[30%] top-[15%] w-[420px] max-w-[40vw] z-50 pointer-events-auto origin-bottom-right"
                 >
-                    <div className="relative bg-white/65 backdrop-blur-xl text-gray-900 rounded-[28px] border border-white/70 shadow-[0_8px_32px_rgba(0,0,0,0.15)] flex flex-col max-h-[55vh] overflow-hidden">
+                    <div className="relative bg-white/60 backdrop-blur-2xl text-gray-900 rounded-[28px] border border-white/75 shadow-[0_18px_55px_rgba(15,23,42,0.18)] flex flex-col max-h-[55vh] overflow-hidden">
                     {/* Row 1: Close button */}
                     <div className="flex justify-end px-4 pt-3 pb-0 shrink-0">
                       <button
@@ -207,7 +207,7 @@ export default function ChatOverlay() {
                         onClick={() => {
                           if (activeSubtitleId) setDismissedSubtitleId(activeSubtitleId);
                         }}
-                        className="h-6 w-6 rounded-full bg-black/10 text-gray-600 hover:bg-black/20 hover:text-gray-900 transition-colors flex items-center justify-center"
+                        className="h-6 w-6 rounded-full bg-black/8 text-gray-600 hover:bg-black/16 hover:text-gray-900 transition-colors flex items-center justify-center"
                         title="Ẩn phụ đề"
                         aria-label="Ẩn phụ đề"
                       >
@@ -215,11 +215,11 @@ export default function ChatOverlay() {
                       </button>
                     </div>
                     {/* Row 2: Content */}
-                    <div className="overflow-y-auto px-6 pb-6 flex-1 whitespace-pre-wrap text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="overflow-y-auto px-6 pb-10 flex-1 whitespace-pre-wrap text-pretty text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <ReactMarkdown
                         components={{
                           p: ({ node, ...props }) => (
-                            <p className="mb-2 last:mb-0" {...props} />
+                            <p className="mb-2 text-pretty last:mb-0" {...props} />
                           ),
                           strong: ({ node, ...props }) => (
                             <strong
@@ -251,7 +251,7 @@ export default function ChatOverlay() {
                       </div>
                     )}
                     {/* Fade-out Overlay for Kiosk touch scrolling hint */}
-                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/70 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
+                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white/55 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
                     {msg.isStreaming && !isWaitingMessage(msg.content) && (
                       <motion.span
                         className="inline-block w-1.5 h-4 ml-1.5 bg-gray-800/70 align-middle"
@@ -499,11 +499,11 @@ export default function ChatOverlay() {
                           {msg.content}
                         </span>
                       ) : (
-                        <div className="whitespace-pre-wrap [&>p]:mb-2 [&>p:last-child]:mb-0">
+                        <div className="whitespace-pre-wrap text-pretty [&>p]:mb-2 [&>p:last-child]:mb-0">
                           <ReactMarkdown
                             components={{
                               p: ({ node, ...props }) => (
-                                <p className="mb-2 last:mb-0" {...props} />
+                                <p className="mb-2 text-pretty last:mb-0" {...props} />
                               ),
                               strong: ({ node, ...props }) => (
                                 <strong

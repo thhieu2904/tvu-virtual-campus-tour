@@ -1,7 +1,7 @@
 /src-tham-khao
 /plan
 .mp4
-assets/*
+#assets/*
 key/*
 vps_key
 backend/data/runtime_tts_cache/*    
