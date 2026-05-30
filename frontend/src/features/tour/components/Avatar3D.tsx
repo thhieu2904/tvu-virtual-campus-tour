@@ -46,6 +46,72 @@ const SMILE_TARGETS = [
 const SMILE_UP_TARGETS = [
   'Fcl_MTH_Up',
 ];
+const FACE_FUN_TARGETS = [
+  'Fcl_ALL_Fun',
+  'Fcl_ALL_Joy',
+];
+const EYE_FUN_TARGETS = [
+  'Fcl_EYE_Fun',
+  'Fcl_EYE_Joy',
+];
+const BROW_FUN_TARGETS = [
+  'Fcl_BRW_Fun',
+  'Fcl_BRW_Joy',
+];
+
+const EXPRESSION_PRESETS: Record<
+  AvatarAnimation | 'Speaking',
+  {
+    mouthSmile: number;
+    mouthUp: number;
+    faceFun: number;
+    eyeFun: number;
+    browFun: number;
+  }
+> = {
+  Idle: {
+    mouthSmile: 0.65,
+    mouthUp: 0.13,
+    faceFun: 0.08,
+    eyeFun: 0.1,
+    browFun: 0.06,
+  },
+  Thinking: {
+    mouthSmile: 0.48,
+    mouthUp: 0.1,
+    faceFun: 0.05,
+    eyeFun: 0.06,
+    browFun: 0.04,
+  },
+  Speaking: {
+    mouthSmile: 0.34,
+    mouthUp: 0.07,
+    faceFun: 0.04,
+    eyeFun: 0.04,
+    browFun: 0.03,
+  },
+  Greeting: {
+    mouthSmile: 0.74,
+    mouthUp: 0.16,
+    faceFun: 0.12,
+    eyeFun: 0.12,
+    browFun: 0.08,
+  },
+  Talking: {
+    mouthSmile: 0.34,
+    mouthUp: 0.07,
+    faceFun: 0.04,
+    eyeFun: 0.04,
+    browFun: 0.03,
+  },
+  Thankful: {
+    mouthSmile: 0.64,
+    mouthUp: 0.13,
+    faceFun: 0.08,
+    eyeFun: 0.09,
+    browFun: 0.06,
+  },
+};
 
 type MorphTargetBinding = {
   mesh: THREE.Mesh;
@@ -86,6 +152,9 @@ const AvatarModel = memo(function AvatarModel({
   const mouthOpenTargetsRef = useRef<MorphTargetBinding[]>([]);
   const smileTargetsRef = useRef<MorphTargetBinding[]>([]);
   const smileUpTargetsRef = useRef<MorphTargetBinding[]>([]);
+  const faceFunTargetsRef = useRef<MorphTargetBinding[]>([]);
+  const eyeFunTargetsRef = useRef<MorphTargetBinding[]>([]);
+  const browFunTargetsRef = useRef<MorphTargetBinding[]>([]);
   const onAnimationCompleteRef = useRef(onAnimationComplete);
 
   const { scene, animations } = useGLTF(modelUrl || DEFAULT_MODEL_URL);
@@ -139,6 +208,9 @@ const AvatarModel = memo(function AvatarModel({
     const mouthOpenTargets: MorphTargetBinding[] = [];
     const smileTargets: MorphTargetBinding[] = [];
     const smileUpTargets: MorphTargetBinding[] = [];
+    const faceFunTargets: MorphTargetBinding[] = [];
+    const eyeFunTargets: MorphTargetBinding[] = [];
+    const browFunTargets: MorphTargetBinding[] = [];
 
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
@@ -168,12 +240,39 @@ const AvatarModel = memo(function AvatarModel({
             index: mesh.morphTargetDictionary[smileUpKey],
           });
         }
+
+        const faceFunKey = findMorphTargetKey(keys, FACE_FUN_TARGETS);
+        if (faceFunKey) {
+          faceFunTargets.push({
+            mesh,
+            index: mesh.morphTargetDictionary[faceFunKey],
+          });
+        }
+
+        const eyeFunKey = findMorphTargetKey(keys, EYE_FUN_TARGETS);
+        if (eyeFunKey) {
+          eyeFunTargets.push({
+            mesh,
+            index: mesh.morphTargetDictionary[eyeFunKey],
+          });
+        }
+
+        const browFunKey = findMorphTargetKey(keys, BROW_FUN_TARGETS);
+        if (browFunKey) {
+          browFunTargets.push({
+            mesh,
+            index: mesh.morphTargetDictionary[browFunKey],
+          });
+        }
       }
     });
 
     mouthOpenTargetsRef.current = mouthOpenTargets;
     smileTargetsRef.current = smileTargets;
     smileUpTargetsRef.current = smileUpTargets;
+    faceFunTargetsRef.current = faceFunTargets;
+    eyeFunTargetsRef.current = eyeFunTargets;
+    browFunTargetsRef.current = browFunTargets;
   }, [scene]);
 
   const avatarState = useTourStore((s) => s.avatarState);
@@ -192,18 +291,9 @@ const AvatarModel = memo(function AvatarModel({
       mouthOpenInfluence = syllable * phrasing * 0.75; // Pleasant max opening of 0.75
     }
 
-    const smileInfluence =
-      animation === 'Greeting' || animation === 'Thankful'
-        ? 0.24
-        : isSpeaking
-          ? 0.12
-          : 0.16;
-    const smileUpInfluence =
-      animation === 'Greeting' || animation === 'Thankful'
-        ? 0.08
-        : isSpeaking
-          ? 0.04
-          : 0.055;
+    const expression = isSpeaking
+      ? EXPRESSION_PRESETS.Speaking
+      : EXPRESSION_PRESETS[animation] || EXPRESSION_PRESETS.Idle;
 
     for (const target of mouthOpenTargetsRef.current) {
       const { mesh, index } = target;
@@ -226,7 +316,7 @@ const AvatarModel = memo(function AvatarModel({
       // eslint-disable-next-line react-hooks/immutability
       mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
         currentInfluence,
-        smileInfluence,
+        expression.mouthSmile,
         0.12
       );
     }
@@ -239,8 +329,47 @@ const AvatarModel = memo(function AvatarModel({
       // eslint-disable-next-line react-hooks/immutability
       mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
         currentInfluence,
-        smileUpInfluence,
+        expression.mouthUp,
         0.25
+      );
+    }
+
+    for (const target of faceFunTargetsRef.current) {
+      const { mesh, index } = target;
+      if (!mesh.morphTargetInfluences) continue;
+
+      const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      // eslint-disable-next-line react-hooks/immutability
+      mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+        currentInfluence,
+        expression.faceFun,
+        0.1
+      );
+    }
+
+    for (const target of eyeFunTargetsRef.current) {
+      const { mesh, index } = target;
+      if (!mesh.morphTargetInfluences) continue;
+
+      const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      // eslint-disable-next-line react-hooks/immutability
+      mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+        currentInfluence,
+        expression.eyeFun,
+        0.1
+      );
+    }
+
+    for (const target of browFunTargetsRef.current) {
+      const { mesh, index } = target;
+      if (!mesh.morphTargetInfluences) continue;
+
+      const currentInfluence = mesh.morphTargetInfluences[index] || 0;
+      // eslint-disable-next-line react-hooks/immutability
+      mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+        currentInfluence,
+        expression.browFun,
+        0.1
       );
     }
   });
