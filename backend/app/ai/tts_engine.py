@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 CONTENT_TYPE_WAV = "audio/wav"    # Gemini output: converted to WAV 24kHz 16-bit mono
 CONTENT_TYPE_MP3 = "audio/mpeg"   # Edge TTS output: MP3
 TTS_PROMPT_VERSION = "tts-persona-v2"
+MALE_VOICES = {"Puck"}
 
 
 @dataclass
@@ -36,8 +37,8 @@ class TTSResult:
 
 CACHE_DIR = "data/tts_cache"
 RUNTIME_CACHE_DIR = Path("data/runtime_tts_cache")
-_RUNTIME_CACHE_KEY_RE = re.compile(r"^[0-9a-f]{32}$")
-_RUNTIME_CACHE_FILENAME_RE = re.compile(r"^[0-9a-f]{32}\.(wav|mp3)$")
+_RUNTIME_CACHE_KEY_RE = re.compile(r"^(?:[0-9a-f]{32}|[0-9a-f]{64})$")
+_RUNTIME_CACHE_FILENAME_RE = re.compile(r"^(?:[0-9a-f]{32}|[0-9a-f]{64})\.(wav|mp3)$")
 
 
 def _extension_for_content_type(content_type: str) -> str:
@@ -57,6 +58,18 @@ def _cache_key(
     """Generate a stable cache key."""
     return hashlib.sha256(
         f"{TTS_PROMPT_VERSION}|{text}|{voice}|{voice_style}|{personality_prompt}".encode()
+    ).hexdigest()
+
+
+def _legacy_cache_key(
+    text: str,
+    voice: str,
+    voice_style: str = "",
+    personality_prompt: str = "",
+) -> str:
+    """Return the previous chat/R2 cache key for backward-compatible lookups."""
+    return hashlib.md5(
+        f"{TTS_PROMPT_VERSION}_{text}_{voice}_{voice_style}_{personality_prompt}".encode()
     ).hexdigest()
 
 
@@ -129,26 +142,15 @@ def resolve_runtime_cache_file(filename: str) -> tuple[Path, str] | None:
 
 def _edge_voice_for(voice: str, personality_prompt: str = "") -> str:
     """Map Gemini mascot voices to Vietnamese Edge fallback voices."""
-    persona = personality_prompt.lower()
-    if voice == "Puck" or "nam" in persona or "anh sinh viên" in persona:
+    if voice in MALE_VOICES:
         return "vi-VN-NamMinhNeural"
     return "vi-VN-HoaiMyNeural"
 
 
 def _speaker_guard(voice: str, personality_prompt: str = "") -> str:
-    persona = personality_prompt.strip()
-    normalized = persona.lower()
-    gender_hint = ""
-    if voice == "Puck" or "nam" in normalized or "anh sinh viên" in normalized:
-        gender_hint = "The speaker is male; keep a clearly masculine Vietnamese voice."
-    elif voice == "Leda" or "nữ" in normalized or "cô bạn" in normalized:
-        gender_hint = "The speaker is female; keep a clearly feminine Vietnamese voice."
-
-    if persona and gender_hint:
-        return f"Speaker persona: {persona} {gender_hint}"
-    if persona:
-        return f"Speaker persona: {persona}"
-    return gender_hint
+    if voice in MALE_VOICES:
+        return "The speaker is male; keep a clearly masculine Vietnamese voice."
+    return "The speaker is female; keep a clearly feminine Vietnamese voice."
 
 
 async def _edge_tts_fallback(text: str, voice: str = "vi-VN-HoaiMyNeural") -> bytes:
@@ -214,18 +216,10 @@ async def synthesize(
         )
 
     try:
-        tone_instruction = f"Tone: {style}." if style else "Tone: natural Vietnamese."
-        speaker_instruction = _speaker_guard(voice, persona)
-        prompt = (
-            "Read the following Vietnamese text as a single continuous speaker. "
-            f"Use the prebuilt voice '{voice}' consistently from the first word to the last word. "
-            "Keep the same speaker identity, timbre, pitch, pace, and energy throughout. "
-            "Do not switch voices, do not imitate another speaker, do not add dialogue, "
-            "and do not change persona mid-sentence. "
-            f"{speaker_instruction} "
-            f"{tone_instruction}\n\n"
-            f"Text: {text}"
-        )
+        if style:
+            prompt = f"Style: {style}. {text}"
+        else:
+            prompt = text
 
         result = await asyncio.to_thread(
             get_client().models.generate_content,
@@ -256,9 +250,15 @@ async def synthesize(
         )
 
     except Exception as e:
-        logger.warning("Gemini TTS failed (%s). Falling back to Edge TTS.", e)
+        edge_voice = _edge_voice_for(voice, persona)
+        logger.warning(
+            "Gemini TTS failed for voice=%s text_len=%d: %s. Falling back to Edge TTS voice=%s",
+            voice,
+            len(text),
+            e,
+            edge_voice,
+        )
         try:
-            edge_voice = _edge_voice_for(voice, persona)
             audio_data = await _edge_tts_fallback(text, edge_voice)
             if use_local_cache:
                 await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_MP3)

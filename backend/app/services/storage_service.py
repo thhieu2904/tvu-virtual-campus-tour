@@ -5,13 +5,14 @@ Folder structure on R2:
   locations/{location-slug}/background.jpg
   locations/{location-slug}/intro.wav
   locations/{location-slug}/media/{filename}
-  documents/{timestamp}_{filename}
+  documents/{category-slug}/{timestamp}_{filename}
   mascots/{mascot-slug}/model.glb
   tts-cache/{hash}.{wav|mp3}
 """
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 from functools import lru_cache
 from urllib.parse import urlparse
@@ -127,11 +128,12 @@ async def file_exists(key: str) -> bool:
         raise
 
 
-def build_document_key(filename: str, *_args, **_kwargs) -> str:
-    """Build R2 key for a global document file."""
+def build_document_key(filename: str, category_slug: str = "uncategorized") -> str:
+    """Build R2 key for a global document file grouped by category."""
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    safe_name = filename.replace(" ", "-").lower()
-    return f"documents/{timestamp}_{safe_name}"
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "-", filename.strip()).strip("-").lower()
+    safe_category = re.sub(r"[^a-z0-9-]+", "-", category_slug.strip().lower()).strip("-")
+    return f"documents/{safe_category or 'uncategorized'}/{timestamp}_{safe_name or 'document'}"
 
 
 def build_media_key(filename: str, location_slug: str) -> str:

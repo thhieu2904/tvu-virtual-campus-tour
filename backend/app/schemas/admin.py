@@ -1,11 +1,46 @@
 """Schemas shared by Admin API endpoints."""
 
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 LocationStatus = Literal["active", "inactive"]
 MediaType = Literal["image", "video", "gif"]
+VALID_GEMINI_VOICES = frozenset(
+    {
+        "Zephyr",
+        "Puck",
+        "Charon",
+        "Kore",
+        "Fenrir",
+        "Leda",
+        "Orus",
+        "Aoede",
+        "Callirrhoe",
+        "Autonoe",
+        "Enceladus",
+        "Iapetus",
+        "Umbriel",
+        "Algieba",
+        "Despina",
+        "Erinome",
+        "Algenib",
+        "Rasalgethi",
+        "Laomedeia",
+        "Achernar",
+        "Alnilam",
+        "Schedar",
+        "Gacrux",
+        "Pulcherrima",
+        "Achird",
+        "Zubenelgenubi",
+        "Vindemiatrix",
+        "Sadachbia",
+        "Sadaltager",
+        "Sulafat",
+    }
+)
 
 
 class LocationUpdateRequest(BaseModel):
@@ -44,6 +79,60 @@ class MediaUpdateRequest(BaseModel):
     sort_order: int | None = None
 
 
+class DocumentCategoryCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    slug: str | None = Field(default=None, max_length=100)
+    description: str = ""
+    color: str = "#6366f1"
+    sort_order: int = 0
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return value
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value):
+            raise ValueError("Slug must be lowercase, ASCII, and hyphenated")
+        return value
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str) -> str:
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise ValueError("Color must be a hex value like #6366f1")
+        return value.lower()
+
+
+class DocumentCategoryUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    slug: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    color: str | None = None
+    sort_order: int | None = None
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return value
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value):
+            raise ValueError("Slug must be lowercase, ASCII, and hyphenated")
+        return value
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise ValueError("Color must be a hex value like #6366f1")
+        return value.lower()
+
+
+class DocumentCategoryAssignRequest(BaseModel):
+    category_id: str | None = None
+
+
 class MascotUpdateRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
 
@@ -53,6 +142,14 @@ class MascotUpdateRequest(BaseModel):
     voice_style: str | None = None
     personality_prompt: str | None = None
     is_default: bool | None = None
+
+    @field_validator("voice_name")
+    @classmethod
+    def validate_voice_name(cls, value: str | None) -> str | None:
+        if value is None or value in VALID_GEMINI_VOICES:
+            return value
+        valid = ", ".join(sorted(VALID_GEMINI_VOICES))
+        raise ValueError(f"Invalid voice_name '{value}'. Valid voices: {valid}")
 
 
 class KioskConfigResponse(BaseModel):

@@ -82,6 +82,20 @@ class SuggestedQuestion(Base):
     location = relationship("Location", back_populates="suggested_questions")
 
 
+class DocumentCategory(Base):
+    __tablename__ = "document_categories"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    slug = Column(String(100), unique=True, nullable=False)
+    description = Column(Text, nullable=False, default="")
+    color = Column(String(7), nullable=False, default="#6366f1")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    documents = relationship("Document", back_populates="category")
+
+
 class Document(Base):
     __tablename__ = "documents"
 
@@ -91,12 +105,14 @@ class Document(Base):
     file_type = Column(String(10), nullable=False, default="pdf")  # pdf | docx
     file_size = Column(Integer, nullable=False, default=0)
     location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("document_categories.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(20), nullable=False, default="pending")  # pending | processing | ready | error
     chunk_count = Column(Integer, nullable=False, default=0)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     location = relationship("Location", back_populates="documents")
+    category = relationship("DocumentCategory", back_populates="documents")
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
 
 

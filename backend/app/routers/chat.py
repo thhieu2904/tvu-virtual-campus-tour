@@ -123,6 +123,7 @@ async def chat(
         answer_text = result.get("answer", "")
         audio_url = None
         audio_base64 = None
+        tts_provider = None
 
         if answer_text and not result.get("error"):
             # Ensure DB connection is released before TTS synthesis
@@ -133,9 +134,20 @@ async def chat(
                 for action in tool_actions
                 if isinstance(action, dict)
             }
-            should_skip_tts_on_miss = "show_media" in tool_names and "navigate_to" not in tool_names
+            # Only skip TTS when showing VIDEO without navigation — video has
+            # its own audio track so TTS would overlap.  Images should still
+            # get voice narration.
+            should_skip_tts_on_miss = (
+                "navigate_to" not in tool_names
+                and any(
+                    isinstance(a, dict)
+                    and a.get("name") == "show_media"
+                    and a.get("args", {}).get("media_type") == "video"
+                    for a in tool_actions
+                )
+            )
 
-            # 3. MD5 Hash Answer cho TTS Cache
+            # 3. Stable answer hash for TTS cache
             # Include the TTS prompt version and persona so stale audio generated
             # with weaker voice instructions is not reused for new answers.
             voice_name = "Leda"
@@ -144,11 +156,23 @@ async def chat(
 
             style = voice_style or ""
             persona = personality_prompt or ""
-            answer_hash = hashlib.md5(
-                f"{tts_engine.TTS_PROMPT_VERSION}_{answer_text}_{voice_name}_{style}_{persona}".encode()
-            ).hexdigest()
-            wav_r2_key = f"tts-cache/{answer_hash}.wav"
-            mp3_r2_key = f"tts-cache/{answer_hash}.mp3"
+            answer_hash = tts_engine._cache_key(answer_text, voice_name, style, persona)
+            legacy_answer_hash = tts_engine._legacy_cache_key(answer_text, voice_name, style, persona)
+            cache_candidates = [
+                {
+                    "hash": answer_hash,
+                    "wav_r2_key": f"tts-cache/{answer_hash}.wav",
+                    "mp3_r2_key": f"tts-cache/{answer_hash}.mp3",
+                }
+            ]
+            if legacy_answer_hash != answer_hash:
+                cache_candidates.append(
+                    {
+                        "hash": legacy_answer_hash,
+                        "wav_r2_key": f"tts-cache/{legacy_answer_hash}.wav",
+                        "mp3_r2_key": f"tts-cache/{legacy_answer_hash}.mp3",
+                    }
+                )
             logger.warning(
                 "TTS voice selected: location=%s voice=%s style=%s persona_set=%s cache=%s",
                 location_name,
@@ -160,68 +184,96 @@ async def chat(
 
             try:
                 cached_r2_key = None
+                cached_hash = None
                 if tts_key_cache.loaded:
-                    if tts_key_cache.contains(wav_r2_key):
-                        cached_r2_key = wav_r2_key
-                    elif tts_key_cache.contains(mp3_r2_key):
-                        cached_r2_key = mp3_r2_key
+                    for candidate in cache_candidates:
+                        if tts_key_cache.contains(candidate["wav_r2_key"]):
+                            cached_r2_key = candidate["wav_r2_key"]
+                            cached_hash = candidate["hash"]
+                            break
+                        if tts_key_cache.contains(candidate["mp3_r2_key"]):
+                            cached_r2_key = candidate["mp3_r2_key"]
+                            cached_hash = candidate["hash"]
+                            break
                 else:
-                    if await storage_service.file_exists(wav_r2_key):
-                        cached_r2_key = wav_r2_key
-                    elif await storage_service.file_exists(mp3_r2_key):
-                        cached_r2_key = mp3_r2_key
+                    for candidate in cache_candidates:
+                        if await storage_service.file_exists(candidate["wav_r2_key"]):
+                            cached_r2_key = candidate["wav_r2_key"]
+                            cached_hash = candidate["hash"]
+                            break
+                        if await storage_service.file_exists(candidate["mp3_r2_key"]):
+                            cached_r2_key = candidate["mp3_r2_key"]
+                            cached_hash = candidate["hash"]
+                            break
                     if cached_r2_key:
                         tts_key_cache.add(cached_r2_key)
 
                 if cached_r2_key:
-                    logger.info("🎯 Trúng TTS Cache MD5: %s", answer_hash)
+                    logger.info("🎯 Trúng TTS Cache: %s", cached_hash)
                     audio_url = storage_service.get_public_url(cached_r2_key)
+                    tts_provider = "cache"
                 elif should_skip_tts_on_miss:
                     logger.info("Skip TTS miss for visual-only tool action: %s", tool_names)
-                elif runtime_cached := tts_engine.get_runtime_cached(answer_hash):
-                    path, content_type, filename = runtime_cached
-                    r2_key = mp3_r2_key if content_type == CONTENT_TYPE_MP3 else wav_r2_key
-                    logger.info("🎯 Trúng local TTS cache: %s", filename)
-                    audio_url = _runtime_audio_url(api_request, filename)
-                    background_tasks.add_task(
-                        _sync_tts_to_r2,
-                        str(path),
-                        r2_key,
-                        content_type,
-                    )
                 else:
-                    logger.info("Miss TTS Cache, generating new audio...")
-                    # Get voice config
-                    voice = "Leda"
-                    if request.location_id and location and location.mascot:
-                        voice = location.mascot.voice_name
+                    runtime_hit = None
+                    for candidate in cache_candidates:
+                        runtime_cached = tts_engine.get_runtime_cached(candidate["hash"])
+                        if runtime_cached:
+                            path, content_type, filename = runtime_cached
+                            r2_key = (
+                                candidate["mp3_r2_key"]
+                                if content_type == CONTENT_TYPE_MP3
+                                else candidate["wav_r2_key"]
+                            )
+                            runtime_hit = path, content_type, filename, r2_key
+                            break
 
-                    tts_result = await tts_engine.synthesize(
-                        text=answer_text,
-                        voice_name=voice,
-                        voice_style=voice_style,
-                        personality_prompt=personality_prompt,
-                    )
-                    if tts_result.content_type == CONTENT_TYPE_MP3:
-                        r2_key = mp3_r2_key
+                    if runtime_hit:
+                        path, content_type, filename, r2_key = runtime_hit
+                        logger.info("🎯 Trúng local TTS cache: %s", filename)
+                        audio_url = _runtime_audio_url(api_request, filename)
+                        tts_provider = "cache"
+                        background_tasks.add_task(
+                            _sync_tts_to_r2,
+                            str(path),
+                            r2_key,
+                            content_type,
+                        )
                     else:
-                        r2_key = wav_r2_key
+                        logger.info("Miss TTS Cache, generating new audio...")
+                        # Get voice config
+                        voice = "Leda"
+                        if request.location_id and location and location.mascot:
+                            voice = location.mascot.voice_name
 
-                    content_type = tts_result.content_type or CONTENT_TYPE_WAV
-                    filename = tts_engine.save_runtime_cache(
-                        answer_hash,
-                        tts_result.audio_data,
-                        content_type,
-                    )
-                    local_path = str(tts_engine.RUNTIME_CACHE_DIR / filename)
-                    audio_url = _runtime_audio_url(api_request, filename)
-                    background_tasks.add_task(
-                        _sync_tts_to_r2,
-                        local_path,
-                        r2_key,
-                        content_type,
-                    )
-                    logger.info("Saved local TTS cache and queued R2 sync: %s -> %s", filename, r2_key)
+                        tts_result = await tts_engine.synthesize(
+                            text=answer_text,
+                            voice_name=voice,
+                            voice_style=voice_style,
+                            personality_prompt=personality_prompt,
+                        )
+                        tts_provider = tts_result.provider
+                        new_candidate = cache_candidates[0]
+                        if tts_result.content_type == CONTENT_TYPE_MP3:
+                            r2_key = new_candidate["mp3_r2_key"]
+                        else:
+                            r2_key = new_candidate["wav_r2_key"]
+
+                        content_type = tts_result.content_type or CONTENT_TYPE_WAV
+                        filename = tts_engine.save_runtime_cache(
+                            answer_hash,
+                            tts_result.audio_data,
+                            content_type,
+                        )
+                        local_path = str(tts_engine.RUNTIME_CACHE_DIR / filename)
+                        audio_url = _runtime_audio_url(api_request, filename)
+                        background_tasks.add_task(
+                            _sync_tts_to_r2,
+                            local_path,
+                            r2_key,
+                            content_type,
+                        )
+                        logger.info("Saved local TTS cache and queued R2 sync: %s -> %s", filename, r2_key)
             except Exception as e:
                 logger.warning("TTS synthesis or R2 upload failed: %s", e)
                 # Fallback to base64 if R2 fails (if we even generated audio)
@@ -229,6 +281,7 @@ async def chat(
 
         result["audio_url"] = audio_url
         result["audio_base64"] = audio_base64
+        result["tts_provider"] = tts_provider
         return JSONResponse(content=result)
 
     # ── Mode 2: SSE Streaming (Muted / text-only) ──

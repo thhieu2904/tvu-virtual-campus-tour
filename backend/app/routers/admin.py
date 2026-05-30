@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,8 +15,11 @@ from app.ai.tts_engine import CONTENT_TYPE_MP3, synthesize
 from app.db.database import get_db
 from app.db.tables import KioskConfig, Location, Mascot, Media
 from app.dependencies import verify_supabase_token
-from app.repositories import admin_location_repo, document_repo, location_repo, stats_repo
+from app.repositories import admin_location_repo, category_repo, document_repo, location_repo, stats_repo
 from app.schemas.admin import (
+    DocumentCategoryAssignRequest,
+    DocumentCategoryCreateRequest,
+    DocumentCategoryUpdateRequest,
     KioskConfigResponse,
     LocationLinksUpdateRequest,
     LocationQuestionsUpdateRequest,
@@ -72,6 +76,12 @@ def _as_uuid(value: str, label: str) -> UUID:
         return UUID(value)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid {label}") from exc
+
+
+def _as_optional_uuid(value: str | None, label: str) -> UUID | None:
+    if not value:
+        return None
+    return _as_uuid(value, label)
 
 
 def _serialize_media(media: Media, location_name: str | None = None) -> dict:
@@ -282,6 +292,58 @@ async def update_location_links(
     }
 
 
+# Document Categories
+
+
+@router.get("/categories")
+async def list_categories(session: AsyncSession = Depends(get_db)):
+    return {"categories": await category_repo.list_categories(session)}
+
+
+@router.post("/categories")
+async def create_category(
+    payload: DocumentCategoryCreateRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        category = await category_repo.create_category(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await session.commit()
+    await session.refresh(category)
+    return category_repo.serialize_category(category, 0)
+
+
+@router.put("/categories/{category_id}")
+async def update_category(
+    category_id: str,
+    payload: DocumentCategoryUpdateRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    category = await category_repo.get_by_id(session, _as_uuid(category_id, "category_id"))
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    try:
+        category = await category_repo.update_category(session, category, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await session.commit()
+    await session.refresh(category)
+    return category_repo.serialize_category(category)
+
+
+@router.delete("/categories/{category_id}")
+async def delete_category(category_id: str, session: AsyncSession = Depends(get_db)):
+    category = await category_repo.get_by_id(session, _as_uuid(category_id, "category_id"))
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    await category_repo.delete_category(session, category)
+    await session.commit()
+    return {"success": True, "deleted_category": category_id}
+
+
 # Documents
 
 
@@ -290,6 +352,7 @@ async def ingest_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str = Form(...),
+    category_id: str | None = Form(None),
     session: AsyncSession = Depends(get_db),
 ):
     file_bytes = await file.read()
@@ -300,11 +363,15 @@ async def ingest_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    doc_id = await ingest_service.start_ingestion(
-        file_bytes=file_bytes,
-        filename=filename,
-        title=title,
-    )
+    try:
+        doc_id = await ingest_service.start_ingestion(
+            file_bytes=file_bytes,
+            filename=filename,
+            title=title,
+            category_id=_as_optional_uuid(category_id, "category_id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     background_tasks.add_task(
         ingest_service.process_document_background,
@@ -319,17 +386,48 @@ async def ingest_document(
 async def list_documents(
     status: str | None = None,
     search: str | None = None,
+    category_id: str | None = None,
+    uncategorized: bool = False,
     page: int = 1,
     limit: int = 10,
     session: AsyncSession = Depends(get_db),
 ):
+    parsed_category_id = _as_optional_uuid(category_id, "category_id")
     return await document_repo.list_documents(
         session,
         status=status,
         search=search,
+        category_id=parsed_category_id,
+        uncategorized=uncategorized,
         page=max(page, 1),
         limit=max(min(limit, 100), 1),
     )
+
+
+@router.patch("/documents/{document_id}/category")
+async def update_document_category(
+    document_id: str,
+    payload: DocumentCategoryAssignRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    parsed_category_id = _as_optional_uuid(payload.category_id, "category_id")
+    if parsed_category_id and not await category_repo.get_by_id(session, parsed_category_id):
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    doc = await document_repo.update_category(
+        session,
+        _as_uuid(document_id, "document_id"),
+        parsed_category_id,
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    await session.commit()
+    return {
+        "success": True,
+        "id": str(doc.id),
+        "category_id": str(doc.category_id) if doc.category_id else None,
+    }
 
 
 @router.get("/documents/{document_id}/status", response_model=DocumentStatusResponse)
@@ -497,7 +595,11 @@ async def update_mascot(
     if not mascot:
         raise HTTPException(status_code=404, detail="Mascot not found")
 
-    payload = MascotUpdateRequest(**await _read_payload(request))
+    try:
+        payload = MascotUpdateRequest(**await _read_payload(request))
+    except ValidationError as exc:
+        detail = "; ".join(error["msg"] for error in exc.errors())
+        raise HTTPException(status_code=400, detail=detail) from exc
     fields = payload.model_dump(exclude_unset=True)
     if fields.get("is_default") is True:
         result = await session.execute(select(Mascot).where(Mascot.id != mascot.id, Mascot.is_default.is_(True)))

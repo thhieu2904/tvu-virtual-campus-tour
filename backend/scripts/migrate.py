@@ -89,6 +89,30 @@ UPGRADE_SQL = [
     "ALTER TABLE suggested_questions ALTER COLUMN sort_order SET NOT NULL;",
 
     # === documents ===
+    (
+        "CREATE TABLE IF NOT EXISTS document_categories ("
+        "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "name VARCHAR(100) NOT NULL, "
+        "slug VARCHAR(100) NOT NULL UNIQUE, "
+        "description TEXT NOT NULL DEFAULT '', "
+        "color VARCHAR(7) NOT NULL DEFAULT '#6366f1', "
+        "sort_order INTEGER NOT NULL DEFAULT 0, "
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        ");"
+    ),
+    (
+        "INSERT INTO document_categories (name, slug, color, sort_order) VALUES "
+        "('Tuyển sinh', 'tuyen-sinh', '#ef4444', 1), "
+        "('Học bổng', 'hoc-bong', '#f59e0b', 2), "
+        "('Đào tạo & Quy chế', 'dao-tao', '#3b82f6', 3), "
+        "('Ngành học', 'nganh-hoc', '#8b5cf6', 4), "
+        "('Cơ sở vật chất', 'co-so-vat-chat', '#10b981', 5), "
+        "('Hoạt động & Sự kiện', 'hoat-dong', '#ec4899', 6), "
+        "('Kiến thức chung', 'khac', '#6b7280', 7) "
+        "ON CONFLICT (slug) DO NOTHING;"
+    ),
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS category_id UUID;",
+    "CREATE INDEX IF NOT EXISTS idx_documents_category_id ON documents(category_id);",
     "UPDATE documents SET file_type = 'pdf' WHERE file_type IS NULL;",
     "ALTER TABLE documents ALTER COLUMN file_type SET NOT NULL;",
     "UPDATE documents SET file_size = 0 WHERE file_size IS NULL;",
@@ -139,6 +163,7 @@ UPGRADE_SQL = [
         "OR to_location_id NOT IN (SELECT id FROM locations);"
     ),
     "UPDATE documents SET location_id = NULL WHERE location_id IS NOT NULL AND location_id NOT IN (SELECT id FROM locations);",
+    "UPDATE documents SET category_id = NULL WHERE category_id IS NOT NULL AND category_id NOT IN (SELECT id FROM document_categories);",
     "UPDATE document_chunks SET location_id = NULL WHERE location_id IS NOT NULL AND location_id NOT IN (SELECT id FROM locations);",
     "DELETE FROM media WHERE location_id NOT IN (SELECT id FROM locations);",
     "UPDATE chat_sessions SET start_location_id = NULL WHERE start_location_id IS NOT NULL AND start_location_id NOT IN (SELECT id FROM locations);",
@@ -154,6 +179,9 @@ UPGRADE_SQL = [
         "END IF; "
         "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'documents_location_id_fkey') THEN "
         "ALTER TABLE documents DROP CONSTRAINT documents_location_id_fkey; "
+        "END IF; "
+        "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'documents_category_id_fkey') THEN "
+        "ALTER TABLE documents DROP CONSTRAINT documents_category_id_fkey; "
         "END IF; "
         "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'document_chunks_location_id_fkey') THEN "
         "ALTER TABLE document_chunks DROP CONSTRAINT document_chunks_location_id_fkey; "
@@ -175,6 +203,7 @@ UPGRADE_SQL = [
     "ALTER TABLE location_links ADD CONSTRAINT location_links_from_location_id_fkey FOREIGN KEY (from_location_id) REFERENCES locations(id) ON DELETE CASCADE;",
     "ALTER TABLE location_links ADD CONSTRAINT location_links_to_location_id_fkey FOREIGN KEY (to_location_id) REFERENCES locations(id) ON DELETE CASCADE;",
     "ALTER TABLE documents ADD CONSTRAINT documents_location_id_fkey FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL;",
+    "ALTER TABLE documents ADD CONSTRAINT documents_category_id_fkey FOREIGN KEY (category_id) REFERENCES document_categories(id) ON DELETE SET NULL;",
     "ALTER TABLE document_chunks ADD CONSTRAINT document_chunks_location_id_fkey FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL;",
     "ALTER TABLE media ADD CONSTRAINT media_location_id_fkey FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE;",
     "ALTER TABLE chat_sessions ADD CONSTRAINT chat_sessions_start_location_id_fkey FOREIGN KEY (start_location_id) REFERENCES locations(id) ON DELETE SET NULL;",

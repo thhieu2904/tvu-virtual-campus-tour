@@ -3,7 +3,7 @@
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.tables import ChatMessage, ChatSession, Document, Location, Mascot, Media
+from app.db.tables import ChatMessage, ChatSession, Document, DocumentCategory, Location, Mascot, Media
 
 
 async def get_dashboard_stats(session: AsyncSession) -> dict:
@@ -43,6 +43,19 @@ async def get_dashboard_stats(session: AsyncSession) -> dict:
         .order_by(desc("visit_count"))
         .limit(10)
     )
+    category_rows = await session.execute(
+        select(
+            DocumentCategory.name,
+            DocumentCategory.color,
+            func.count(Document.id).label("count"),
+        )
+        .outerjoin(Document, Document.category_id == DocumentCategory.id)
+        .group_by(DocumentCategory.id, DocumentCategory.name, DocumentCategory.color, DocumentCategory.sort_order)
+        .order_by(DocumentCategory.sort_order, DocumentCategory.name)
+    )
+    uncategorized_count = (
+        await session.execute(select(func.count(Document.id)).where(Document.category_id.is_(None)))
+    ).scalar() or 0
 
     return {
         "locations": {"total": total_locations, "active": active_locations},
@@ -64,5 +77,13 @@ async def get_dashboard_stats(session: AsyncSession) -> dict:
             {"name": name, "visit_count": visit_count}
             for name, visit_count in popular_locations_rows.all()
         ],
+        "documents_by_category": [
+            {"category_name": name, "color": color, "count": count}
+            for name, color, count in category_rows.all()
+        ]
+        + (
+            [{"category_name": "Uncategorized", "color": "#6b7280", "count": uncategorized_count}]
+            if uncategorized_count
+            else []
+        ),
     }
-

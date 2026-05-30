@@ -7,10 +7,11 @@ All functions receive an AsyncSession as the first argument.
 import logging
 from uuid import UUID
 
-from sqlalchemy import select, delete, func, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.db.tables import Document, DocumentChunk, Location
+from app.db.tables import Document, DocumentChunk
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ async def insert_document(
     file_url: str,
     file_type: str,
     file_size: int,
+    category_id: UUID | None = None,
 ) -> UUID:
     """Insert a new document record. Returns document_id (UUID)."""
     doc = Document(
@@ -29,6 +31,7 @@ async def insert_document(
         file_type=file_type,
         file_size=file_size,
         location_id=None,
+        category_id=category_id,
         status="pending",
     )
     session.add(doc)
@@ -117,16 +120,22 @@ async def list_documents(
     session: AsyncSession,
     status: str | None = None,
     search: str | None = None,
+    category_id: UUID | None = None,
+    uncategorized: bool = False,
     page: int = 1,
     limit: int = 10,
 ) -> dict:
     """List documents with filtering and pagination."""
-    query = select(Document).order_by(Document.created_at.desc())
+    query = select(Document).options(selectinload(Document.category)).order_by(Document.created_at.desc())
 
     if status:
         query = query.where(Document.status == status)
     if search:
         query = query.where(Document.title.ilike(f"%{search}%"))
+    if uncategorized:
+        query = query.where(Document.category_id.is_(None))
+    elif category_id:
+        query = query.where(Document.category_id == category_id)
 
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
@@ -149,6 +158,9 @@ async def list_documents(
                 "file_type": doc.file_type,
                 "file_size": doc.file_size,
                 "location_id": str(doc.location_id) if doc.location_id else None,
+                "category_id": str(doc.category_id) if doc.category_id else None,
+                "category_name": doc.category.name if doc.category else None,
+                "category_color": doc.category.color if doc.category else None,
                 "chunk_count": doc.chunk_count,
                 "status": doc.status,
                 "error_message": doc.error_message,
@@ -173,3 +185,18 @@ async def delete_with_chunks(session: AsyncSession, document_id: UUID) -> str | 
     await session.flush()
     logger.info(f"🗑️ Deleted document {document_id} + chunks")
     return file_url
+
+
+async def update_category(
+    session: AsyncSession,
+    document_id: UUID,
+    category_id: UUID | None,
+) -> Document | None:
+    """Assign or clear a document category."""
+    doc = await get_by_id(session, document_id)
+    if not doc:
+        return None
+
+    doc.category_id = category_id
+    await session.flush()
+    return doc

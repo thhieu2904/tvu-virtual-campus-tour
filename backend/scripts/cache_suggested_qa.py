@@ -75,19 +75,26 @@ async def cache_qa():
                 
                 # 2. Sinh Audio & Upload
                 style = voice_style or ""
-                answer_hash = hashlib.md5(
-                    f"{tts_engine.TTS_PROMPT_VERSION}_{answer_text}_{voice}_{style}_{personality_prompt}".encode()
-                ).hexdigest()
-                wav_r2_key = f"tts-cache/{answer_hash}.wav"
-                mp3_r2_key = f"tts-cache/{answer_hash}.mp3"
+                answer_hash = tts_engine._cache_key(answer_text, voice, style, personality_prompt)
+                legacy_answer_hash = tts_engine._legacy_cache_key(answer_text, voice, style, personality_prompt)
+                r2_candidates = [
+                    (f"tts-cache/{answer_hash}.wav", f"tts-cache/{answer_hash}.mp3")
+                ]
+                if legacy_answer_hash != answer_hash:
+                    r2_candidates.append(
+                        (f"tts-cache/{legacy_answer_hash}.wav", f"tts-cache/{legacy_answer_hash}.mp3")
+                    )
                 
                 audio_url = None
                 
                 cached_r2_key = None
-                if await storage_service.file_exists(wav_r2_key):
-                    cached_r2_key = wav_r2_key
-                elif await storage_service.file_exists(mp3_r2_key):
-                    cached_r2_key = mp3_r2_key
+                for wav_r2_key, mp3_r2_key in r2_candidates:
+                    if await storage_service.file_exists(wav_r2_key):
+                        cached_r2_key = wav_r2_key
+                        break
+                    if await storage_service.file_exists(mp3_r2_key):
+                        cached_r2_key = mp3_r2_key
+                        break
 
                 if cached_r2_key:
                     audio_url = storage_service.get_public_url(cached_r2_key)

@@ -15,6 +15,7 @@ from pathlib import Path
 from uuid import UUID
 
 from app.db.database import async_session
+from app.db.tables import DocumentCategory
 from app.services.extractors import TextExtractor
 from app.services.chunker import MarkdownSemanticChunker
 from app.services import storage_service
@@ -47,6 +48,7 @@ async def start_ingestion(
     file_bytes: bytes,
     filename: str,
     title: str,
+    category_id: UUID | None = None,
 ) -> UUID:
     """
     Stage 1: Create document record in DB + upload file to R2.
@@ -61,21 +63,29 @@ async def start_ingestion(
     # Validate
     validate_file(filename, file_size)
 
-    # Upload to R2
-    r2_key = storage_service.build_document_key(filename)
-    content_type = "application/pdf" if file_type == "pdf" else (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-    await storage_service.upload_file(file_bytes, r2_key, content_type)
-
-    # Insert document record
     async with async_session() as session:
+        category_slug = "uncategorized"
+        if category_id:
+            category = await session.get(DocumentCategory, category_id)
+            if not category:
+                raise ValueError("Category not found")
+            category_slug = category.slug
+
+        # Upload to R2
+        r2_key = storage_service.build_document_key(filename, category_slug=category_slug)
+        content_type = "application/pdf" if file_type == "pdf" else (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        await storage_service.upload_file(file_bytes, r2_key, content_type)
+
+        # Insert document record
         doc_id = await document_repo.insert_document(
             session,
             title=title,
             file_url=r2_key,
             file_type=file_type,
             file_size=file_size,
+            category_id=category_id,
         )
         await session.commit()
 
