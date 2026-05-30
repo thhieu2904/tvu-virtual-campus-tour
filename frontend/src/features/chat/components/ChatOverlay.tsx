@@ -12,9 +12,9 @@ import { isWaitingMessage } from "../messages";
 function TypingIndicator() {
   return (
     <span className="inline-flex items-center ml-1.5 gap-1 align-middle">
-      <span className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-      <span className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-      <span className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-bounce"></span>
+      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"></span>
     </span>
   );
 }
@@ -111,14 +111,14 @@ export default function ChatOverlay() {
         addMessage({
           id: `nav-${location.slug}-${Date.now()}`,
           role: "assistant",
-          content: `📍 Chào mừng bạn quay lại ${location.name}.`,
+          content: `Chào mừng bạn quay lại ${location.name}.`,
         });
       } else {
         // User tự bấm map hoặc AI điều hướng → append intro đầy đủ
         addMessage({
           id: `nav-${location.slug}-${Date.now()}`,
           role: "assistant",
-          content: `📍 ${location.introMessage}`,
+          content: `${location.introMessage}`,
         });
         
         useTourStore.getState().addVisitedLocation(location.slug);
@@ -199,21 +199,23 @@ export default function ChatOverlay() {
                   exit={{ opacity: 0, scale: 0.8, y: 10 }}
                   className="fixed right-[30%] top-[15%] w-[420px] max-w-[40vw] z-50 pointer-events-auto origin-bottom-right"
                 >
-                  <div className="relative bg-black/70 backdrop-blur-3xl text-white px-6 py-4 rounded-[28px] rounded-br-xl border border-white/20 shadow-2xl flex flex-col max-h-[55vh] overflow-hidden">
-                    <div className="absolute top-3 right-3 z-20 flex items-center gap-1">
+                    <div className="relative bg-white/65 backdrop-blur-xl text-gray-900 rounded-[28px] border border-white/70 shadow-[0_8px_32px_rgba(0,0,0,0.15)] flex flex-col max-h-[55vh] overflow-hidden">
+                    {/* Row 1: Close button */}
+                    <div className="flex justify-end px-4 pt-3 pb-0 shrink-0">
                       <button
                         type="button"
                         onClick={() => {
                           if (activeSubtitleId) setDismissedSubtitleId(activeSubtitleId);
                         }}
-                        className="h-8 w-8 rounded-full bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-colors flex items-center justify-center"
+                        className="h-6 w-6 rounded-full bg-black/10 text-gray-600 hover:bg-black/20 hover:text-gray-900 transition-colors flex items-center justify-center"
                         title="Ẩn phụ đề"
                         aria-label="Ẩn phụ đề"
                       >
-                        <X className="h-4 w-4" strokeWidth={2.3} />
+                        <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                       </button>
                     </div>
-                    <div className="overflow-y-auto pr-12 pb-6 flex-1 whitespace-pre-wrap text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    {/* Row 2: Content */}
+                    <div className="overflow-y-auto px-6 pb-6 flex-1 whitespace-pre-wrap text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <ReactMarkdown
                         components={{
                           p: ({ node, ...props }) => (
@@ -221,7 +223,7 @@ export default function ChatOverlay() {
                           ),
                           strong: ({ node, ...props }) => (
                             <strong
-                              className="font-bold text-yellow-300"
+                              className="font-bold text-blue-600"
                               {...props}
                             />
                           ),
@@ -249,10 +251,10 @@ export default function ChatOverlay() {
                       </div>
                     )}
                     {/* Fade-out Overlay for Kiosk touch scrolling hint */}
-                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
+                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/70 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
                     {msg.isStreaming && !isWaitingMessage(msg.content) && (
                       <motion.span
-                        className="inline-block w-1.5 h-4 ml-1.5 bg-white/70 align-middle"
+                        className="inline-block w-1.5 h-4 ml-1.5 bg-gray-800/70 align-middle"
                         animate={{ opacity: [1, 0] }}
                         transition={{
                           repeat: Infinity,
@@ -261,8 +263,7 @@ export default function ChatOverlay() {
                         }}
                       />
                     )}
-                    {/* Speech Bubble Tail */}
-                    <div className="absolute -right-2 bottom-2 w-5 h-5 bg-black/70 border-r border-b border-white/20 rounded-br-md transform -rotate-45 -z-10 backdrop-blur-3xl"></div>
+
                   </div>
                 </motion.div>
               );
@@ -493,10 +494,39 @@ export default function ChatOverlay() {
                           : "bg-white/10 text-white/90 rounded-tl-sm"
                       }`}
                     >
-                      <span className="whitespace-pre-wrap">
-                        {msg.content}
-                        {msg.isStreaming && isWaitingMessage(msg.content) && <TypingIndicator />}
-                      </span>
+                      {isUser ? (
+                        <span className="whitespace-pre-wrap">
+                          {msg.content}
+                        </span>
+                      ) : (
+                        <div className="whitespace-pre-wrap [&>p]:mb-2 [&>p:last-child]:mb-0">
+                          <ReactMarkdown
+                            components={{
+                              p: ({ node, ...props }) => (
+                                <p className="mb-2 last:mb-0" {...props} />
+                              ),
+                              strong: ({ node, ...props }) => (
+                                <strong
+                                  className="font-bold text-blue-300"
+                                  {...props}
+                                />
+                              ),
+                              ul: ({ node, ...props }) => (
+                                <ul className="list-disc pl-5 mb-2" {...props} />
+                              ),
+                              ol: ({ node, ...props }) => (
+                                <ol className="list-decimal pl-5 mb-2" {...props} />
+                              ),
+                              li: ({ node, ...props }) => (
+                                <li className="mb-1" {...props} />
+                              ),
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                          {msg.isStreaming && isWaitingMessage(msg.content) && <TypingIndicator />}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

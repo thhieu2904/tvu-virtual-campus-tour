@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminApi } from '@/lib/admin-api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { AdminNotice, AdminPageHeader } from '../_components/admin-ui'
-import { MapPin, Monitor, RefreshCw, Save, Settings, Timer, Volume2 } from 'lucide-react'
+import { AdminNotice, AdminPageHeader, AdminPanel, AdminSwitch } from '../_components/admin-ui'
+import { MapPin, RefreshCw, Save, Timer, Volume2, Monitor } from 'lucide-react'
 
 interface KioskConfig {
   idle_timeout_minutes: number
@@ -65,98 +64,106 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <AdminPageHeader
-        title="Cấu hình kiosk"
-        description="Thiết lập timeout, màn hình bắt đầu và mặc định âm thanh cho môi trường kiosk."
+        title="Cấu hình Kiosk"
+        description="Thiết lập timeout, màn hình bắt đầu và mặc định âm thanh cho môi trường kiosk tham quan."
         actions={
-          <Button variant="outline" size="sm" onClick={fetchConfig} disabled={loading}>
-            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Refresh
+          <Button variant="outline" size="sm" onClick={fetchConfig} disabled={loading} className="rounded-xl">
+            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
           </Button>
         }
       />
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
-      {saved && <AdminNotice tone="success">Đã lưu cấu hình.</AdminNotice>}
+      {saved && <AdminNotice tone="success">✓ Đã lưu cấu hình thành công.</AdminNotice>}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-muted-foreground" />
-            Kiosk Configuration
-          </CardTitle>
-          <CardDescription>Các giá trị này được lưu qua Admin API `/config`.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 rounded-lg border p-3">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <Timer className="h-4 w-4 text-muted-foreground" />
-                Idle Timeout (phút)
-              </span>
-              <Input
-                type="number"
-                min={1}
-                value={config.idle_timeout_minutes}
-                onChange={(event) => setConfig({ ...config, idle_timeout_minutes: Number(event.target.value) })}
-              />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Timing Settings */}
+        <AdminPanel title="Thời gian & Timeout" description="Cấu hình idle timeout và cảnh báo trước khi reset phiên.">
+          <div className="space-y-4 p-5">
+            <label className="flex flex-col gap-2 rounded-xl border border-[#d7e0f0] p-4">
+              <div className="flex items-center gap-2">
+                <Timer className="h-4 w-4 text-[#7a96c9]" />
+                <span className="text-sm font-medium text-[#10213f]">Idle Timeout</span>
+              </div>
+              <p className="text-xs text-[#52627f]">
+                Thời gian không tương tác trước khi hiện cảnh báo. Sau cảnh báo, phiên sẽ tự reset.
+              </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  value={config.idle_timeout_minutes}
+                  onChange={(event) => setConfig({ ...config, idle_timeout_minutes: Number(event.target.value) })}
+                  className="w-24 rounded-xl text-center"
+                />
+                <span className="text-sm text-[#52627f]">phút</span>
+              </div>
             </label>
 
-            <label className="space-y-2 rounded-lg border p-3">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <Timer className="h-4 w-4 text-muted-foreground" />
-                Warning Duration (giây)
-              </span>
-              <Input
-                type="number"
-                min={5}
-                value={config.warning_duration_seconds}
-                onChange={(event) => setConfig({ ...config, warning_duration_seconds: Number(event.target.value) })}
-              />
+            <label className="flex flex-col gap-2 rounded-xl border border-[#d7e0f0] p-4">
+              <div className="flex items-center gap-2">
+                <Timer className="h-4 w-4 text-[#7a96c9]" />
+                <span className="text-sm font-medium text-[#10213f]">Warning Duration</span>
+              </div>
+              <p className="text-xs text-[#52627f]">
+                Thời gian hiển thị cảnh báo đếm ngược trước khi tự động reset phiên tham quan.
+              </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={5}
+                  value={config.warning_duration_seconds}
+                  onChange={(event) => setConfig({ ...config, warning_duration_seconds: Number(event.target.value) })}
+                  className="w-24 rounded-xl text-center"
+                />
+                <span className="text-sm text-[#52627f]">giây</span>
+              </div>
             </label>
+          </div>
+        </AdminPanel>
 
-            <label className="space-y-2 rounded-lg border p-3">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                Default Start Slug
-              </span>
+        {/* Display Settings */}
+        <AdminPanel title="Hiển thị & Mặc định" description="Cấu hình điểm bắt đầu mặc định và các tùy chọn kiosk.">
+          <div className="space-y-4 p-5">
+            <label className="flex flex-col gap-2 rounded-xl border border-[#d7e0f0] p-4">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-[#7a96c9]" />
+                <span className="text-sm font-medium text-[#10213f]">Điểm bắt đầu mặc định</span>
+              </div>
+              <p className="text-xs text-[#52627f]">
+                Slug của location sẽ hiển thị đầu tiên khi kiosk khởi động hoặc sau khi reset phiên.
+              </p>
               <Input
                 value={config.default_start_slug}
                 onChange={(event) => setConfig({ ...config, default_start_slug: event.target.value })}
+                placeholder="VD: cong-chinh"
+                className="rounded-xl font-mono"
               />
             </label>
 
-            <div className="space-y-3 rounded-lg border p-3">
-              <label className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <Monitor className="h-4 w-4 text-muted-foreground" />
-                  Kiosk Mode
-                </span>
-                <input
-                  type="checkbox"
-                  checked={config.kiosk_mode}
-                  onChange={(event) => setConfig({ ...config, kiosk_mode: event.target.checked })}
-                />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <Volume2 className="h-4 w-4 text-muted-foreground" />
-                  TTS Default
-                </span>
-                <input
-                  type="checkbox"
-                  checked={config.tts_enabled_default}
-                  onChange={(event) => setConfig({ ...config, tts_enabled_default: event.target.checked })}
-                />
-              </label>
-            </div>
-          </div>
+            <AdminSwitch
+              checked={config.kiosk_mode}
+              onChange={(checked) => setConfig({ ...config, kiosk_mode: checked })}
+              label="Chế độ Kiosk"
+              description="Bật để ẩn thanh điều hướng browser, chặn right-click và các thao tác không phải kiosk."
+            />
 
-          <div className="flex justify-end border-t pt-4">
-            <Button onClick={saveConfig} disabled={saving}>
-              <Save className="mr-2 h-4 w-4" /> {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
-            </Button>
+            <AdminSwitch
+              checked={config.tts_enabled_default}
+              onChange={(checked) => setConfig({ ...config, tts_enabled_default: checked })}
+              label="Text-to-Speech mặc định"
+              description="Bật để tự động đọc phản hồi từ đại sứ ảo khi sinh viên hỏi."
+            />
           </div>
-        </CardContent>
-      </Card>
+        </AdminPanel>
+      </div>
+
+      {/* Save button */}
+      <div className="flex justify-end rounded-2xl border border-[#d7e0f0]/80 bg-white p-5 shadow-sm">
+        <Button onClick={saveConfig} disabled={saving} className="rounded-xl px-6 shadow-sm">
+          <Save className="mr-2 h-4 w-4" /> {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+        </Button>
+      </div>
     </div>
   )
 }

@@ -2,20 +2,36 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { adminApi } from '@/lib/admin-api'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { AdminNotice, AdminPageHeader, AdminPanel, AdminSelect } from '../_components/admin-ui'
+import {
+  AdminEmptyState,
+  AdminModal,
+  AdminNotice,
+  AdminPageHeader,
+  AdminPanel,
+  AdminSelect,
+  AdminSkeleton,
+} from '../_components/admin-ui'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Image as ImageIcon,
   RefreshCw,
   Upload,
   Trash2,
-  X,
   Film,
   FileImage,
   MapPin,
+  Star,
+  Play,
+  MoreVertical,
 } from 'lucide-react'
 
 interface MediaItem {
@@ -35,7 +51,8 @@ interface LocationNode extends LocationOption {
 
 const ALL_LOCATIONS_ID = '__all__'
 
-const typeIcons = { image: FileImage, video: Film, gif: ImageIcon }
+const typeIcons: Record<string, typeof FileImage> = { image: FileImage, video: Film, gif: ImageIcon }
+const typeLabels: Record<string, string> = { image: 'Hình ảnh', video: 'Video', gif: 'GIF' }
 
 export default function MediaPage() {
   const [media, setMedia] = useState<MediaItem[]>([])
@@ -86,26 +103,18 @@ export default function MediaPage() {
 
   const fetchMedia = useCallback(async () => {
     if (!activeLocationId) {
-      setMedia([])
-      setTotal(0)
-      setLoadingMedia(false)
-      return
+      setMedia([]); setTotal(0); setLoadingMedia(false); return
     }
-
-    setLoadingMedia(true)
-    setError(null)
+    setLoadingMedia(true); setError(null)
     try {
       let url = '/media?limit=100'
       if (activeLocationId !== ALL_LOCATIONS_ID) url += `&location_id=${activeLocationId}`
       if (filterType) url += `&type=${filterType}`
       const data = await adminApi.get<{ total: number; media: MediaItem[] }>(url)
-      setMedia(data.media)
-      setTotal(data.total)
+      setMedia(data.media); setTotal(data.total)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải')
-    } finally {
-      setLoadingMedia(false)
-    }
+    } finally { setLoadingMedia(false) }
   }, [activeLocationId, filterType])
 
   const fetchLocations = useCallback(async () => {
@@ -113,30 +122,18 @@ export default function MediaPage() {
     try {
       const data = await adminApi.get<{ locations: LocationOption[] }>('/locations')
       setLocations(data.locations)
-    } catch {
-      setLocations([])
-    } finally {
-      setLoadingLocations(false)
-    }
+    } catch { setLocations([]) }
+    finally { setLoadingLocations(false) }
   }, [])
 
-  useEffect(() => {
-    void Promise.resolve().then(fetchLocations)
-  }, [fetchLocations])
-
-  useEffect(() => {
-    void Promise.resolve().then(fetchMedia)
-  }, [fetchMedia])
+  useEffect(() => { void Promise.resolve().then(fetchLocations) }, [fetchLocations])
+  useEffect(() => { void Promise.resolve().then(fetchMedia) }, [fetchMedia])
 
   const selectLocation = (locationId: string) => {
-    setMedia([])
-    setTotal(0)
-    setSelectedLocationId(locationId)
+    setMedia([]); setTotal(0); setSelectedLocationId(locationId)
   }
 
-  const refreshAll = async () => {
-    await Promise.all([fetchLocations(), fetchMedia()])
-  }
+  const refreshAll = async () => { await Promise.all([fetchLocations(), fetchMedia()]) }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Xóa media này? Thao tác không thể hoàn tác.')) return
@@ -193,13 +190,13 @@ export default function MediaPage() {
       <AdminPageHeader
         title="Thư viện media"
         description="Quản lý hình ảnh, video và GIF gắn với từng địa điểm trong trải nghiệm tham quan."
-        meta={<Badge variant="outline">{locationNodes[0]?.media_count ?? 0} files</Badge>}
+        meta={<Badge variant="outline" className="rounded-lg">{locationNodes[0]?.media_count ?? 0} files</Badge>}
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loadingMedia || loadingLocations}>
-              <RefreshCw data-icon="inline-start" className={loadingMedia || loadingLocations ? 'animate-spin' : ''} /> Refresh
+            <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loadingMedia || loadingLocations} className="rounded-xl">
+              <RefreshCw data-icon="inline-start" className={loadingMedia || loadingLocations ? 'animate-spin' : ''} /> Làm mới
             </Button>
-            <Button size="sm" onClick={openUpload}>
+            <Button size="sm" onClick={openUpload} className="rounded-xl">
               <Upload data-icon="inline-start" /> Upload Media
             </Button>
           </>
@@ -208,62 +205,60 @@ export default function MediaPage() {
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
-      {/* Upload Dialog */}
+      {/* ─── Upload Modal ─── */}
       {showUpload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-background border rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">Upload Media</h2>
-              <Button variant="ghost" size="icon" onClick={() => setShowUpload(false)}><X className="h-5 w-5" /></Button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">File *</label>
-                <label className="flex items-center gap-2 cursor-pointer rounded-md border border-dashed p-3 hover:bg-muted/50 mt-1">
-                  <Upload className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{uploadFile ? uploadFile.name : 'Chọn hình/video/GIF'}</span>
-                  <input type="file" accept="image/*,video/*,.gif" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
-                </label>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Location *</label>
-                <select className="w-full rounded-md border bg-transparent px-3 py-2 text-sm mt-1"
-                  value={uploadLocationId} onChange={e => setUploadLocationId(e.target.value)}>
-                  <option value="">Chọn location</option>
-                  {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Caption</label>
-                <Input value={uploadCaption} onChange={e => setUploadCaption(e.target.value)} placeholder="Mô tả hình ảnh" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Keywords (cách nhau bởi dấu phẩy)</label>
-                <Input value={uploadKeywords} onChange={e => setUploadKeywords(e.target.value)} placeholder="VD: thư viện, sách, sinh viên" />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={uploadIsIntro} onChange={e => setUploadIsIntro(e.target.checked)} className="rounded" />
-                Đặt làm ảnh giới thiệu (intro) của location
-              </label>
-            </div>
-            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowUpload(false)}>Hủy</Button>
-              <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadLocationId}>
+        <AdminModal
+          title="Upload Media"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setShowUpload(false)} className="rounded-xl">Hủy</Button>
+              <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadLocationId} className="rounded-xl">
                 {uploading ? 'Đang upload...' : 'Upload'}
               </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-[#10213f]">File *</label>
+              <label className="mt-1.5 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-[#d7e0f0] p-4 transition-colors hover:border-[#7a96c9] hover:bg-[#f6f8fb]">
+                <Upload className="h-5 w-5 text-[#7a96c9]" />
+                <span className="text-sm text-[#52627f]">{uploadFile ? uploadFile.name : 'Chọn hình/video/GIF'}</span>
+                <input type="file" accept="image/*,video/*,.gif" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
+              </label>
             </div>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Location *
+              <AdminSelect value={uploadLocationId} onChange={e => setUploadLocationId(e.target.value)}>
+                <option value="">Chọn location</option>
+                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+              </AdminSelect>
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Caption
+              <Input value={uploadCaption} onChange={e => setUploadCaption(e.target.value)} placeholder="Mô tả hình ảnh" className="rounded-xl" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Keywords (cách nhau bởi dấu phẩy)
+              <Input value={uploadKeywords} onChange={e => setUploadKeywords(e.target.value)} placeholder="VD: thư viện, sách, sinh viên" className="rounded-xl" />
+            </label>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#d7e0f0] p-3.5 transition-colors hover:bg-[#f6f8fb]">
+              <input type="checkbox" checked={uploadIsIntro} onChange={e => setUploadIsIntro(e.target.checked)} className="rounded accent-[#053384]" />
+              <div>
+                <p className="text-sm font-medium text-[#10213f]">Ảnh giới thiệu (Intro)</p>
+                <p className="text-xs text-[#52627f]">Đặt làm ảnh đại diện của location trong giao diện kiosk</p>
+              </div>
+            </label>
           </div>
-        </div>
+        </AdminModal>
       )}
 
-      <AdminPanel className="overflow-hidden">
-        <div className="grid min-h-[560px] lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="border-b border-border/70 bg-muted/20 lg:border-b-0 lg:border-r">
-            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-4">
-              <div>
-                <h2 className="text-base font-semibold">Địa điểm</h2>
-                <p className="mt-1 text-xs text-muted-foreground">Chọn một địa điểm để quản lý media.</p>
-              </div>
+      <AdminPanel className="overflow-hidden !rounded-2xl">
+        <div className="grid min-h-[560px] lg:grid-cols-[280px_minmax(0,1fr)]">
+          {/* ─── Sidebar: Locations ─── */}
+          <aside className="border-b border-[#d7e0f0]/70 bg-[#f6f8fb] lg:border-b-0 lg:border-r">
+            <div className="flex items-center justify-between gap-3 border-b border-[#d7e0f0]/70 px-4 py-3.5">
+              <h2 className="text-sm font-semibold text-[#10213f]">Địa điểm</h2>
             </div>
 
             <div className="max-h-[620px] overflow-y-auto p-2">
@@ -274,72 +269,68 @@ export default function MediaPage() {
                     key={location.id}
                     type="button"
                     onClick={() => selectLocation(location.id)}
-                    className={`mb-1 w-full rounded-lg border px-3 py-3 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/20 ${
+                    className={`group mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-[#7a96c9]/30 ${
                       isSelected
-                        ? 'border-primary/30 bg-primary/8 text-primary'
-                        : 'border-transparent bg-transparent text-foreground hover:border-border hover:bg-background'
+                        ? 'bg-[#053384] text-white shadow-sm shadow-[#053384]/20'
+                        : 'text-[#10213f] hover:bg-white'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="flex size-8 items-center justify-center rounded-lg border bg-background/80">
-                        {location.isAll ? <ImageIcon className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{location.name}</span>
-                      <Badge variant="outline" className="shrink-0">
-                        {location.media_count}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                      {location.isAll ? 'media/all/' : `locations/${location.slug}/media/`}
-                    </p>
+                    <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                      isSelected ? 'bg-white/15' : 'bg-white border border-[#d7e0f0]/80'
+                    }`}>
+                      {location.isAll
+                        ? <ImageIcon className="h-4 w-4" />
+                        : <MapPin className="h-4 w-4" />
+                      }
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[0.82rem] font-medium">{location.name}</span>
+                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[0.7rem] font-semibold tabular-nums ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-[#eef3fb] text-[#52627f]'
+                    }`}>
+                      {location.media_count}
+                    </span>
                   </button>
                 )
               })}
 
               {!loadingLocations && locationNodes.length <= 1 && (
-                <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-                  Chưa có địa điểm nào để hiển thị.
+                <div className="px-3 py-8 text-center text-sm text-[#52627f]">
+                  Chưa có địa điểm nào.
                 </div>
               )}
             </div>
           </aside>
 
-          <section className="min-w-0 bg-card">
+          {/* ─── Main: Media Gallery ─── */}
+          <section className="min-w-0 bg-white">
             {selectedLocation ? (
               <>
-                <div className="border-b border-border/70 px-5 py-5">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-                        {selectedLocation.isAll ? <ImageIcon /> : <MapPin />}
+                {/* Header */}
+                <div className="border-b border-[#d7e0f0]/70 px-5 py-4">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb]">
+                        {selectedLocation.isAll ? <ImageIcon className="h-5 w-5 text-[#053384]" /> : <MapPin className="h-5 w-5 text-[#053384]" />}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-xl font-semibold leading-tight">{selectedLocation.name}</h2>
-                          <Badge variant="outline">{selectedLocation.media_count} media</Badge>
-                          <Badge variant="secondary">{total} kết quả</Badge>
-                        </div>
-                        <p className="mt-1 font-mono text-xs text-muted-foreground">
-                          {selectedLocation.isAll ? 'media/all/' : `locations/${selectedLocation.slug}/media/`}
+                        <h2 className="text-lg font-bold text-[#10213f]">{selectedLocation.name}</h2>
+                        <p className="text-xs text-[#7a96c9]">
+                          {total} media
+                          {selectedLocation.description && <> · {selectedLocation.description}</>}
                         </p>
-                        {selectedLocation.description && (
-                          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                            {selectedLocation.description}
-                          </p>
-                        )}
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <AdminSelect value={filterType} onChange={e => setFilterType(e.target.value)}>
                         <option value="">Tất cả loại</option>
                         <option value="image">Hình ảnh</option>
                         <option value="video">Video</option>
                         <option value="gif">GIF</option>
                       </AdminSelect>
-                      <Button size="sm" onClick={openUpload}>
+                      <Button size="sm" onClick={openUpload} className="rounded-xl">
                         <Upload data-icon="inline-start" />
-                        Tải media
+                        Upload
                       </Button>
                     </div>
                   </div>
@@ -349,65 +340,117 @@ export default function MediaPage() {
                 {loadingMedia && media.length === 0 ? (
                   <div className="grid gap-4 px-5 py-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {[1, 2, 3, 4].map(i => (
-                      <Card key={i} className="animate-pulse">
-                        <CardContent className="p-0"><div className="h-40 rounded bg-muted" /></CardContent>
-                      </Card>
+                      <AdminSkeleton key={i} variant="card" className="h-56 rounded-xl" />
                     ))}
                   </div>
                 ) : (
                   <div className="grid gap-4 px-5 py-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {media.map(item => {
                       const TypeIcon = typeIcons[item.type] || ImageIcon
+                      const typeLabel = typeLabels[item.type] || item.type
+
                       return (
-                        <Card key={item.id} className="overflow-hidden group">
-                          <CardContent className="p-0 relative">
+                        <div key={item.id} className="group overflow-hidden rounded-xl border border-[#d7e0f0]/80 bg-white shadow-sm transition-all hover:shadow-md hover:border-[#7a96c9]/40">
+                          {/* Thumbnail */}
+                          <div className="relative aspect-[4/3] overflow-hidden bg-[#eef3fb]">
                             {item.type === 'video' ? (
-                              <div className="h-40 bg-muted flex items-center justify-center">
-                                <Film className="h-12 w-12 text-muted-foreground" />
+                              <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#10213f] to-[#1e3a5f]">
+                                <div className="flex size-12 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
+                                  <Play className="h-6 w-6 text-white" />
+                                </div>
                               </div>
                             ) : (
-                              <div className="h-40 bg-muted relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={item.url} alt={item.caption} className="w-full h-full object-cover" />
-                              </div>
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={item.url}
+                                alt={item.caption || 'Media'}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
                             )}
 
-                            {/* Overlay */}
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3">
-                              <div className="flex justify-between items-start">
-                                <div className="flex gap-1">
-                                  <Badge variant="outline" className="text-white border-white/30 text-xs">
-                                    <TypeIcon className="mr-1 h-3 w-3" />{item.type}
-                                  </Badge>
-                                  {item.is_intro && <Badge className="text-xs">Intro</Badge>}
-                                </div>
-                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)}
-                                  disabled={deletingId === item.id} className="text-white hover:text-red-400 h-8 w-8">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <div>
-                                {item.caption && <p className="text-white text-xs truncate">{item.caption}</p>}
-                                <p className="text-white/60 text-xs">{getLocationName(item)}</p>
-                              </div>
+                            {/* Persistent badges (always visible) */}
+                            <div className="absolute left-2 top-2 flex gap-1.5">
+                              {item.is_intro && (
+                                <span className="flex items-center gap-1 rounded-md bg-amber-500 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-white shadow-sm">
+                                  <Star className="h-2.5 w-2.5" /> Intro
+                                </span>
+                              )}
                             </div>
-                          </CardContent>
-                        </Card>
+
+                            {/* Hover overlay — delete only */}
+                            <div className="absolute inset-0 flex items-start justify-end bg-gradient-to-b from-black/40 via-transparent to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger render={
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm" />
+                                }>
+                                  <MoreVertical className="h-3.5 w-3.5" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => handleDelete(item.id)}
+                                    disabled={deletingId === item.id}
+                                    className="text-red-600 focus:text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Xóa media
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+
+                          {/* Info — always visible below card */}
+                          <div className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <TypeIcon className="h-3.5 w-3.5 shrink-0 text-[#7a96c9]" />
+                              <span className="truncate text-[0.78rem] font-medium text-[#10213f]">
+                                {item.caption || typeLabel}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-[0.7rem] text-[#7a96c9]">
+                              {getLocationName(item)}
+                            </p>
+                            {item.keywords && item.keywords.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {item.keywords.slice(0, 3).map((kw) => (
+                                  <span key={kw} className="rounded-md bg-[#eef3fb] px-1.5 py-0.5 text-[0.6rem] font-medium text-[#52627f]">
+                                    {kw}
+                                  </span>
+                                ))}
+                                {item.keywords.length > 3 && (
+                                  <span className="rounded-md bg-[#eef3fb] px-1.5 py-0.5 text-[0.6rem] font-medium text-[#7a96c9]">
+                                    +{item.keywords.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )
                     })}
                   </div>
                 )}
 
+                {/* Empty state */}
                 {!loadingMedia && media.length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    Chưa có media nào. Hãy upload media đầu tiên!
-                  </div>
+                  <AdminEmptyState
+                    icon={ImageIcon}
+                    title="Chưa có media nào"
+                    description="Upload hình ảnh, video hoặc GIF để bổ sung vào trải nghiệm tham quan."
+                    action={
+                      <Button size="sm" onClick={openUpload} className="rounded-xl">
+                        <Upload data-icon="inline-start" /> Upload Media
+                      </Button>
+                    }
+                  />
                 )}
               </>
             ) : (
-              <div className="flex min-h-[480px] items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                Chọn một địa điểm để bắt đầu quản lý thư viện media.
-              </div>
+              <AdminEmptyState
+                icon={MapPin}
+                title="Chọn một địa điểm"
+                description="Chọn địa điểm từ danh sách bên trái để quản lý thư viện media."
+              />
             )}
           </section>
         </div>

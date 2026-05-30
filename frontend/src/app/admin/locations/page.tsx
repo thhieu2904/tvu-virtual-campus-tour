@@ -2,14 +2,21 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { adminApi } from '@/lib/admin-api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { AdminNotice, AdminPageHeader } from '../_components/admin-ui'
+import {
+  AdminEmptyState,
+  AdminModal,
+  AdminNotice,
+  AdminPageHeader,
+  AdminPanel,
+  AdminSkeleton,
+  AdminTextarea,
+} from '../_components/admin-ui'
 import {
   MapPin, Image as ImageIcon, ToggleLeft, ToggleRight,
-  RefreshCw, Search, Star, Pencil, X, Plus, Trash2, Upload, Volume2,
+  RefreshCw, Search, Star, Pencil, Plus, Trash2, Upload, Volume2, Eye,
 } from 'lucide-react'
 
 interface LocationItem {
@@ -132,154 +139,191 @@ export default function LocationsPage() {
         description="Quản lý nội dung giới thiệu, ảnh 360°, câu hỏi gợi ý và trạng thái hiển thị trên bản đồ khuôn viên."
         meta={
           <>
-            <Badge variant="outline">{activeCount} active</Badge>
-            <Badge variant="secondary">{inactiveCount} inactive</Badge>
+            <Badge variant="outline" className="rounded-lg">{activeCount} đang mở</Badge>
+            <Badge variant="secondary" className="rounded-lg">{inactiveCount} tạm đóng</Badge>
           </>
         }
         actions={
-          <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading}>
-            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Refresh
+          <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading} className="rounded-xl">
+            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
           </Button>
         }
       />
 
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Tìm kiếm..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
+        <Input placeholder="Tìm theo tên hoặc slug..." value={search} onChange={e => setSearch(e.target.value)} className="rounded-xl pl-10" />
       </div>
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog — using AdminModal */}
       {editingId && editData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-background border rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6 mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Chỉnh sửa: {editData.name}</h2>
-              <Button variant="ghost" size="icon" onClick={() => setEditingId(null)}><X className="h-5 w-5" /></Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Tên location</label>
-                <Input value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Mô tả</label>
-                <textarea className="w-full min-h-[80px] rounded-md border bg-transparent px-3 py-2 text-sm"
-                  value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Intro Message (mascot nói khi vào location)</label>
-                <textarea className="w-full min-h-[80px] rounded-md border bg-transparent px-3 py-2 text-sm"
-                  value={editData.intro_message} onChange={e => setEditData({ ...editData, intro_message: e.target.value })} />
-                <div className="mt-2 flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleRegenerateAudio} disabled={regeneratingAudio || !editData.intro_message.trim()}>
-                    <Volume2 className="mr-1.5 h-4 w-4" />
-                    {regeneratingAudio ? 'Đang tạo audio...' : 'Tạo lại audio'}
-                  </Button>
-                  {editData.intro_audio_url && (
-                    <audio controls src={editData.intro_audio_url} className="h-9 max-w-[260px]" />
-                  )}
-                </div>
-              </div>
-
-              {/* Suggested Questions */}
-              <div>
-                <label className="text-sm font-medium">Câu hỏi gợi ý</label>
-                <div className="space-y-2 mt-2">
-                  {editQuestions.map((q, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <Input value={q} onChange={e => {
-                        const updated = [...editQuestions]; updated[idx] = e.target.value; setEditQuestions(updated)
-                      }} placeholder={`Câu hỏi ${idx + 1}`} />
-                      <Button variant="ghost" size="icon" onClick={() => setEditQuestions(editQuestions.filter((_, i) => i !== idx))}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button variant="outline" size="sm" onClick={() => setEditQuestions([...editQuestions, ''])}>
-                    <Plus className="mr-1 h-4 w-4" /> Thêm câu hỏi
-                  </Button>
-                </div>
-              </div>
-
-              {/* Background Upload */}
-              <div>
-                <label className="text-sm font-medium">Ảnh nền 360°</label>
-                {editData.background_url && (
-                  <p className="text-xs text-muted-foreground mt-1 truncate">Hiện tại: {editData.background_url}</p>
-                )}
-                <div className="mt-2">
-                  <label className="flex items-center gap-2 cursor-pointer rounded-md border border-dashed p-3 hover:bg-muted/50 transition-colors">
-                    <Upload className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{bgFile ? bgFile.name : 'Chọn ảnh mới (tùy chọn)'}</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={e => setBgFile(e.target.files?.[0] || null)} />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => setEditingId(null)}>Hủy</Button>
-              <Button onClick={handleSave} disabled={saving || uploadingBg}>
+        <AdminModal
+          title={`Chỉnh sửa: ${editData.name}`}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setEditingId(null)} className="rounded-xl">Hủy</Button>
+              <Button onClick={handleSave} disabled={saving || uploadingBg} className="rounded-xl">
                 {saving ? 'Đang lưu...' : uploadingBg ? 'Đang upload ảnh...' : 'Lưu thay đổi'}
               </Button>
+            </>
+          }
+        >
+          <div className="space-y-5">
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Tên location
+              <Input value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} className="rounded-xl" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Mô tả
+              <AdminTextarea className="min-h-[80px]"
+                value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} />
+            </label>
+            <div>
+              <label className="text-sm font-medium text-[#10213f]">Intro Message (mascot nói khi vào location)</label>
+              <AdminTextarea className="mt-1.5 min-h-[80px]"
+                value={editData.intro_message} onChange={e => setEditData({ ...editData, intro_message: e.target.value })} />
+              <div className="mt-2.5 flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleRegenerateAudio} disabled={regeneratingAudio || !editData.intro_message.trim()} className="rounded-xl">
+                  <Volume2 className="mr-1.5 h-4 w-4" />
+                  {regeneratingAudio ? 'Đang tạo audio...' : 'Tạo lại audio'}
+                </Button>
+                {editData.intro_audio_url && (
+                  <audio controls src={editData.intro_audio_url} className="h-9 max-w-[260px]" />
+                )}
+              </div>
+            </div>
+
+            {/* Suggested Questions */}
+            <div>
+              <label className="text-sm font-medium text-[#10213f]">Câu hỏi gợi ý</label>
+              <div className="mt-2 space-y-2">
+                {editQuestions.map((q, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Input value={q} onChange={e => {
+                      const updated = [...editQuestions]; updated[idx] = e.target.value; setEditQuestions(updated)
+                    }} placeholder={`Câu hỏi ${idx + 1}`} className="rounded-xl" />
+                    <Button variant="ghost" size="icon" onClick={() => setEditQuestions(editQuestions.filter((_, i) => i !== idx))}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={() => setEditQuestions([...editQuestions, ''])} className="rounded-xl">
+                  <Plus className="mr-1 h-4 w-4" /> Thêm câu hỏi
+                </Button>
+              </div>
+            </div>
+
+            {/* Background Upload */}
+            <div>
+              <label className="text-sm font-medium text-[#10213f]">Ảnh nền 360°</label>
+              {editData.background_url && (
+                <p className="mt-1 truncate text-xs text-[#52627f]">Hiện tại: {editData.background_url}</p>
+              )}
+              <div className="mt-2">
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-[#d7e0f0] p-4 transition-colors hover:border-[#7a96c9] hover:bg-[#f6f8fb]">
+                  <Upload className="h-5 w-5 text-[#7a96c9]" />
+                  <span className="text-sm text-[#52627f]">{bgFile ? bgFile.name : 'Chọn ảnh mới (tùy chọn)'}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => setBgFile(e.target.files?.[0] || null)} />
+                </label>
+              </div>
             </div>
           </div>
-        </div>
+        </AdminModal>
       )}
 
       {/* Location Cards */}
       {loading && locations.length === 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map(i => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader><div className="h-5 w-32 rounded bg-muted" /></CardHeader>
-              <CardContent><div className="h-16 rounded bg-muted" /></CardContent>
-            </Card>
+            <AdminSkeleton key={i} variant="card" className="h-52" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(loc => (
-            <Card key={loc.id} className={`transition-all ${loc.status === 'inactive' ? 'opacity-60' : ''}`}>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-                <div className="space-y-1 min-w-0 flex-1">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-primary shrink-0" />
-                    <span className="truncate">{loc.name}</span>
-                    {loc.is_start_node && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground font-mono">/{loc.slug}</p>
+            <AdminPanel key={loc.id} className={`overflow-hidden transition-all ${loc.status === 'inactive' ? 'opacity-60 grayscale-[30%]' : ''}`}>
+              {/* Thumbnail */}
+              {loc.background_url && (
+                <div className="relative h-36 overflow-hidden bg-[#eef3fb]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={loc.background_url}
+                    alt={loc.name}
+                    className="h-full w-full object-cover transition-transform hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                  <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                    <Badge
+                      className={`rounded-lg text-xs ${loc.status === 'active'
+                        ? 'border-emerald-400/30 bg-emerald-500 text-white'
+                        : 'border-white/30 bg-white/80 text-[#52627f]'
+                      }`}
+                    >
+                      {loc.status === 'active' ? '● Đang mở' : '○ Tạm đóng'}
+                    </Badge>
+                    {loc.is_start_node && (
+                      <Badge className="rounded-lg border-amber-400/30 bg-amber-500 text-white text-xs">
+                        <Star className="mr-1 h-3 w-3" /> Điểm bắt đầu
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <Badge variant={loc.status === 'active' ? 'default' : 'secondary'}>{loc.status}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {loc.description && <p className="text-sm text-muted-foreground line-clamp-2">{loc.description}</p>}
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> {loc.media_count} media</span>
+              )}
+
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="flex items-center gap-2 text-[0.95rem] font-semibold text-[#10213f]">
+                      <MapPin className="h-4 w-4 shrink-0 text-[#053384]" />
+                      <span className="truncate">{loc.name}</span>
+                    </h3>
+                    <p className="mt-0.5 font-mono text-xs text-[#7a96c9]">/{loc.slug}</p>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(loc.id)}>
-                    <Pencil className="mr-1.5 h-4 w-4" /> Edit
+
+                {loc.description && (
+                  <p className="mt-2.5 line-clamp-2 text-[0.82rem] leading-relaxed text-[#52627f]">{loc.description}</p>
+                )}
+
+                <div className="mt-3 flex items-center gap-3 text-xs text-[#7a96c9]">
+                  <span className="flex items-center gap-1">
+                    <ImageIcon className="h-3.5 w-3.5" /> {loc.media_count} media
+                  </span>
+                  {loc.updated_at && (
+                    <span>Cập nhật: {new Date(loc.updated_at).toLocaleDateString('vi-VN')}</span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-2 border-t border-[#d7e0f0]/70 pt-3">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(loc.id)} className="rounded-xl text-xs">
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" /> Chỉnh sửa
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleToggleStatus(loc.id)} disabled={togglingId === loc.id}
-                    className={loc.status === 'active' ? 'text-green-600' : 'text-muted-foreground'}>
-                    {loc.status === 'active' ? <ToggleRight className="mr-1.5 h-4 w-4" /> : <ToggleLeft className="mr-1.5 h-4 w-4" />}
-                    {togglingId === loc.id ? '...' : loc.status}
+                  <Button
+                    variant="ghost" size="sm"
+                    onClick={() => handleToggleStatus(loc.id)}
+                    disabled={togglingId === loc.id}
+                    className={`rounded-xl text-xs ${loc.status === 'active' ? 'text-emerald-600 hover:text-emerald-700' : 'text-[#52627f]'}`}
+                  >
+                    {loc.status === 'active'
+                      ? <><ToggleRight className="mr-1.5 h-3.5 w-3.5" /> Tắt</>
+                      : <><ToggleLeft className="mr-1.5 h-3.5 w-3.5" /> Bật</>
+                    }
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </AdminPanel>
           ))}
         </div>
       )}
 
       {!loading && filtered.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          {search ? 'Không tìm thấy.' : 'Chưa có location nào.'}
-        </div>
+        <AdminEmptyState
+          icon={search ? Search : MapPin}
+          title={search ? 'Không tìm thấy kết quả' : 'Chưa có địa điểm nào'}
+          description={search ? 'Thử thay đổi từ khóa tìm kiếm.' : 'Thêm địa điểm mới để bắt đầu.'}
+        />
       )}
     </div>
   )
