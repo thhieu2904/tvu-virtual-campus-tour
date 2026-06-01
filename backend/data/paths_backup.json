@@ -95,6 +95,28 @@
       "node": "c7_front"
     }
   ],
+  "d5-giang-duong_to_c8-toa-c8": [
+    {
+      "x": 40.64,
+      "y": 27.03,
+      "node": "d5_front"
+    },
+    {
+      "x": 40.2,
+      "y": 36.77,
+      "node": "j_center_d3"
+    },
+    {
+      "x": 40.05,
+      "y": 57.74,
+      "node": "j_center_c7"
+    },
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    }
+  ],
   "cong-chinh_to_d5-giang-duong": [
     {
       "x": 68.83,
@@ -241,6 +263,43 @@
       "node": "c7_front"
     }
   ],
+  "cong-chinh_to_c8-toa-c8": [
+    {
+      "x": 68.83,
+      "y": 96.06,
+      "node": "welcome"
+    },
+    {
+      "x": 68.83,
+      "y": 86.62,
+      "node": "b1_front"
+    },
+    {
+      "x": 68.54,
+      "y": 78.77,
+      "node": "b2_front"
+    },
+    {
+      "x": 68.15,
+      "y": 74.63,
+      "node": "j_right_c3"
+    },
+    {
+      "x": 39.33,
+      "y": 74.63,
+      "node": "j_center_c3"
+    },
+    {
+      "x": 40.05,
+      "y": 57.74,
+      "node": "j_center_c7"
+    },
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    }
+  ],
   "b7-thu-vien_to_d5-giang-duong": [
     {
       "x": 66.36,
@@ -347,6 +406,38 @@
       "node": "c7_front"
     }
   ],
+  "b7-thu-vien_to_c8-toa-c8": [
+    {
+      "x": 66.36,
+      "y": 18.17,
+      "node": "b7_front"
+    },
+    {
+      "x": 40.78,
+      "y": 18.17,
+      "node": "j_center_top"
+    },
+    {
+      "x": 40.64,
+      "y": 27.03,
+      "node": "d5_front"
+    },
+    {
+      "x": 40.2,
+      "y": 36.77,
+      "node": "j_center_d3"
+    },
+    {
+      "x": 40.05,
+      "y": 57.74,
+      "node": "j_center_c7"
+    },
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    }
+  ],
   "c7-khoa-cntt_to_d5-giang-duong": [
     {
       "x": 21.89,
@@ -451,6 +542,121 @@
       "x": 66.36,
       "y": 18.17,
       "node": "b7_front"
+    }
+  ],
+  "c7-khoa-cntt_to_c8-toa-c8": [
+    {
+      "x": 21.89,
+      "y": 57.74,
+      "node": "c7_front"
+    },
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    }
+  ],
+  "c8-toa-c8_to_d5-giang-duong": [
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    },
+    {
+      "x": 40.05,
+      "y": 57.74,
+      "node": "j_center_c7"
+    },
+    {
+      "x": 40.2,
+      "y": 36.77,
+      "node": "j_center_d3"
+    },
+    {
+      "x": 40.64,
+      "y": 27.03,
+      "node": "d5_front"
+    }
+  ],
+  "c8-toa-c8_to_cong-chinh": [
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    },
+    {
+      "x": 40.05,
+      "y": 57.74,
+      "node": "j_center_c7"
+    },
+    {
+      "x": 39.33,
+      "y": 74.63,
+      "node": "j_center_c3"
+    },
+    {
+      "x": 68.15,
+      "y": 74.63,
+      "node": "j_right_c3"
+    },
+    {
+      "x": 68.54,
+      "y": 78.77,
+      "node": "b2_front"
+    },
+    {
+      "x": 68.83,
+      "y": 86.62,
+      "node": "b1_front"
+    },
+    {
+      "x": 68.83,
+      "y": 96.06,
+      "node": "welcome"
+    }
+  ],
+  "c8-toa-c8_to_b7-thu-vien": [
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    },
+    {
+      "x": 40.05,
+      "y": 57.74,
+      "node": "j_center_c7"
+    },
+    {
+      "x": 40.2,
+      "y": 36.77,
+      "node": "j_center_d3"
+    },
+    {
+      "x": 40.64,
+      "y": 27.03,
+      "node": "d5_front"
+    },
+    {
+      "x": 40.78,
+      "y": 18.17,
+      "node": "j_center_top"
+    },
+    {
+      "x": 66.36,
+      "y": 18.17,
+      "node": "b7_front"
+    }
+  ],
+  "c8-toa-c8_to_c7-khoa-cntt": [
+    {
+      "x": 32.79,
+      "y": 57.74,
+      "node": "c8_front"
+    },
+    {
+      "x": 21.89,
+      "y": 57.74,
+      "node": "c7_front"
     }
   ]
 }

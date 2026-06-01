@@ -259,3 +259,11 @@ def find_path(
         explored_count=len(closed), total_nodes=len(nodes),
         computation_ms=round(elapsed_ms, 3), steps=steps,
     )
+
+
+def reset_cache() -> None:
+    """Clear in-memory graph caches after graph/path admin updates."""
+    global _graph_cache, _nodes_cache, _adj_cache
+    _graph_cache = None
+    _nodes_cache = None
+    _adj_cache = None

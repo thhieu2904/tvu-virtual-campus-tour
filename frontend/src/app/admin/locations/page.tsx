@@ -9,18 +9,17 @@ import {
   AdminEmptyState,
   AdminModal,
   AdminNotice,
-  AdminPageHeader,
   AdminPanel,
   AdminSkeleton,
   AdminTextarea,
 } from '../_components/admin-ui'
 import {
   MapPin, Image as ImageIcon, ToggleLeft, ToggleRight,
-  RefreshCw, Search, Star, Pencil, Plus, Trash2, Upload, Volume2, Eye,
-  Route,
+  RefreshCw, Search, Star, Pencil, Plus, Trash2, Upload, Volume2,
+  Map,
 } from 'lucide-react'
 
-const PathfindingTab = lazy(() => import('./_components/PathfindingTab'))
+const MapManagerTab = lazy(() => import('./_components/MapManagerTab'))
 
 interface LocationItem {
   id: string; name: string; slug: string; description: string
@@ -39,7 +38,7 @@ export default function LocationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'list' | 'pathfinding'>('list')
+  const [activeTab, setActiveTab] = useState<'list' | 'map'>('list')
 
   // Edit dialog state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -72,6 +71,12 @@ export default function LocationsPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Lỗi toggle') }
     finally { setTogglingId(null) }
   }
+
+  const handleLocationStatusChange = useCallback((id: string, status: 'active' | 'inactive') => {
+    setLocations(prev => prev.map(loc =>
+      loc.id === id ? { ...loc, status } : loc
+    ))
+  }, [])
 
   const openEdit = async (id: string) => {
     try {
@@ -137,70 +142,69 @@ export default function LocationsPage() {
   const inactiveCount = locations.filter(l => l.status === 'inactive').length
 
   return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="Địa điểm tham quan"
-        description="Quản lý nội dung giới thiệu, ảnh 360°, câu hỏi gợi ý và trạng thái hiển thị trên bản đồ khuôn viên."
-        meta={
-          <>
-            <Badge variant="outline" className="rounded-lg">{activeCount} đang mở</Badge>
-            <Badge variant="secondary" className="rounded-lg">{inactiveCount} tạm đóng</Badge>
-          </>
-        }
-        actions={
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-[1.55rem] font-bold leading-tight tracking-[-0.01em] text-[#10213f] md:text-[1.75rem]">
+                Địa điểm tham quan
+              </h1>
+              <Badge variant="outline" className="rounded-lg">{activeCount} đang mở</Badge>
+              <Badge variant="secondary" className="rounded-lg">{inactiveCount} tạm đóng</Badge>
+            </div>
+            <p className="mt-1.5 max-w-3xl text-[0.85rem] leading-6 text-[#52627f]">
+              Quản lý nội dung giới thiệu, ảnh 360°, câu hỏi gợi ý và trạng thái hiển thị trên bản đồ khuôn viên.
+            </p>
+          </div>
           <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading} className="rounded-xl">
             <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
           </Button>
-        }
-      />
+        </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-1 rounded-xl bg-[#f6f8fb] p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('list')}
-          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-            activeTab === 'list'
-              ? 'bg-white text-[#10213f] shadow-sm'
-              : 'text-[#52627f] hover:text-[#10213f]'
-          }`}
-        >
-          <MapPin className="h-3.5 w-3.5" /> Danh sách
-        </button>
-        <button
-          onClick={() => setActiveTab('pathfinding')}
-          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-            activeTab === 'pathfinding'
-              ? 'bg-white text-[#10213f] shadow-sm'
-              : 'text-[#52627f] hover:text-[#10213f]'
-          }`}
-        >
-          <Route className="h-3.5 w-3.5" /> Pathfinding
-        </button>
-      </div>
-
-      {/* Pathfinding Tab */}
-      {activeTab === 'pathfinding' && (
-        <Suspense fallback={
-          <div className="grid gap-4 md:grid-cols-2">
-            <AdminSkeleton variant="card" className="h-96" />
-            <AdminSkeleton variant="card" className="h-96" />
-          </div>
-        }>
-          <PathfindingTab />
-        </Suspense>
-      )}
-
-      {/* List Tab (existing content) */}
-      {activeTab === 'list' && (<>
-
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
-        <Input placeholder="Tìm theo tên hoặc slug..." value={search} onChange={e => setSearch(e.target.value)} className="rounded-xl pl-10" />
+        {/* Tab Navigation */}
+        <div className="flex w-fit gap-1 rounded-xl bg-[#eef3fb] p-1">
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+              activeTab === 'list'
+                ? 'bg-white text-[#10213f] shadow-sm'
+                : 'text-[#52627f] hover:text-[#10213f]'
+            }`}
+          >
+            <MapPin className="h-3.5 w-3.5" /> Danh sách
+          </button>
+          <button
+            onClick={() => setActiveTab('map')}
+            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+              activeTab === 'map'
+                ? 'bg-white text-[#10213f] shadow-sm'
+                : 'text-[#52627f] hover:text-[#10213f]'
+            }`}
+          >
+            <Map className="h-3.5 w-3.5" /> Bản đồ
+          </button>
+        </div>
       </div>
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
-      {/* Edit Dialog — using AdminModal */}
+      {/* Map Tab */}
+      {activeTab === 'map' && (
+        <Suspense fallback={
+          <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+            <AdminSkeleton variant="card" className="h-[560px]" />
+            <AdminSkeleton variant="card" className="h-[560px]" />
+          </div>
+        }>
+          <MapManagerTab
+            onEditLocation={(id) => void openEdit(id)}
+            onLocationStatusChange={handleLocationStatusChange}
+          />
+        </Suspense>
+      )}
+
+      {/* Edit Dialog — shared by list and map tabs */}
       {editingId && editData && (
         <AdminModal
           title={`Chỉnh sửa: ${editData.name}`}
@@ -213,7 +217,7 @@ export default function LocationsPage() {
             </>
           }
         >
-          <div className="space-y-5">
+          <div className="flex flex-col gap-5">
             <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
               Tên location
               <Input value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} className="rounded-xl" />
@@ -241,7 +245,7 @@ export default function LocationsPage() {
             {/* Suggested Questions */}
             <div>
               <label className="text-sm font-medium text-[#10213f]">Câu hỏi gợi ý</label>
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 flex flex-col gap-2">
                 {editQuestions.map((q, idx) => (
                   <div key={idx} className="flex gap-2">
                     <Input value={q} onChange={e => {
@@ -252,7 +256,7 @@ export default function LocationsPage() {
                     </Button>
                   </div>
                 ))}
-                <Button variant="outline" size="sm" onClick={() => setEditQuestions([...editQuestions, ''])} className="rounded-xl">
+                <Button variant="outline" size="sm" onClick={() => setEditQuestions([...editQuestions, ''])} className="w-fit rounded-xl">
                   <Plus className="mr-1 h-4 w-4" /> Thêm câu hỏi
                 </Button>
               </div>
@@ -275,6 +279,14 @@ export default function LocationsPage() {
           </div>
         </AdminModal>
       )}
+
+      {/* List Tab (existing content) */}
+      {activeTab === 'list' && (<>
+
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
+        <Input placeholder="Tìm theo tên hoặc slug..." value={search} onChange={e => setSearch(e.target.value)} className="rounded-xl pl-10" />
+      </div>
 
       {/* Location Cards */}
       {loading && locations.length === 0 ? (

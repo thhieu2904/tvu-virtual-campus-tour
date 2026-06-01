@@ -127,6 +127,7 @@ interface TourState {
   fetchLocationMedia: (slug: string) => Promise<void>;
   fetchNavGraph: () => Promise<void>;
   fetchPath: (fromSlug: string, toSlug: string) => Promise<NavPathResult | null>;
+  clearNavigationCache: () => void;
   navigateTo: (slug: string, source?: "agent" | "user") => void;
   setLoading: (loading: boolean) => void;
   setAppReady: (ready: boolean) => void;
@@ -298,6 +299,14 @@ export const useTourStore = create<TourState>((set, get) => ({
       return null;
     }
   },
+
+  clearNavigationCache: () => set({
+    pathCache: {},
+    navNodes: [],
+    navEdges: [],
+    navActiveDestinations: [],
+    isNavGraphLoaded: false,
+  }),
 
   /**
    * Fetch ALL media for a location from the API.

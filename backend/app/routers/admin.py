@@ -1,6 +1,8 @@
 """Protected Admin API endpoints for content management."""
 
+import itertools
 import json
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -28,11 +30,14 @@ from app.schemas.admin import (
     MediaUpdateRequest,
 )
 from app.schemas.document import DocumentStatusResponse, IngestResponse
-from app.services import ingest_service, storage_service
+from app.services import ingest_service, pathfinding_service, storage_service
 
 router = APIRouter(dependencies=[Depends(verify_supabase_token)])
 
 DEFAULT_KIOSK_CONFIG = KioskConfigResponse().model_dump()
+BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
+PATHS_PATH = BACKEND_ROOT / "data" / "paths.json"
+PATHS_BACKUP_PATH = BACKEND_ROOT / "data" / "paths_backup.json"
 
 
 async def _read_payload(request: Request) -> dict[str, Any]:
@@ -196,9 +201,66 @@ async def update_location(
 @router.patch("/locations/{location_id}/status")
 async def toggle_location_status(location_id: str, session: AsyncSession = Depends(get_db)):
     loc = await _get_location_or_404(session, location_id)
-    loc.status = "inactive" if loc.status == "active" else "active"
+    next_status = "inactive" if loc.status == "active" else "active"
+    if next_status == "active" and not loc.background_url.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Cần upload ảnh 360° trước khi bật địa điểm.",
+        )
+    loc.status = next_status
     await session.commit()
     return {"id": str(loc.id), "status": loc.status}
+
+
+@router.post("/nav/regenerate-paths")
+async def regenerate_navigation_paths(session: AsyncSession = Depends(get_db)):
+    """
+    Regenerate static path coordinates for all active ordered location pairs.
+    The runtime A* API still computes fresh paths on demand; this file is a
+    fallback/preview asset for the map renderer.
+    """
+    started = time.perf_counter()
+    pathfinding_service.reset_cache()
+    result = await session.execute(
+        select(Location.slug)
+        .where(Location.status == "active")
+        .order_by(Location.sort_order, Location.name)
+    )
+    active_slugs = [row[0] for row in result.all()]
+
+    paths_output: dict[str, list[dict[str, Any]]] = {}
+    failed_pairs: list[dict[str, str]] = []
+
+    for from_slug, to_slug in itertools.permutations(active_slugs, 2):
+        path_result = pathfinding_service.find_path(from_slug, to_slug)
+        key = f"{from_slug}_to_{to_slug}"
+        if path_result.found:
+            paths_output[key] = path_result.coordinates
+        else:
+            failed_pairs.append({"from": from_slug, "to": to_slug})
+
+    if PATHS_PATH.exists():
+        shutil.copy2(PATHS_PATH, PATHS_BACKUP_PATH)
+
+    temp_path = PATHS_PATH.with_suffix(".tmp")
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump(paths_output, file, ensure_ascii=False, indent=2)
+        file.write("\n")
+    temp_path.replace(PATHS_PATH)
+
+    pathfinding_service.reset_cache()
+    total_ms = round((time.perf_counter() - started) * 1000, 3)
+
+    return {
+        "success": True,
+        "active_count": len(active_slugs),
+        "paths_computed": len(paths_output),
+        "paths_failed": len(failed_pairs),
+        "failed_pairs": failed_pairs,
+        "total_ms": total_ms,
+        "paths_file": str(PATHS_PATH),
+        "backup_file": str(PATHS_BACKUP_PATH) if PATHS_BACKUP_PATH.exists() else None,
+    }
 
 
 @router.put("/locations/{location_id}/background")
