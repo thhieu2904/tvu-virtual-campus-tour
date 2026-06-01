@@ -38,7 +38,7 @@ export default function LocationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'list' | 'map'>('list')
+  const [activeTab, setActiveTab] = useState<'list' | 'map'>('map')
 
   // Edit dialog state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -142,67 +142,96 @@ export default function LocationsPage() {
   const inactiveCount = locations.filter(l => l.status === 'inactive').length
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[1.55rem] font-bold leading-tight tracking-[-0.01em] text-[#10213f] md:text-[1.75rem]">
-                Địa điểm tham quan
-              </h1>
-              <Badge variant="outline" className="rounded-lg">{activeCount} đang mở</Badge>
-              <Badge variant="secondary" className="rounded-lg">{inactiveCount} tạm đóng</Badge>
-            </div>
-            <p className="mt-1.5 max-w-3xl text-[0.85rem] leading-6 text-[#52627f]">
-              Quản lý nội dung giới thiệu, ảnh 360°, câu hỏi gợi ý và trạng thái hiển thị trên bản đồ khuôn viên.
+    <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+      <aside className="xl:sticky xl:top-20 xl:self-start">
+        <div className="rounded-2xl border border-[#d7e0f0]/80 bg-white p-4 shadow-sm shadow-[#053384]/[0.03]">
+          <div>
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[#7a96c9]">
+              Quản lý địa điểm
+            </p>
+            <h1 className="mt-2 text-[1.45rem] font-bold leading-tight tracking-[-0.01em] text-[#10213f]">
+              Địa điểm tham quan
+            </h1>
+            <p className="mt-2 text-[0.82rem] leading-5 text-[#52627f]">
+              Quản lý nội dung giới thiệu, ảnh 360°, câu hỏi gợi ý và trạng thái hiển thị.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading} className="rounded-xl">
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Badge variant="outline" className="justify-center rounded-xl py-1.5">{activeCount} đang mở</Badge>
+            <Badge variant="secondary" className="justify-center rounded-xl py-1.5">{inactiveCount} tạm đóng</Badge>
+          </div>
+
+          <nav className="mt-5 flex gap-2 xl:flex-col" aria-label="Chế độ xem địa điểm">
+            <button
+              onClick={() => setActiveTab('map')}
+              className={`flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3 py-3 text-left transition-all xl:flex-none ${
+                activeTab === 'map'
+                  ? 'bg-[#053384] text-white shadow-sm shadow-[#053384]/20'
+                  : 'bg-[#f6f8fb] text-[#52627f] hover:bg-[#eef3fb] hover:text-[#10213f]'
+              }`}
+            >
+              <Map className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Bản đồ</span>
+                <span className={`mt-0.5 hidden text-[0.72rem] leading-4 xl:block ${activeTab === 'map' ? 'text-white/70' : 'text-[#7a96c9]'}`}>
+                  Xem node trực quan theo khuôn viên.
+                </span>
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('list')}
+              className={`flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3 py-3 text-left transition-all xl:flex-none ${
+                activeTab === 'list'
+                  ? 'bg-[#053384] text-white shadow-sm shadow-[#053384]/20'
+                  : 'bg-[#f6f8fb] text-[#52627f] hover:bg-[#eef3fb] hover:text-[#10213f]'
+              }`}
+            >
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Danh sách</span>
+                <span className={`mt-0.5 hidden text-[0.72rem] leading-4 xl:block ${activeTab === 'list' ? 'text-white/70' : 'text-[#7a96c9]'}`}>
+                  Tìm kiếm và thao tác hàng loạt.
+                </span>
+              </span>
+            </button>
+          </nav>
+
+          <div className="mt-5 rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] p-3">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Chú giải</p>
+            <div className="mt-2 grid gap-2 text-[0.78rem] text-[#52627f]">
+              <span className="inline-flex items-center gap-2">
+                <span className="size-2.5 rounded-full bg-[#22c55e]" /> Đang mở
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="size-2.5 rounded-full bg-[#94a3b8]" /> Tạm đóng
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="size-2.5 rounded-full bg-[#475569]" /> Chưa thiết lập
+              </span>
+            </div>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={fetchLocations} disabled={loading} className="mt-4 w-full rounded-xl">
             <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
           </Button>
         </div>
+      </aside>
 
-        {/* Tab Navigation */}
-        <div className="flex w-fit gap-1 rounded-xl bg-[#eef3fb] p-1">
-          <button
-            onClick={() => setActiveTab('list')}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-              activeTab === 'list'
-                ? 'bg-white text-[#10213f] shadow-sm'
-                : 'text-[#52627f] hover:text-[#10213f]'
-            }`}
-          >
-            <MapPin className="h-3.5 w-3.5" /> Danh sách
-          </button>
-          <button
-            onClick={() => setActiveTab('map')}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-              activeTab === 'map'
-                ? 'bg-white text-[#10213f] shadow-sm'
-                : 'text-[#52627f] hover:text-[#10213f]'
-            }`}
-          >
-            <Map className="h-3.5 w-3.5" /> Bản đồ
-          </button>
-        </div>
-      </div>
+      <div className="min-w-0">
+        {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
-      {error && <AdminNotice tone="danger">{error}</AdminNotice>}
-
-      {/* Map Tab */}
-      {activeTab === 'map' && (
-        <Suspense fallback={
-          <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-            <AdminSkeleton variant="card" className="h-[560px]" />
-            <AdminSkeleton variant="card" className="h-[560px]" />
-          </div>
-        }>
-          <MapManagerTab
-            onEditLocation={(id) => void openEdit(id)}
-            onLocationStatusChange={handleLocationStatusChange}
-          />
-        </Suspense>
-      )}
+        {/* Map Tab */}
+        {activeTab === 'map' && (
+          <Suspense fallback={
+            <AdminSkeleton variant="card" className="h-[620px]" />
+          }>
+            <MapManagerTab
+              onEditLocation={(id) => void openEdit(id)}
+              onLocationStatusChange={handleLocationStatusChange}
+            />
+          </Suspense>
+        )}
 
       {/* Edit Dialog — shared by list and map tabs */}
       {editingId && editData && (
@@ -280,8 +309,8 @@ export default function LocationsPage() {
         </AdminModal>
       )}
 
-      {/* List Tab (existing content) */}
-      {activeTab === 'list' && (<>
+        {/* List Tab (existing content) */}
+        {activeTab === 'list' && (<>
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
@@ -380,7 +409,8 @@ export default function LocationsPage() {
           description={search ? 'Thử thay đổi từ khóa tìm kiếm.' : 'Thêm địa điểm mới để bắt đầu.'}
         />
       )}
-      </>)}
+        </>)}
+      </div>
     </div>
   )
 }

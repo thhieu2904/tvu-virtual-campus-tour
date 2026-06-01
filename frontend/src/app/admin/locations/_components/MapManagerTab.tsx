@@ -2,14 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertCircle,
   Building2,
-  CalendarDays,
   Image as ImageIcon,
   Loader2,
-  MapPin,
-  Maximize2,
-  Minimize2,
   Pencil,
   ToggleLeft,
   ToggleRight,
@@ -91,6 +86,12 @@ function getNodeTitle(node: NavNode) {
   return node.label || node.building || node.slug || node.id
 }
 
+function getNodeShortLabel(node: NavNode, location?: LocationItem) {
+  if (node.building) return node.building
+  if (node.id === 'welcome') return 'Cổng'
+  return node.label || location?.name || node.id
+}
+
 function formatDate(value: string | null) {
   if (!value) return 'Chưa cập nhật'
   return new Date(value).toLocaleDateString('vi-VN', {
@@ -125,7 +126,6 @@ export default function MapManagerTab({
   const [regenResult, setRegenResult] = useState<RegeneratePathsResult | null>(null)
   const [regenError, setRegenError] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
-  const [mapExpanded, setMapExpanded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -147,8 +147,9 @@ export default function MapManagerTab({
         setEdges(graphData.edges || [])
         setDbLocations(locationsData.locations || [])
 
-        const firstDisplayNode = (graphData.nodes || []).find((node) => node.type !== 'junction')
-        setSelectedNodeId((current) => current || firstDisplayNode?.id || null)
+        setSelectedNodeId((current) =>
+          current && (graphData.nodes || []).some((node) => node.id === current) ? current : null,
+        )
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Không thể tải dữ liệu bản đồ')
@@ -354,57 +355,13 @@ export default function MapManagerTab({
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       {notice && <AdminNotice tone="success">{notice}</AdminNotice>}
 
-      <div
-        className={cn(
-          'grid gap-4',
-          mapExpanded
-            ? 'xl:grid-cols-1'
-            : 'xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_380px]',
-        )}
-      >
-        <AdminPanel className="overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-[#d7e0f0]/70 bg-[#f6f8fb] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-[0.95rem] font-semibold text-[#10213f]">Bản đồ quản lý địa điểm</h2>
-              <p className="mt-1 text-[0.8rem] text-[#52627f]">
-                {setupCount}/{displayNodes.length} node đã thiết lập, {activeCount} đang mở
-              </p>
+      <AdminPanel className="overflow-hidden">
+        <div className="flex justify-center bg-[#eef3fb] p-3 sm:p-4">
+          <div className="relative aspect-square w-full max-w-[min(100%,820px)] overflow-hidden rounded-xl bg-[#08142b] shadow-md ring-1 ring-black/5">
+            <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-xl border border-white/60 bg-white/90 px-3 py-2 text-xs text-[#52627f] shadow-sm backdrop-blur-md">
+              <span className="font-semibold text-[#10213f]">{setupCount}/{displayNodes.length}</span> node,{' '}
+              <span className="font-semibold text-emerald-700">{activeCount}</span> đang mở
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-[#52627f]">
-              <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-[#22c55e]" /> Đang mở
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-[#94a3b8]" /> Tạm đóng
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-[#475569]" /> Chưa thiết lập
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMapExpanded((value) => !value)}
-                className="ml-0 h-8 rounded-xl px-2.5 text-xs sm:ml-2"
-              >
-                {mapExpanded ? (
-                  <Minimize2 data-icon="inline-start" className="h-3.5 w-3.5" />
-                ) : (
-                  <Maximize2 data-icon="inline-start" className="h-3.5 w-3.5" />
-                )}
-                {mapExpanded ? 'Thu gọn' : 'Mở rộng'}
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex justify-center bg-[#eef3fb] p-3 sm:p-4">
-            <div
-              className={cn(
-                'relative aspect-square w-full overflow-hidden rounded-xl bg-[#08142b] shadow-md ring-1 ring-black/5',
-                mapExpanded ? 'max-w-[min(100%,980px)]' : 'max-w-[min(100%,820px)]',
-              )}
-            >
               <img
                 src="/map_v3.png"
                 alt="Bản đồ khuôn viên TVU"
@@ -442,6 +399,12 @@ export default function MapManagerTab({
               {displayNodes.map((node) => {
                 const state = getNodeState(node)
                 const selected = selectedNodeId === node.id
+                const dbLocation = node.slug ? dbBySlug.get(node.slug) : undefined
+                const isActive = dbLocation?.status === 'active'
+                const labelVisible = selected || isActive
+                const shortLabel = getNodeShortLabel(node, dbLocation)
+                const fullLabel = dbLocation?.name || node.label || node.building || node.id
+                const canExpandLabel = fullLabel !== shortLabel
 
                 return (
                   <button
@@ -453,9 +416,27 @@ export default function MapManagerTab({
                       setSelectedNodeId(node.id)
                       setNotice(null)
                     }}
-                    className="absolute z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full outline-none transition-transform hover:scale-110 focus-visible:ring-3 focus-visible:ring-white/70"
+                    className="group absolute z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full outline-none transition-transform hover:z-20 hover:scale-110 focus-visible:ring-3 focus-visible:ring-white/70"
                     style={{ left: `${node.x}%`, top: `${node.y}%` }}
                   >
+                    <span
+                      className={cn(
+                        'pointer-events-none absolute left-1/2 top-0 min-w-8 max-w-36 -translate-x-1/2 -translate-y-[calc(100%-2px)] whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold leading-none shadow-lg backdrop-blur-md transition-opacity',
+                        selected
+                          ? 'border-white/70 bg-[#053384] text-white'
+                          : dbLocation?.status === 'active'
+                            ? 'border-white/80 bg-white/95 text-[#10213f]'
+                            : 'border-white/25 bg-[#08142b]/75 text-white',
+                        labelVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                      )}
+                    >
+                      <span className={cn(canExpandLabel && 'group-hover:hidden')}>{shortLabel}</span>
+                      {canExpandLabel && <span className="hidden group-hover:inline">{fullLabel}</span>}
+                      <span className="absolute left-1/2 top-full size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-inherit bg-inherit" />
+                    </span>
+                    {isActive && !selected && (
+                      <span className="absolute size-6 rounded-full border border-emerald-200/70 bg-emerald-400/20 shadow-[0_0_18px_rgba(34,197,94,0.55)]" />
+                    )}
                     {selected && (
                       <span
                         className="absolute inset-1 animate-ping rounded-full opacity-50"
@@ -464,25 +445,17 @@ export default function MapManagerTab({
                     )}
                     <span
                       className={cn(
-                        'relative size-3.5 rounded-full border border-white/80 shadow-lg shadow-black/30',
+                        'relative rounded-full border border-white/80 shadow-lg shadow-black/30',
+                        isActive ? 'size-4' : 'size-3.5',
                         selected && 'ring-4 ring-white/50',
                       )}
                       style={{ backgroundColor: state.fill }}
                     />
-                    <span
-                      className={cn(
-                        'pointer-events-none absolute left-1/2 top-7 max-w-28 -translate-x-1/2 truncate rounded-md px-1.5 py-0.5 text-[10px] leading-tight shadow-sm',
-                        state.labelClass,
-                        !selected && 'opacity-90',
-                      )}
-                    >
-                      {node.building || node.label || node.id}
-                    </span>
                   </button>
                 )
               })}
 
-              {mapExpanded && selectedNode && (
+              {selectedNode && (
                 <div
                   className="pointer-events-none absolute z-30 w-96 max-w-[calc(100%-1.5rem)]"
                   style={getBubblePlacement(selectedNode)}
@@ -618,131 +591,6 @@ export default function MapManagerTab({
             </div>
           </div>
         </AdminPanel>
-
-        <AdminPanel className={cn('overflow-hidden xl:self-start xl:sticky xl:top-4', mapExpanded && 'xl:hidden')}>
-          <div className="border-b border-[#d7e0f0]/70 px-4 py-3.5">
-            <h2 className="text-[0.95rem] font-semibold text-[#10213f]">Chi tiết node</h2>
-            <p className="mt-1 text-[0.8rem] text-[#52627f]">Chọn một điểm trên bản đồ để xem nội dung.</p>
-          </div>
-
-          <div className="p-4">
-            {!selectedNode && (
-              <div className="flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-[#d7e0f0] bg-[#f6f8fb] p-6 text-center">
-                <MapPin className="h-10 w-10 text-[#7a96c9]" />
-                <p className="mt-3 text-sm font-semibold text-[#10213f]">Chọn một tòa nhà</p>
-                <p className="mt-1 text-sm text-[#52627f]">Trên bản đồ để xem thông tin chi tiết.</p>
-              </div>
-            )}
-
-            {selectedNode && selectedLocation && (
-              <div className="flex flex-col gap-4">
-                <div className="relative aspect-video overflow-hidden rounded-xl bg-[#eef3fb]">
-                  {selectedLocation.background_url ? (
-                    <img
-                      src={selectedLocation.background_url}
-                      alt={selectedLocation.name}
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex size-full flex-col items-center justify-center text-[#7a96c9]">
-                      <ImageIcon className="h-10 w-10" />
-                      <span className="mt-2 text-sm">Chưa có ảnh 360°</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
-                  <Badge
-                    className={cn(
-                      'absolute bottom-3 left-3 rounded-lg border-white/20 text-white',
-                      selectedLocation.status === 'active' ? 'bg-emerald-500' : 'bg-slate-500',
-                    )}
-                  >
-                    {selectedLocation.status === 'active' ? '● Đang mở' : '○ Tạm đóng'}
-                  </Badge>
-                </div>
-
-                <div>
-                  <h3 className="flex items-center gap-2 text-lg font-bold text-[#10213f]">
-                    <MapPin className="h-5 w-5 shrink-0 text-[#053384]" />
-                    <span className="min-w-0 truncate">{selectedLocation.name}</span>
-                  </h3>
-                  <p className="mt-1 font-mono text-xs text-[#7a96c9]">/{selectedLocation.slug}</p>
-                </div>
-
-                <p className="line-clamp-4 text-sm leading-6 text-[#52627f]">
-                  {selectedLocation.description || 'Chưa có mô tả cho địa điểm này.'}
-                </p>
-
-                <div className="flex flex-wrap gap-3 text-xs text-[#7a96c9]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    {selectedLocation.media_count} media
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {formatDate(selectedLocation.updated_at)}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-2 border-t border-[#d7e0f0]/70 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleToggle(selectedLocation.id)}
-                    disabled={togglingId === selectedLocation.id}
-                    className={cn(
-                      'rounded-xl',
-                      selectedLocation.status === 'active'
-                        ? 'text-emerald-700 hover:text-emerald-800'
-                        : 'text-[#52627f]',
-                    )}
-                  >
-                    {togglingId === selectedLocation.id ? (
-                      <Loader2 data-icon="inline-start" className="animate-spin" />
-                    ) : selectedLocation.status === 'active' ? (
-                      <ToggleRight data-icon="inline-start" />
-                    ) : (
-                      <ToggleLeft data-icon="inline-start" />
-                    )}
-                    {selectedLocation.status === 'active' ? 'Tắt' : 'Bật'}
-                  </Button>
-                  <Button
-                    onClick={() => onEditLocation?.(selectedLocation.id)}
-                    className="rounded-xl bg-[#053384] hover:bg-[#053384]/90"
-                  >
-                    <Pencil data-icon="inline-start" />
-                    Chỉnh sửa
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {selectedNode && !selectedLocation && (
-              <div className="flex flex-col gap-5">
-                <div className="flex aspect-video flex-col items-center justify-center rounded-xl border border-dashed border-[#d7e0f0] bg-[#eef3fb] text-[#7a96c9]">
-                  <Building2 className="h-12 w-12" />
-                  <p className="mt-2 text-xl font-bold text-[#10213f]">
-                    {selectedNode.building || selectedNode.label || selectedNode.id}
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-bold text-[#10213f]">
-                    {selectedNode.label || `Tòa ${selectedNode.building || selectedNode.id}`}
-                  </h3>
-                  <p className="mt-1 text-sm font-medium text-[#7a96c9]">Chưa thiết lập</p>
-                </div>
-
-                <div className="rounded-xl border border-[#d7e0f0] bg-[#f6f8fb] p-4 text-sm leading-6 text-[#52627f]">
-                  <div className="mb-2 flex items-center gap-2 font-semibold text-[#10213f]">
-                    <AlertCircle className="h-4 w-4 text-[#7a96c9]" />
-                    Chưa có dữ liệu trong hệ thống
-                  </div>
-                  Tòa nhà này chưa được thêm vào hệ thống. Liên hệ quản trị viên để thiết lập nội dung.
-                </div>
-              </div>
-            )}
-          </div>
-        </AdminPanel>
-      </div>
     </div>
   )
 }
