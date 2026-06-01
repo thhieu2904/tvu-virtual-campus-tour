@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
 import { adminApi } from '@/lib/admin-api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,10 @@ import {
 import {
   MapPin, Image as ImageIcon, ToggleLeft, ToggleRight,
   RefreshCw, Search, Star, Pencil, Plus, Trash2, Upload, Volume2, Eye,
+  Route,
 } from 'lucide-react'
+
+const PathfindingTab = lazy(() => import('./_components/PathfindingTab'))
 
 interface LocationItem {
   id: string; name: string; slug: string; description: string
@@ -36,6 +39,7 @@ export default function LocationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'list' | 'pathfinding'>('list')
 
   // Edit dialog state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -149,6 +153,45 @@ export default function LocationsPage() {
           </Button>
         }
       />
+
+      {/* Tab Navigation */}
+      <div className="flex gap-1 rounded-xl bg-[#f6f8fb] p-1 w-fit">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+            activeTab === 'list'
+              ? 'bg-white text-[#10213f] shadow-sm'
+              : 'text-[#52627f] hover:text-[#10213f]'
+          }`}
+        >
+          <MapPin className="h-3.5 w-3.5" /> Danh sách
+        </button>
+        <button
+          onClick={() => setActiveTab('pathfinding')}
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+            activeTab === 'pathfinding'
+              ? 'bg-white text-[#10213f] shadow-sm'
+              : 'text-[#52627f] hover:text-[#10213f]'
+          }`}
+        >
+          <Route className="h-3.5 w-3.5" /> Pathfinding
+        </button>
+      </div>
+
+      {/* Pathfinding Tab */}
+      {activeTab === 'pathfinding' && (
+        <Suspense fallback={
+          <div className="grid gap-4 md:grid-cols-2">
+            <AdminSkeleton variant="card" className="h-96" />
+            <AdminSkeleton variant="card" className="h-96" />
+          </div>
+        }>
+          <PathfindingTab />
+        </Suspense>
+      )}
+
+      {/* List Tab (existing content) */}
+      {activeTab === 'list' && (<>
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
@@ -325,6 +368,7 @@ export default function LocationsPage() {
           description={search ? 'Thử thay đổi từ khóa tìm kiếm.' : 'Thêm địa điểm mới để bắt đầu.'}
         />
       )}
+      </>)}
     </div>
   )
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
+import { preloadImage } from "@/shared/lib/utils";
 import { useChatStore, _stopCurrentAudio } from "@/features/chat/store";
 import { useKioskIdleWatcher } from "@/hooks/useKioskIdleWatcher";
 import PanoramaViewer from "@/features/tour/components/PanoramaViewer";
@@ -43,6 +44,7 @@ function resolveR2Url(url?: string | null) {
 export default function TourPage() {
   const [isResetting, setIsResetting] = useState(false);
   const fetchLocations = useTourStore((s) => s.fetchLocations);
+  const fetchNavGraph = useTourStore((s) => s.fetchNavGraph);
   const location = useTourStore((s) => s.currentLocation());
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const isLoading = useTourStore((s) => s.isLoading);
@@ -70,7 +72,8 @@ export default function TourPage() {
 
   useEffect(() => {
     fetchLocations();
-  }, [fetchLocations]);
+    fetchNavGraph();
+  }, [fetchLocations, fetchNavGraph]);
 
   // Event-based startup: panorama + avatar model must both be ready before the tour starts.
   useEffect(() => {
@@ -94,6 +97,31 @@ export default function TourPage() {
       return () => clearTimeout(safety);
     }
   }, [isLoading, location, isAppReady]);
+
+  // Preload 360° images of adjacent locations into browser cache.
+  // Runs after a 3s delay so it doesn't compete with the current panorama load.
+  const preloadedSlugsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!location || !isAppReady) return;
+
+    const timer = setTimeout(() => {
+      const { locations } = useTourStore.getState();
+      location.links.forEach((link) => {
+        if (preloadedSlugsRef.current.has(link.toSlug)) return;
+        const adj = locations.find((l) => l.slug === link.toSlug);
+        if (adj?.backgroundUrl) {
+          preloadedSlugsRef.current.add(link.toSlug);
+          preloadImage(resolveR2Url(adj.backgroundUrl)).catch(() => {
+            // Silent fail — preloading is best-effort
+            preloadedSlugsRef.current.delete(link.toSlug);
+          });
+        }
+      });
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [location?.slug, isAppReady]);
+
 
   // Callback for PanoramaViewer onLoad event
   const handlePanoramaLoad = useCallback(() => {

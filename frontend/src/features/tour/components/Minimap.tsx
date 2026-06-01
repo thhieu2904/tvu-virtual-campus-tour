@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
 import Image from "next/image";
+import { Sparkles } from "lucide-react";
 
 import CampusMap, {
   getCoordsBySlug,
   getPathPoints,
-  getAllPathsFrom,
 } from "./CampusMap";
 import { CloseButton } from "@/components/ui/close-button";
+
+const AStarExplainer = lazy(() => import("./AStarExplainer"));
 
 export default function Minimap() {
   const activeOverlay = useTourStore((s) => s.activeOverlay);
@@ -22,6 +24,9 @@ export default function Minimap() {
   const currentSlug = useTourStore((s) => s.currentLocationSlug);
   const isTransitioning = useTourStore((s) => s.isTransitioning);
   const navigateTo = useTourStore((s) => s.navigateTo);
+  const fetchPath = useTourStore((s) => s.fetchPath);
+  const pathCache = useTourStore((s) => s.pathCache);
+  const navNodes = useTourStore((s) => s.navNodes);
   const pendingNavigation = useTourStore((s) => s.pendingNavigation);
   const pendingMapAnimationSlug = useTourStore(
     (s) => s.pendingMapAnimationSlug,
@@ -40,22 +45,55 @@ export default function Minimap() {
 
   // ── Navigation animation state ──
   const [navTarget, setNavTarget] = useState<string | null>(null);
+  const [isPathResolving, setIsPathResolving] = useState(false);
   const [animProgress, setAnimProgress] = useState(0);
   const animRef = useRef<number | null>(null);
   const pendingNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAgentNavRef = useRef(false); // Tracks if current navigation was AI-triggered
+  const [showAStarExplainer, setShowAStarExplainer] = useState(false);
 
   // Active path key for CampusMap
   const activePathKey = useMemo(() => {
     if (!navTarget || !currentSlug) return null;
     const key = `${currentSlug}_to_${navTarget}`;
-    return getPathPoints(currentSlug, navTarget) ? key : null;
-  }, [navTarget, currentSlug]);
+    return pathCache[key]?.found || getPathPoints(currentSlug, navTarget)
+      ? key
+      : null;
+  }, [navTarget, currentSlug, pathCache]);
 
   // ── Handle destination click ──
   const handleNavigate = useCallback(
-    (targetSlug: string) => {
-      if (targetSlug === currentSlug) return;
+    async (targetSlug: string) => {
+      if (
+        !currentSlug ||
+        targetSlug === currentSlug ||
+        navTarget ||
+        isPathResolving
+      ) {
+        return;
+      }
+
+      const startSlug = currentSlug;
+      const source = isAgentNavRef.current ? "agent" : "user";
+      const fallbackPath = getPathPoints(startSlug, targetSlug);
+
+      setIsPathResolving(true);
+      const apiPath = await fetchPath(startSlug, targetSlug);
+      setIsPathResolving(false);
+
+      const currentState = useTourStore.getState();
+      if (currentState.currentLocationSlug !== startSlug) {
+        isAgentNavRef.current = false;
+        return;
+      }
+
+      if (!apiPath?.found && !fallbackPath) {
+        console.warn(
+          `[Minimap] No path found from ${startSlug} to ${targetSlug}`,
+        );
+        isAgentNavRef.current = false;
+        return;
+      }
 
       setNavTarget(targetSlug);
       setAnimProgress(0);
@@ -71,13 +109,13 @@ export default function Minimap() {
           animRef.current = requestAnimationFrame(tick);
         } else {
           // Pass "agent" source if triggered by AI, so ChatOverlay won't add duplicate intro
-          navigateTo(targetSlug, isAgentNavRef.current ? "agent" : "user");
+          navigateTo(targetSlug, source);
           isAgentNavRef.current = false;
         }
       };
       animRef.current = requestAnimationFrame(tick);
     },
-    [currentSlug, navigateTo],
+    [currentSlug, fetchPath, isPathResolving, navigateTo, navTarget],
   );
 
   // ── Auto-close after navigation completes AND panorama is ready ──
@@ -94,6 +132,7 @@ export default function Minimap() {
           }, 800); // Wait for 360 scene to settle
         }
         setNavTarget(null);
+        setIsPathResolving(false);
         setAnimProgress(0);
       }, 50);
       return () => clearTimeout(timer);
@@ -120,6 +159,7 @@ export default function Minimap() {
         );
         setExpanded(false);
         setNavTarget(null);
+        setIsPathResolving(false);
         setAnimProgress(0);
       }, 6000);
       return () => clearTimeout(safety);
@@ -175,12 +215,20 @@ export default function Minimap() {
   }, [pendingMapAnimationSlug, currentSlug]);
 
   // ── Node list for CampusMap ──
+  const dynamicCoordSlugs = useMemo(() => {
+    const slugs = new Set<string>();
+    for (const node of navNodes) {
+      if (node.slug) slugs.add(node.slug);
+    }
+    return slugs;
+  }, [navNodes]);
+
   const mapNodes = useMemo(
     () =>
       locations
-        .filter((l) => getCoordsBySlug(l.slug))
+        .filter((l) => dynamicCoordSlugs.has(l.slug) || getCoordsBySlug(l.slug))
         .map((l) => ({ slug: l.slug, name: l.name, status: l.status })),
-    [locations],
+    [locations, dynamicCoordSlugs],
   );
 
   return (
@@ -271,7 +319,7 @@ export default function Minimap() {
             <div
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => {
-                if (!navTarget) setExpanded(false);
+                if (!navTarget && !isPathResolving) setExpanded(false);
               }}
             />
 
@@ -304,10 +352,17 @@ export default function Minimap() {
                 </div>
 
                 {/* Close button (Absolute Right) */}
-                <div className="absolute right-5 top-1/2 -translate-y-1/2">
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                  <button
+                    onClick={() => setShowAStarExplainer(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#053384]/10 hover:bg-[#053384]/20 text-[#053384] text-[11px] font-semibold transition-all"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Thuật toán A*
+                  </button>
                   <CloseButton
                     onClick={() => setExpanded(false)}
-                    disabled={!!navTarget}
+                    disabled={!!navTarget || isPathResolving}
                   />
                 </div>
               </div>
@@ -322,11 +377,11 @@ export default function Minimap() {
                       currentSlug={currentSlug}
                       activePathKey={activePathKey}
                       animProgress={animProgress}
-                      showAvailablePaths={!navTarget}
+                      showAvailablePaths={!navTarget && !isPathResolving}
                       nodes={mapNodes}
                       navTargetSlug={navTarget}
                       onNodeClick={handleNavigate}
-                      disabled={!!navTarget}
+                      disabled={!!navTarget || isPathResolving}
                     />
                   </div>
                 </div>
@@ -335,17 +390,28 @@ export default function Minimap() {
                 <HelpTooltip />
 
                 {/* Navigation status overlay */}
-                {navTarget && (
+                {(navTarget || isPathResolving) && (
                   <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 bg-white/95 backdrop-blur shadow-lg rounded-full px-5 py-2 flex items-center gap-2.5 border border-gray-100">
                     <span className="text-sm">🚶</span>
                     <span className="text-xs font-medium text-[#053384] animate-pulse">
-                      Đang dẫn đường...
+                      {isPathResolving
+                        ? "Đang tính đường bằng A*..."
+                        : "Đang dẫn đường..."}
                     </span>
                   </div>
                 )}
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* A* Explainer Overlay */}
+      <AnimatePresence>
+        {showAStarExplainer && (
+          <Suspense fallback={null}>
+            <AStarExplainer onClose={() => setShowAStarExplainer(false)} />
+          </Suspense>
         )}
       </AnimatePresence>
     </>

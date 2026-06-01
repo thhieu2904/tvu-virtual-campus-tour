@@ -18,12 +18,14 @@
 import { useMemo } from "react";
 import navGraph from "@/data/nav_graph.json";
 import pathsData from "@/data/paths.json";
+import { useTourStore, type NavPathResult } from "@/features/tour/store";
 
 // ── Types ──
 type Point = { x: number; y: number; node?: string };
 type PathsMap = Record<string, Point[]>;
+type StaticNavNode = { slug?: string; x: number; y: number };
 
-const paths = pathsData as PathsMap;
+const staticPaths = pathsData as PathsMap;
 
 // ── Destination brand colors ──
 const DEST_COLORS: Record<string, string> = {
@@ -33,29 +35,78 @@ const DEST_COLORS: Record<string, string> = {
   "d5-giang-duong": "#ec4899",
 };
 
-// ── Lookup: slug → {x, y} (built once at module level) ──
-const COORDS_BY_SLUG: Record<string, { x: number; y: number }> = {};
-for (const node of navGraph.nodes) {
-  if ((node as any).slug) {
-    COORDS_BY_SLUG[(node as any).slug] = { x: node.x, y: node.y };
+// ── Lookup: slug → {x, y} (static fallback when API graph is unavailable) ──
+const STATIC_COORDS_BY_SLUG: Record<string, { x: number; y: number }> = {};
+for (const node of navGraph.nodes as StaticNavNode[]) {
+  if (node.slug) {
+    STATIC_COORDS_BY_SLUG[node.slug] = { x: node.x, y: node.y };
   }
 }
 
 export function getCoordsBySlug(slug: string) {
-  return COORDS_BY_SLUG[slug] || null;
+  const dynamicNode = useTourStore
+    .getState()
+    .navNodes.find((node) => node.slug === slug);
+
+  if (dynamicNode) {
+    return { x: dynamicNode.x, y: dynamicNode.y };
+  }
+
+  return STATIC_COORDS_BY_SLUG[slug] || null;
 }
 
 export function getDestColor(slug: string) {
   return DEST_COLORS[slug] || "#053384";
 }
 
+/**
+ * Get path points between two slugs.
+ * Priority: 1) Store pathCache (API) → 2) Static paths.json fallback
+ */
 export function getPathPoints(fromSlug: string, toSlug: string): Point[] | null {
   const key = `${fromSlug}_to_${toSlug}`;
-  return paths[key] || null;
+
+  // Check API cache first
+  const cached = useTourStore.getState().pathCache[key];
+  if (cached?.found) {
+    return cached.coordinates.map((c) => ({ x: c.x, y: c.y, node: c.node }));
+  }
+
+  // Fallback to static paths
+  return staticPaths[key] || null;
 }
 
+/**
+ * Get all path keys from current location.
+ * Priority: 1) Store pathCache keys → 2) Static paths.json keys
+ */
 export function getAllPathsFrom(slug: string): string[] {
-  return Object.keys(paths).filter((k) => k.startsWith(`${slug}_to_`));
+  const state = useTourStore.getState();
+
+  // Merge: API cached paths + static paths
+  const apiKeys = Object.keys(state.pathCache).filter(
+    (k) => k.startsWith(`${slug}_to_`) && state.pathCache[k]?.found
+  );
+  const staticKeys = Object.keys(staticPaths).filter((k) =>
+    k.startsWith(`${slug}_to_`)
+  );
+  const dynamicKeys = state.navActiveDestinations
+    .filter((toSlug) => toSlug !== slug)
+    .map((toSlug) => `${slug}_to_${toSlug}`);
+
+  // Deduplicate
+  return [...new Set([...apiKeys, ...staticKeys, ...dynamicKeys])];
+}
+
+/**
+ * Get the full NavPathResult for a route (for visualization).
+ */
+export function getNavPathResult(
+  fromSlug: string,
+  toSlug: string,
+): NavPathResult | null {
+  const key = `${fromSlug}_to_${toSlug}`;
+  return useTourStore.getState().pathCache[key] || null;
 }
 
 // ── Helpers ──
@@ -76,6 +127,12 @@ function getPathLength(pts: Point[]): number {
 function getPathColor(pathKey: string): string {
   const parts = pathKey.split("_to_");
   return DEST_COLORS[parts[1]] || "#053384";
+}
+
+function getPathPointsByKey(pathKey: string): Point[] | null {
+  const [fromSlug, toSlug] = pathKey.split("_to_");
+  if (!fromSlug || !toSlug) return null;
+  return getPathPoints(fromSlug, toSlug);
 }
 
 // ── Component Props ──
@@ -115,11 +172,47 @@ export default function CampusMap({
   disabled = false,
   className = "",
 }: CampusMapProps) {
+  const pathCache = useTourStore((s) => s.pathCache);
+  const navNodes = useTourStore((s) => s.navNodes);
+  const navActiveDestinations = useTourStore((s) => s.navActiveDestinations);
+
+  const dynamicCoordsBySlug = useMemo(() => {
+    const coords: Record<string, { x: number; y: number }> = {};
+    for (const node of navNodes) {
+      if (node.slug) {
+        coords[node.slug] = { x: node.x, y: node.y };
+      }
+    }
+    return coords;
+  }, [navNodes]);
+
+  const resolveCoordsBySlug = (slug: string) =>
+    dynamicCoordsBySlug[slug] || STATIC_COORDS_BY_SLUG[slug] || null;
+
   // Paths from current location
   const availablePaths = useMemo(() => {
     if (!currentSlug || !showAvailablePaths) return [];
-    return getAllPathsFrom(currentSlug);
-  }, [currentSlug, showAvailablePaths]);
+    const apiKeys = Object.keys(pathCache).filter(
+      (key) => key.startsWith(`${currentSlug}_to_`) && pathCache[key]?.found,
+    );
+    const staticKeys = Object.keys(staticPaths).filter((key) =>
+      key.startsWith(`${currentSlug}_to_`),
+    );
+    const dynamicKeys = navActiveDestinations
+      .filter((toSlug) => toSlug !== currentSlug)
+      .map((toSlug) => `${currentSlug}_to_${toSlug}`);
+
+    return [...new Set([...apiKeys, ...staticKeys, ...dynamicKeys])];
+  }, [currentSlug, showAvailablePaths, pathCache, navActiveDestinations]);
+
+  const activePathPoints = useMemo(() => {
+    if (!activePathKey) return null;
+    const cached = pathCache[activePathKey];
+    if (cached?.found) {
+      return cached.coordinates.map((c) => ({ x: c.x, y: c.y, node: c.node }));
+    }
+    return staticPaths[activePathKey] || null;
+  }, [activePathKey, pathCache]);
 
   return (
     // ╔══════════════════════════════════════════════════════╗
@@ -163,7 +256,7 @@ export default function CampusMap({
         {/* Available paths (faint dashed) — only when NOT navigating */}
         {!activePathKey &&
           availablePaths.map((key) => {
-            const pts = paths[key];
+            const pts = getPathPointsByKey(key);
             if (!pts?.length) return null;
             const color = getPathColor(key);
             return (
@@ -183,9 +276,9 @@ export default function CampusMap({
 
         {/* Active navigation path (animated) */}
         {activePathKey &&
-          paths[activePathKey] &&
+          activePathPoints &&
           (() => {
-            const pts = paths[activePathKey];
+            const pts = activePathPoints;
             const totalLen = getPathLength(pts);
             const dashLen = totalLen * animProgress;
             const color = getPathColor(activePathKey);
@@ -229,7 +322,7 @@ export default function CampusMap({
         {currentSlug &&
           !activePathKey &&
           (() => {
-            const c = COORDS_BY_SLUG[currentSlug];
+            const c = resolveCoordsBySlug(currentSlug);
             if (!c) return null;
             return (
               <>
@@ -245,7 +338,7 @@ export default function CampusMap({
 
       {/* Layer 3: Interactive node buttons */}
       {nodes.map((node) => {
-        const coords = COORDS_BY_SLUG[node.slug];
+        const coords = resolveCoordsBySlug(node.slug);
         if (!coords) return null;
 
         const isCurrent = node.slug === currentSlug;

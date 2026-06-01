@@ -41,6 +41,44 @@ export interface MediaItem {
   sort_order: number;
 }
 
+// ===== Nav Graph Types =====
+
+export interface NavGraphNode {
+  id: string;
+  slug?: string;
+  x: number;
+  y: number;
+  label?: string;
+  building?: string;
+  type: string;
+  active?: boolean;
+}
+
+export interface NavGraphEdge {
+  from: string;
+  to: string;
+  cost?: number;
+  bidirectional?: boolean;
+}
+
+export interface NavPathResult {
+  found: boolean;
+  path: string[];
+  coordinates: { x: number; y: number; node: string }[];
+  total_cost: number;
+  explored_count: number;
+  total_nodes: number;
+  computation_ms: number;
+  steps: {
+    action: string;
+    node_id: string;
+    node_label: string;
+    g: number;
+    f: number;
+    detail: string;
+  }[];
+}
+
 interface TourState {
   // === Data ===
   locations: LocationNode[];
@@ -74,12 +112,21 @@ interface TourState {
   focusedMediaId: string | null;    // AI Agent points to this specific item
   preferredMediaTab: "video" | "info";
 
+  // === Navigation Graph (Dynamic A*) ===
+  navNodes: NavGraphNode[];            // All graph nodes (from API)
+  navEdges: NavGraphEdge[];            // All graph edges (from API)
+  navActiveDestinations: string[];     // Active destination slugs
+  pathCache: Record<string, NavPathResult>; // Cached A* results: "from_to" → result
+  isNavGraphLoaded: boolean;
+
   // === Computed ===
   currentLocation: () => LocationNode | undefined;
 
   // === Actions ===
   fetchLocations: () => Promise<void>;
   fetchLocationMedia: (slug: string) => Promise<void>;
+  fetchNavGraph: () => Promise<void>;
+  fetchPath: (fromSlug: string, toSlug: string) => Promise<NavPathResult | null>;
   navigateTo: (slug: string, source?: "agent" | "user") => void;
   setLoading: (loading: boolean) => void;
   setAppReady: (ready: boolean) => void;
@@ -130,6 +177,13 @@ export const useTourStore = create<TourState>((set, get) => ({
   isMediaLoading: false,
   focusedMediaId: null,
   preferredMediaTab: "video",
+
+  // Navigation Graph
+  navNodes: [],
+  navEdges: [],
+  navActiveDestinations: [],
+  pathCache: {},
+  isNavGraphLoaded: false,
 
   currentLocation: () => {
     const { locations, currentLocationSlug } = get();
@@ -195,6 +249,54 @@ export const useTourStore = create<TourState>((set, get) => ({
   resetNetworkRetry: () => {
     set({ networkRetryCount: 0, isFatalError: false, isNetworkError: false });
     get().fetchLocations();
+  },
+
+  /**
+   * Fetch navigation graph from backend (nodes, edges, active destinations).
+   * Called once on app load. Data is cached in store.
+   */
+  fetchNavGraph: async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/nav/graph`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      set({
+        navNodes: data.nodes || [],
+        navEdges: data.edges || [],
+        navActiveDestinations: data.active_destinations || [],
+        isNavGraphLoaded: true,
+      });
+    } catch (err) {
+      console.warn("Failed to fetch nav graph:", err);
+    }
+  },
+
+  /**
+   * Fetch A* path between two locations. Results are cached.
+   * Returns null if path not found or on error.
+   */
+  fetchPath: async (fromSlug: string, toSlug: string) => {
+    const cacheKey = `${fromSlug}_to_${toSlug}`;
+    const cached = get().pathCache[cacheKey];
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/nav/path?from=${encodeURIComponent(fromSlug)}&to=${encodeURIComponent(toSlug)}`
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result: NavPathResult = await response.json();
+
+      // Cache the result
+      set((state) => ({
+        pathCache: { ...state.pathCache, [cacheKey]: result },
+      }));
+
+      return result;
+    } catch (err) {
+      console.warn(`Failed to fetch path ${fromSlug} → ${toSlug}:`, err);
+      return null;
+    }
   },
 
   /**
