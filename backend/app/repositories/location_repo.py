@@ -40,7 +40,7 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
     stmt = select(Location).options(
         selectinload(Location.suggested_questions),
         selectinload(Location.mascot),
-    ).order_by(Location.sort_order)
+    ).where(Location.status == "active").order_by(Location.sort_order)
     
     result = await db.execute(stmt)
     locations = result.scalars().all()

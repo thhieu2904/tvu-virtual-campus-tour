@@ -13,13 +13,22 @@ import {
   AdminSkeleton,
   AdminTextarea,
 } from '../_components/admin-ui'
+import MascotPreview3D from '../_components/MascotPreview3D'
 import {
   MapPin, Image as ImageIcon, ToggleLeft, ToggleRight,
   RefreshCw, Search, Star, Pencil, Plus, Trash2, Upload, Volume2,
-  Map,
+  Map, Bot, Crown, Check,
 } from 'lucide-react'
 
 const MapManagerTab = lazy(() => import('./_components/MapManagerTab'))
+
+interface MascotOption {
+  id: string
+  name: string
+  slug: string
+  model_3d_url: string
+  is_default: boolean
+}
 
 interface LocationItem {
   id: string; name: string; slug: string; description: string
@@ -48,6 +57,8 @@ export default function LocationsPage() {
   const [bgFile, setBgFile] = useState<File | null>(null)
   const [uploadingBg, setUploadingBg] = useState(false)
   const [regeneratingAudio, setRegeneratingAudio] = useState(false)
+  const [mascots, setMascots] = useState<MascotOption[]>([])
+  const [selectedMascotId, setSelectedMascotId] = useState<string | null>(null)
 
   const fetchLocations = useCallback(async () => {
     setLoading(true); setError(null)
@@ -80,11 +91,18 @@ export default function LocationsPage() {
 
   const openEdit = async (id: string) => {
     try {
-      const detail = await adminApi.get<LocationDetail>(`/locations/${id}`)
+      const [detail, mascotData] = await Promise.all([
+        adminApi.get<LocationDetail>(`/locations/${id}`),
+        mascots.length === 0
+          ? adminApi.get<{ mascots: MascotOption[] }>('/mascots')
+          : Promise.resolve(null),
+      ])
       setEditData(detail)
       setEditQuestions(detail.suggested_questions.map(q => q.question))
+      setSelectedMascotId(detail.mascot_id)
       setEditingId(id)
       setBgFile(null)
+      if (mascotData) setMascots(mascotData.mascots)
     } catch (err) { setError(err instanceof Error ? err.message : 'Lỗi tải chi tiết') }
   }
 
@@ -96,6 +114,7 @@ export default function LocationsPage() {
         name: editData.name,
         description: editData.description,
         intro_message: editData.intro_message,
+        mascot_id: selectedMascotId || null,
       })
       await adminApi.put(`/locations/${editingId}/questions`, {
         questions: editQuestions
@@ -269,6 +288,84 @@ export default function LocationsPage() {
                   <audio controls src={editData.intro_audio_url} className="h-9 max-w-[260px]" />
                 )}
               </div>
+            </div>
+
+            {/* Mascot Selector */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Bot className="h-4 w-4 text-[#7a96c9]" />
+                <label className="text-sm font-medium text-[#10213f]">Đại sứ ảo (Mascot)</label>
+              </div>
+              <p className="mb-3 text-xs text-[#52627f]">Chọn mascot sẽ xuất hiện khi người dùng tham quan địa điểm này.</p>
+              {mascots.length === 0 ? (
+                <div className="flex items-center justify-center rounded-xl border border-dashed border-[#d7e0f0] p-8">
+                  <p className="text-sm text-[#7a96c9]">Đang tải mascot...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {mascots.map((m) => {
+                    const isSelected = selectedMascotId === m.id
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedMascotId(isSelected ? null : m.id)}
+                        className={`group relative flex flex-col overflow-hidden rounded-xl border-2 transition-all duration-200 text-left ${
+                          isSelected
+                            ? 'border-[#053384] shadow-[0_0_0_3px_rgba(5,51,132,0.12)] ring-1 ring-[#053384]/30'
+                            : 'border-[#d7e0f0] hover:border-[#7a96c9] hover:shadow-md'
+                        }`}
+                      >
+                        {/* 3D Preview */}
+                        <div className="relative h-48 w-full">
+                          <MascotPreview3D modelUrl={m.model_3d_url} />
+                          {/* Selection indicator */}
+                          {isSelected && (
+                            <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#053384] text-white shadow-lg">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                          {m.is_default && (
+                            <div className="absolute left-2 top-2">
+                              <Badge className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#e3b83c] to-[#d4a22e] px-2 py-0.5 text-[10px] text-white shadow-sm">
+                                <Crown className="h-2.5 w-2.5" />
+                                Mặc định
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                        {/* Info */}
+                        <div className={`flex items-center gap-2 px-3 py-2.5 transition-colors ${
+                          isSelected ? 'bg-[#053384]/5' : 'bg-white group-hover:bg-[#f6f8fb]'
+                        }`}>
+                          <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${
+                            isSelected
+                              ? 'bg-[#053384] text-white'
+                              : 'bg-[#eef3fb] text-[#7a96c9] group-hover:bg-[#dce6f5]'
+                          }`}>
+                            <Bot className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`truncate text-sm font-semibold ${
+                              isSelected ? 'text-[#053384]' : 'text-[#10213f]'
+                            }`}>{m.name}</p>
+                            <p className="truncate text-[10px] font-mono text-[#7a96c9]">{m.slug}</p>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {selectedMascotId && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMascotId(null)}
+                  className="mt-2 text-xs font-medium text-[#7a96c9] hover:text-[#053384] transition-colors"
+                >
+                  ✕ Bỏ chọn mascot (sẽ dùng mặc định)
+                </button>
+              )}
             </div>
 
             {/* Suggested Questions */}

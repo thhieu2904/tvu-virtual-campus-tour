@@ -266,7 +266,7 @@ export default function CampusMap({
                 fill="none"
                 stroke={color}
                 strokeWidth="0.5"
-                strokeOpacity="0.25"
+                strokeOpacity="0.12"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeDasharray="1.5,1.5"
@@ -368,12 +368,12 @@ export default function CampusMap({
             <span
               className={`absolute left-1/2 -translate-x-1/2 bottom-full mb-1 text-[11px] font-bold px-2.5 py-0.5 rounded-md whitespace-nowrap border transition-all duration-300 ${
                 isCurrent
-                  ? "bg-[#053384] text-white border-transparent shadow-lg"
+                  ? "bg-[#053384]/95 text-white border-white/30 shadow-lg"
                   : isTarget
                     ? "text-white border-transparent shadow-lg animate-pulse"
                     : node.status === "active"
-                      ? "bg-white/95 text-[#053384] border-[#053384]/20 shadow-md backdrop-blur-sm"
-                      : "bg-gray-200 text-gray-500 border-transparent"
+                      ? "bg-[#0a1628]/80 text-white border-white/25 shadow-md backdrop-blur-md"
+                      : "bg-[#0a1628]/55 text-white/45 border-white/10"
               }`}
               style={isTarget ? { backgroundColor: color } : undefined}
             >
