@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { adminApi } from '@/lib/admin-api'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -13,14 +12,12 @@ import {
   AdminPanel,
   AdminSelect,
   AdminSkeleton,
+  AdminWorkbench,
+  AdminResourceSidebar,
+  AdminMetricStrip,
+  AdminPreviewFrame,
+  AdminStatusPill,
 } from '../_components/admin-ui'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   Image as ImageIcon,
   RefreshCw,
@@ -31,7 +28,6 @@ import {
   MapPin,
   Star,
   Play,
-  MoreVertical,
 } from 'lucide-react'
 
 interface MediaItem {
@@ -64,6 +60,8 @@ export default function MediaPage() {
   const [filterType, setFilterType] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [locations, setLocations] = useState<LocationOption[]>([])
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Upload
   const [showUpload, setShowUpload] = useState(false)
@@ -103,7 +101,7 @@ export default function MediaPage() {
 
   const fetchMedia = useCallback(async () => {
     if (!activeLocationId) {
-      setMedia([]); setTotal(0); setLoadingMedia(false); return
+      setMedia([]); setTotal(0); setLoadingMedia(false); setSelectedMediaId(null); return
     }
     setLoadingMedia(true); setError(null)
     try {
@@ -112,6 +110,12 @@ export default function MediaPage() {
       if (filterType) url += `&type=${filterType}`
       const data = await adminApi.get<{ total: number; media: MediaItem[] }>(url)
       setMedia(data.media); setTotal(data.total)
+      if (data.media.length > 0) {
+        setSelectedMediaId(data.media[0].id)
+      } else {
+        setSelectedMediaId(null)
+      }
+      setPreviewOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải')
     } finally { setLoadingMedia(false) }
@@ -130,7 +134,7 @@ export default function MediaPage() {
   useEffect(() => { void Promise.resolve().then(fetchMedia) }, [fetchMedia])
 
   const selectLocation = (locationId: string) => {
-    setMedia([]); setTotal(0); setSelectedLocationId(locationId)
+    setMedia([]); setTotal(0); setSelectedLocationId(locationId); setSelectedMediaId(null)
   }
 
   const refreshAll = async () => { await Promise.all([fetchLocations(), fetchMedia()]) }
@@ -141,8 +145,13 @@ export default function MediaPage() {
     try {
       const target = media.find(item => item.id === id)
       await adminApi.delete(`/media/${id}`)
-      setMedia(prev => prev.filter(m => m.id !== id))
+      const newMedia = media.filter(m => m.id !== id)
+      setMedia(newMedia)
       setTotal(prev => prev - 1)
+      if (selectedMediaId === id) {
+        setSelectedMediaId(newMedia.length > 0 ? newMedia[0].id : null)
+        setPreviewOpen(false)
+      }
       if (target) {
         setLocations(prev => prev.map(loc =>
           loc.id === target.location_id
@@ -185,22 +194,34 @@ export default function MediaPage() {
     || locations.find(l => l.id === item.location_id)?.name
     || item.location_id
 
+  const sidebarItems = locationNodes.map(loc => ({
+    id: loc.id,
+    title: loc.name,
+    subtitle: loc.slug !== 'all' ? `/${loc.slug}` : 'Toàn bộ thư viện',
+    count: loc.media_count,
+    icon: loc.isAll ? ImageIcon : MapPin,
+  }))
+
+  const visibleImages = media.filter(m => m.type === 'image').length
+  const visibleVideos = media.filter(m => m.type === 'video').length
+  const visibleGifs = media.filter(m => m.type === 'gif').length
+  const visibleIntro = media.filter(m => m.is_intro).length
+
+  const metrics = [
+    { label: 'Đang hiển thị', value: media.length, description: total > media.length ? `${total} file trong API` : 'Theo bộ lọc hiện tại' },
+    { label: 'Hình ảnh', value: visibleImages, color: '#053384' },
+    { label: 'Video/GIF', value: visibleVideos + visibleGifs, color: '#52627f' },
+    { label: 'Intro media', value: visibleIntro, color: '#b8891f' },
+  ]
+
+  const selectedMediaItem = media.find(m => m.id === selectedMediaId)
+  const selectedLocationTotal = selectedLocation?.media_count ?? 0
+
   return (
     <div className="flex flex-col gap-6">
       <AdminPageHeader
         title="Thư viện media"
         description="Quản lý hình ảnh, video và GIF gắn với từng địa điểm trong trải nghiệm tham quan."
-        meta={<Badge variant="outline" className="rounded-lg">{locationNodes[0]?.media_count ?? 0} files</Badge>}
-        actions={
-          <>
-            <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loadingMedia || loadingLocations} className="rounded-xl">
-              <RefreshCw data-icon="inline-start" className={loadingMedia || loadingLocations ? 'animate-spin' : ''} /> Làm mới
-            </Button>
-            <Button size="sm" onClick={openUpload} className="rounded-xl">
-              <Upload data-icon="inline-start" /> Upload Media
-            </Button>
-          </>
-        }
       />
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
@@ -212,7 +233,7 @@ export default function MediaPage() {
           footer={
             <>
               <Button variant="outline" onClick={() => setShowUpload(false)} className="rounded-xl">Hủy</Button>
-              <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadLocationId} className="rounded-xl">
+              <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadLocationId} className="rounded-xl bg-[#053384] hover:bg-[#053384]/90 text-white">
                 {uploading ? 'Đang upload...' : 'Upload'}
               </Button>
             </>
@@ -253,110 +274,112 @@ export default function MediaPage() {
         </AdminModal>
       )}
 
-      <AdminPanel className="overflow-hidden !rounded-2xl">
-        <div className="grid min-h-[560px] lg:grid-cols-[280px_minmax(0,1fr)]">
-          {/* ─── Sidebar: Locations ─── */}
-          <aside className="border-b border-[#d7e0f0]/70 bg-[#f6f8fb] lg:border-b-0 lg:border-r">
-            <div className="flex items-center justify-between gap-3 border-b border-[#d7e0f0]/70 px-4 py-3.5">
-              <h2 className="text-sm font-semibold text-[#10213f]">Địa điểm</h2>
-            </div>
-
-            <div className="max-h-[620px] overflow-y-auto p-2">
-              {locationNodes.map((location) => {
-                const isSelected = selectedLocation?.id === location.id
-                return (
-                  <button
-                    key={location.id}
-                    type="button"
-                    onClick={() => selectLocation(location.id)}
-                    className={`group mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-[#7a96c9]/30 ${
-                      isSelected
-                        ? 'bg-[#053384] text-white shadow-sm shadow-[#053384]/20'
-                        : 'text-[#10213f] hover:bg-white'
-                    }`}
-                  >
-                    <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                      isSelected ? 'bg-white/15' : 'bg-white border border-[#d7e0f0]/80'
-                    }`}>
-                      {location.isAll
-                        ? <ImageIcon className="h-4 w-4" />
-                        : <MapPin className="h-4 w-4" />
-                      }
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[0.82rem] font-medium">{location.name}</span>
-                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[0.7rem] font-semibold tabular-nums ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-[#eef3fb] text-[#52627f]'
-                    }`}>
-                      {location.media_count}
-                    </span>
-                  </button>
-                )
-              })}
-
-              {!loadingLocations && locationNodes.length <= 1 && (
-                <div className="px-3 py-8 text-center text-sm text-[#52627f]">
-                  Chưa có địa điểm nào.
+      <AdminWorkbench
+        sidebar={
+          <AdminResourceSidebar
+            kicker="Media board"
+            title="Tư liệu theo địa điểm"
+            description="Theo dõi độ phủ hình ảnh, video và media intro cho từng điểm tham quan."
+            items={sidebarItems}
+            activeId={activeLocationId}
+            onSelect={selectLocation}
+            loading={loadingLocations}
+            summary={
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Địa điểm</p>
+                  <p className="mt-1 text-base font-bold text-[#10213f]">{locations.length}</p>
                 </div>
-              )}
-            </div>
-          </aside>
-
-          {/* ─── Main: Media Gallery ─── */}
-          <section className="min-w-0 bg-white">
-            {selectedLocation ? (
-              <>
-                {/* Header */}
-                <div className="border-b border-[#d7e0f0]/70 px-5 py-4">
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb]">
-                        {selectedLocation.isAll ? <ImageIcon className="h-5 w-5 text-[#053384]" /> : <MapPin className="h-5 w-5 text-[#053384]" />}
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="text-lg font-bold text-[#10213f]">{selectedLocation.name}</h2>
-                        <p className="text-xs text-[#7a96c9]">
-                          {total} media
-                          {selectedLocation.description && <> · {selectedLocation.description}</>}
-                        </p>
-                      </div>
+                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Media</p>
+                  <p className="mt-1 text-base font-bold text-[#10213f]">{locationNodes[0]?.media_count ?? 0}</p>
+                </div>
+              </div>
+            }
+          />
+        }
+        main={
+          <div className="flex flex-col gap-4">
+            <AdminPanel className="overflow-hidden">
+              <div className="border-b border-[#d7e0f0]/70 bg-white px-5 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb] text-[#053384]">
+                      {selectedLocation?.isAll ? <ImageIcon className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
                     </div>
-
-                    <div className="flex shrink-0 items-center gap-2">
-                      <AdminSelect value={filterType} onChange={e => setFilterType(e.target.value)}>
-                        <option value="">Tất cả loại</option>
-                        <option value="image">Hình ảnh</option>
-                        <option value="video">Video</option>
-                        <option value="gif">GIF</option>
-                      </AdminSelect>
-                      <Button size="sm" onClick={openUpload} className="rounded-xl">
-                        <Upload data-icon="inline-start" />
-                        Upload
-                      </Button>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-bold text-[#10213f]">
+                        {selectedLocation?.name ?? 'Thư viện media'}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-[#7a96c9]">
+                        {selectedLocationTotal} file trong địa điểm này
+                        {filterType && <> · đang lọc {typeLabels[filterType]}</>}
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                {/* Media Grid */}
-                {loadingMedia && media.length === 0 ? (
-                  <div className="grid gap-4 px-5 py-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {[1, 2, 3, 4].map(i => (
-                      <AdminSkeleton key={i} variant="card" className="h-56 rounded-xl" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AdminSelect value={filterType} onChange={e => setFilterType(e.target.value)} className="w-40">
+                      <option value="">Tất cả loại</option>
+                      <option value="image">Hình ảnh</option>
+                      <option value="video">Video</option>
+                      <option value="gif">GIF</option>
+                    </AdminSelect>
+                    <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loadingMedia || loadingLocations} className="rounded-xl">
+                      <RefreshCw data-icon="inline-start" className={loadingMedia || loadingLocations ? 'animate-spin' : ''} /> Làm mới
+                    </Button>
+                    <Button size="sm" onClick={openUpload} className="rounded-xl">
+                      <Upload data-icon="inline-start" /> Upload
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-b border-[#d7e0f0]/70 bg-[#f8fbff] px-5 py-4">
+                <AdminMetricStrip metrics={metrics} />
+              </div>
+
+              <div className="p-5">
+                {loadingMedia ? (
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                      <AdminSkeleton key={i} variant="card" className="h-44 rounded-xl" />
                     ))}
                   </div>
+                ) : media.length === 0 ? (
+                  <AdminEmptyState
+                    icon={ImageIcon}
+                    title={selectedLocation?.isAll ? 'Thư viện chưa có media' : `${selectedLocation?.name ?? 'Địa điểm'} chưa có media`}
+                    description={filterType ? 'Không có file phù hợp với bộ lọc hiện tại.' : 'Upload hình ảnh, video hoặc GIF để hoàn thiện trải nghiệm tham quan.'}
+                    action={
+                      <Button size="sm" onClick={openUpload} className="rounded-xl">
+                        <Upload data-icon="inline-start" /> Upload media
+                      </Button>
+                    }
+                  />
                 ) : (
-                  <div className="grid gap-4 px-5 py-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                     {media.map(item => {
                       const TypeIcon = typeIcons[item.type] || ImageIcon
-                      const typeLabel = typeLabels[item.type] || item.type
+                      const isSelected = selectedMediaId === item.id
 
                       return (
-                        <div key={item.id} className="group overflow-hidden rounded-xl border border-[#d7e0f0]/80 bg-white shadow-sm transition-all hover:shadow-md hover:border-[#7a96c9]/40">
-                          {/* Thumbnail */}
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMediaId(item.id)
+                            setPreviewOpen(true)
+                          }}
+                          className={`group overflow-hidden rounded-xl border bg-white text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-[#7a96c9]/30 ${
+                            isSelected ? 'border-[#053384] shadow-md shadow-[#053384]/10' : 'border-[#d7e0f0]/80 hover:border-[#7a96c9]/50 hover:shadow-md'
+                          }`}
+                        >
                           <div className="relative aspect-[4/3] overflow-hidden bg-[#eef3fb]">
                             {item.type === 'video' ? (
-                              <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#10213f] to-[#1e3a5f]">
-                                <div className="flex size-12 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
-                                  <Play className="h-6 w-6 text-white" />
+                              <div className="flex h-full items-center justify-center bg-[#10213f]">
+                                <div className="flex size-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm">
+                                  <Play className="h-5 w-5" />
                                 </div>
                               </div>
                             ) : (
@@ -364,97 +387,98 @@ export default function MediaPage() {
                               <img
                                 src={item.url}
                                 alt={item.caption || 'Media'}
-                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                               />
                             )}
-
-                            {/* Persistent badges (always visible) */}
-                            <div className="absolute left-2 top-2 flex gap-1.5">
+                            <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
+                              <AdminStatusPill
+                                status="info"
+                                label={<><TypeIcon className="mr-1 h-3 w-3" /> {typeLabels[item.type] || item.type}</>}
+                                className="border-white/50 bg-white/90 text-[#053384] backdrop-blur"
+                              />
                               {item.is_intro && (
-                                <span className="flex items-center gap-1 rounded-md bg-amber-500 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-white shadow-sm">
-                                  <Star className="h-2.5 w-2.5" /> Intro
-                                </span>
+                                <AdminStatusPill status="warning" label={<><Star className="mr-1 h-3 w-3" /> Intro</>} className="border-0 bg-[#e3b83c] text-white" />
                               )}
                             </div>
-
-                            {/* Hover overlay — delete only */}
-                            <div className="absolute inset-0 flex items-start justify-end bg-gradient-to-b from-black/40 via-transparent to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger render={
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm" />
-                                }>
-                                  <MoreVertical className="h-3.5 w-3.5" />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => handleDelete(item.id)}
-                                    disabled={deletingId === item.id}
-                                    className="text-red-600 focus:text-red-600"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Xóa media
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
                           </div>
-
-                          {/* Info — always visible below card */}
                           <div className="px-3 py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <TypeIcon className="h-3.5 w-3.5 shrink-0 text-[#7a96c9]" />
-                              <span className="truncate text-[0.78rem] font-medium text-[#10213f]">
-                                {item.caption || typeLabel}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 truncate text-[0.7rem] text-[#7a96c9]">
-                              {getLocationName(item)}
+                            <p className="truncate text-[0.82rem] font-semibold text-[#10213f]">
+                              {item.caption || 'Chưa có mô tả'}
                             </p>
-                            {item.keywords && item.keywords.length > 0 && (
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {item.keywords.slice(0, 3).map((kw) => (
-                                  <span key={kw} className="rounded-md bg-[#eef3fb] px-1.5 py-0.5 text-[0.6rem] font-medium text-[#52627f]">
-                                    {kw}
-                                  </span>
-                                ))}
-                                {item.keywords.length > 3 && (
-                                  <span className="rounded-md bg-[#eef3fb] px-1.5 py-0.5 text-[0.6rem] font-medium text-[#7a96c9]">
-                                    +{item.keywords.length - 3}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            <p className="mt-0.5 truncate text-[0.72rem] text-[#7a96c9]">
+                              {selectedLocation?.isAll ? getLocationName(item) : item.keywords?.slice(0, 2).join(', ') || 'Chưa có từ khóa'}
+                            </p>
                           </div>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>
                 )}
+              </div>
+            </AdminPanel>
+          </div>
+        }
+      />
 
-                {/* Empty state */}
-                {!loadingMedia && media.length === 0 && (
-                  <AdminEmptyState
-                    icon={ImageIcon}
-                    title="Chưa có media nào"
-                    description="Upload hình ảnh, video hoặc GIF để bổ sung vào trải nghiệm tham quan."
-                    action={
-                      <Button size="sm" onClick={openUpload} className="rounded-xl">
-                        <Upload data-icon="inline-start" /> Upload Media
-                      </Button>
-                    }
-                  />
-                )}
-              </>
-            ) : (
-              <AdminEmptyState
-                icon={MapPin}
-                title="Chọn một địa điểm"
-                description="Chọn địa điểm từ danh sách bên trái để quản lý thư viện media."
-              />
-            )}
-          </section>
-        </div>
-      </AdminPanel>
+      {previewOpen && selectedMediaItem && (
+        <AdminModal
+          title="Xem trước media"
+          className="max-w-4xl"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setPreviewOpen(false)} className="rounded-xl">Đóng</Button>
+              <Button
+                variant="outline"
+                className="rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={() => handleDelete(selectedMediaItem.id)}
+                disabled={deletingId === selectedMediaItem.id}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {deletingId === selectedMediaItem.id ? 'Đang xóa...' : 'Xóa media'}
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,0.6fr)]">
+            <AdminPreviewFrame
+              src={selectedMediaItem.url}
+              type={selectedMediaItem.type === 'video' ? 'video' : 'image'}
+            />
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Mô tả</p>
+                <p className="mt-1 font-medium text-[#10213f]">{selectedMediaItem.caption || 'Chưa có mô tả'}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-[#f6f8fb] p-3">
+                  <p className="text-[0.68rem] font-semibold uppercase text-[#7a96c9]">Loại</p>
+                  <p className="mt-1 text-[#10213f]">{typeLabels[selectedMediaItem.type] || selectedMediaItem.type}</p>
+                </div>
+                <div className="rounded-lg bg-[#f6f8fb] p-3">
+                  <p className="text-[0.68rem] font-semibold uppercase text-[#7a96c9]">Intro</p>
+                  <p className="mt-1 text-[#10213f]">{selectedMediaItem.is_intro ? 'Có' : 'Không'}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Địa điểm</p>
+                <p className="mt-1 text-[#10213f]">{getLocationName(selectedMediaItem)}</p>
+              </div>
+              {selectedMediaItem.keywords && selectedMediaItem.keywords.length > 0 && (
+                <div>
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Từ khóa</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {selectedMediaItem.keywords.map(kw => (
+                      <span key={kw} className="rounded-md bg-[#eef3fb] px-2 py-1 text-[0.7rem] font-medium text-[#053384]">
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </AdminModal>
+      )}
     </div>
   )
 }

@@ -14,6 +14,7 @@ import {
   Settings,
   Bot,
   ChevronRight,
+  Database,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Tài liệu', href: '/admin/documents', icon: FileText },
   { name: 'Thư viện media', href: '/admin/media', icon: ImageIcon },
   { name: 'Đại sứ ảo', href: '/admin/mascots', icon: Bot },
+  { name: 'Cache', href: '/admin/cache', icon: Database },
   { name: 'Cấu hình', href: '/admin/settings', icon: Settings },
 ]
 

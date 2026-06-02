@@ -28,7 +28,6 @@ export default function ChatOverlay() {
   const {
     messages,
     isLoading,
-    initSession,
     sendMessage,
     addMessage,
     _setMessages,
@@ -66,11 +65,6 @@ export default function ChatOverlay() {
       stopListening();
     }
   }, [avatarState, isListening, stopListening]);
-
-  // Khởi tạo session
-  useEffect(() => {
-    initSession();
-  }, [initSession]);
 
   // Continuous Session: location intro logic
   const isTransitioning = useTourStore((s) => s.isTransitioning);

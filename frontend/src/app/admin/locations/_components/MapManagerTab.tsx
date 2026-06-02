@@ -19,7 +19,6 @@ import { useTourStore } from '@/features/tour/store'
 import {
   AdminModal,
   AdminNotice,
-  AdminPanel,
   AdminSkeleton,
 } from '../../_components/admin-ui'
 
@@ -355,8 +354,7 @@ export default function MapManagerTab({
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       {notice && <AdminNotice tone="success">{notice}</AdminNotice>}
 
-      <AdminPanel className="overflow-hidden">
-        <div className="flex justify-center bg-[#eef3fb] p-3 sm:p-4">
+      <section className="flex justify-center rounded-2xl bg-[#eef3fb]/55 px-3 py-3 sm:px-4">
           <div className="relative aspect-square w-full max-w-[min(100%,820px)] overflow-hidden rounded-xl bg-[#08142b] shadow-md ring-1 ring-black/5">
             <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-xl border border-white/60 bg-white/90 px-3 py-2 text-xs text-[#52627f] shadow-sm backdrop-blur-md">
               <span className="font-semibold text-[#10213f]">{setupCount}/{displayNodes.length}</span> node,{' '}
@@ -589,8 +587,7 @@ export default function MapManagerTab({
                 </div>
               )}
             </div>
-          </div>
-        </AdminPanel>
+        </section>
     </div>
   )
 }

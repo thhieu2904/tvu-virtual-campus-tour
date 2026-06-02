@@ -1,5 +1,6 @@
 """Protected Admin API endpoints for content management."""
 
+import base64
 import itertools
 import json
 import shutil
@@ -13,7 +14,9 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.tts_engine import CONTENT_TYPE_MP3, synthesize
+from app.ai import tts_engine
+from app.ai.tts_engine import CONTENT_TYPE_MP3, CONTENT_TYPE_WAV, synthesize
+from app.cache import tts_key_cache
 from app.db.database import get_db
 from app.db.tables import KioskConfig, Location, Mascot, Media
 from app.dependencies import verify_supabase_token
@@ -27,6 +30,7 @@ from app.schemas.admin import (
     LocationQuestionsUpdateRequest,
     LocationUpdateRequest,
     MascotUpdateRequest,
+    MascotVoicePreviewRequest,
     MediaUpdateRequest,
 )
 from app.schemas.document import DocumentStatusResponse, IngestResponse
@@ -126,8 +130,12 @@ async def _get_location_or_404(session: AsyncSession, location_id: str) -> Locat
 
 
 @router.get("/stats")
-async def get_dashboard_stats(session: AsyncSession = Depends(get_db)):
-    return await stats_repo.get_dashboard_stats(session)
+async def get_dashboard_stats(
+    period: str = "week",
+    cursor: str | None = None,
+    session: AsyncSession = Depends(get_db),
+):
+    return await stats_repo.get_dashboard_stats(session, period=period, cursor=cursor)
 
 
 @router.get("/config", response_model=KioskConfigResponse)
@@ -657,6 +665,80 @@ async def list_mascots(session: AsyncSession = Depends(get_db)):
             for mascot, location_count in result.all()
         ]
     }
+
+
+@router.post("/mascots/voice-preview")
+async def preview_mascot_voice(payload: MascotVoicePreviewRequest):
+    name = payload.name.strip() or "Đại sứ ảo"
+    preview_text = (
+        f"Xin chào, mình là {name}. "
+        "Mình sẽ đồng hành cùng bạn trong chuyến tham quan Đại học Trà Vinh hôm nay."
+    )
+    voice = payload.voice_name or "Leda"
+    style = payload.voice_style or ""
+    persona = payload.personality_prompt or ""
+    cache_key = tts_engine._cache_key(preview_text, voice, style, persona)
+    r2_candidates = [
+        (f"tts-cache/{cache_key}.wav", CONTENT_TYPE_WAV),
+        (f"tts-cache/{cache_key}.mp3", CONTENT_TYPE_MP3),
+    ]
+
+    try:
+        for r2_key, content_type in r2_candidates:
+            if tts_key_cache.loaded:
+                exists = tts_key_cache.contains(r2_key)
+            else:
+                exists = await storage_service.file_exists(r2_key)
+                if exists:
+                    tts_key_cache.add(r2_key)
+            if exists:
+                return {
+                    "audio_url": storage_service.get_public_url(r2_key),
+                    "provider": "r2-cache",
+                    "cached": True,
+                    "content_type": content_type,
+                    "storage_key": r2_key,
+                }
+    except Exception:
+        # R2 HEAD can fail in local/dev environments. Preview should still work via synthesize fallback.
+        pass
+
+    try:
+        result = await synthesize(
+            preview_text,
+            voice_name=voice,
+            voice_style=style,
+            personality_prompt=persona,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Không thể tạo giọng đọc mẫu") from exc
+
+    extension = "mp3" if result.content_type == CONTENT_TYPE_MP3 else "wav"
+    r2_key = f"tts-cache/{cache_key}.{extension}"
+    try:
+        await storage_service.upload_file(
+            file_bytes=result.audio_data,
+            key=r2_key,
+            content_type=result.content_type,
+            cache_control="public, max-age=31536000, immutable",
+        )
+        tts_key_cache.add(r2_key)
+        return {
+            "audio_url": storage_service.get_public_url(r2_key),
+            "provider": result.provider,
+            "cached": result.cached,
+            "content_type": result.content_type,
+            "storage_key": r2_key,
+        }
+    except Exception:
+        data = base64.b64encode(result.audio_data).decode("ascii")
+        return {
+            "audio_url": f"data:{result.content_type};base64,{data}",
+            "provider": result.provider,
+            "cached": result.cached,
+            "content_type": result.content_type,
+            "storage_key": None,
+        }
 
 
 @router.put("/mascots/{mascot_id}")

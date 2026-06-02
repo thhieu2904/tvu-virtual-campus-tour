@@ -161,7 +161,7 @@ export default function LocationsPage() {
   const inactiveCount = locations.filter(l => l.status === 'inactive').length
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="xl:sticky xl:top-20 xl:self-start">
         <div className="rounded-2xl border border-[#d7e0f0]/80 bg-white p-4 shadow-sm shadow-[#053384]/[0.03]">
           <div>
@@ -371,6 +371,9 @@ export default function LocationsPage() {
             {/* Suggested Questions */}
             <div>
               <label className="text-sm font-medium text-[#10213f]">Câu hỏi gợi ý</label>
+              <p className="mt-1 text-xs leading-relaxed text-[#52627f]">
+                Câu hỏi mới vẫn chạy được, nhưng cần cache console để kiểm tra và pre-cache nếu muốn phản hồi nhanh theo ms.
+              </p>
               <div className="mt-2 flex flex-col gap-2">
                 {editQuestions.map((q, idx) => (
                   <div key={idx} className="flex gap-2">
@@ -385,6 +388,12 @@ export default function LocationsPage() {
                 <Button variant="outline" size="sm" onClick={() => setEditQuestions([...editQuestions, ''])} className="w-fit rounded-xl">
                   <Plus className="mr-1 h-4 w-4" /> Thêm câu hỏi
                 </Button>
+                <a
+                  href={`/admin/cache?scope=location&locationId=${editingId}&focus=questions`}
+                  className="w-fit rounded-xl border border-[#d7e0f0] bg-white px-3 py-2 text-xs font-semibold text-[#053384] transition-colors hover:bg-[#eef3fb]"
+                >
+                  Mở Cache Console cho câu hỏi này
+                </a>
               </div>
             </div>
 

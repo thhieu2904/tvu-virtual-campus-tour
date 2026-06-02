@@ -152,6 +152,23 @@ class MascotUpdateRequest(BaseModel):
         raise ValueError(f"Invalid voice_name '{value}'. Valid voices: {valid}")
 
 
+class MascotVoicePreviewRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    name: str = "Đại sứ ảo"
+    voice_name: str | None = None
+    voice_style: str | None = None
+    personality_prompt: str | None = None
+
+    @field_validator("voice_name")
+    @classmethod
+    def validate_voice_name(cls, value: str | None) -> str | None:
+        if value is None or value in VALID_GEMINI_VOICES:
+            return value
+        valid = ", ".join(sorted(VALID_GEMINI_VOICES))
+        raise ValueError(f"Invalid voice_name '{value}'. Valid voices: {valid}")
+
+
 class KioskConfigResponse(BaseModel):
     idle_timeout_minutes: int = 10
     warning_duration_seconds: int = 60

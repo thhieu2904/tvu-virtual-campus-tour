@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { adminApi } from '@/lib/admin-api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { AdminNotice, AdminPageHeader, AdminPanel, AdminSwitch } from '../_components/admin-ui'
-import { MapPin, RefreshCw, Save, Timer, Volume2, Monitor } from 'lucide-react'
+import { AdminMetricStrip, AdminNotice, AdminPageHeader, AdminPanel, AdminSelect, AdminSwitch } from '../_components/admin-ui'
+import { MapPin, RefreshCw, Save, Timer } from 'lucide-react'
 
 interface KioskConfig {
   idle_timeout_minutes: number
@@ -13,6 +13,12 @@ interface KioskConfig {
   kiosk_mode: boolean
   default_start_slug: string
   tts_enabled_default: boolean
+}
+
+interface LocationOption {
+  id: string
+  name: string
+  slug: string
 }
 
 const DEFAULT_CONFIG: KioskConfig = {
@@ -29,6 +35,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [locations, setLocations] = useState<LocationOption[]>([])
+  const [loadingLocations, setLoadingLocations] = useState(true)
 
   const fetchConfig = useCallback(async () => {
     setLoading(true)
@@ -42,9 +50,21 @@ export default function SettingsPage() {
     }
   }, [])
 
+  const fetchLocations = useCallback(async () => {
+    setLoadingLocations(true)
+    try {
+      const data = await adminApi.get<{ locations: LocationOption[] }>('/locations')
+      setLocations(data.locations)
+    } catch {
+      setLocations([])
+    } finally {
+      setLoadingLocations(false)
+    }
+  }, [])
+
   useEffect(() => {
-    void Promise.resolve().then(fetchConfig)
-  }, [fetchConfig])
+    void Promise.resolve().then(() => Promise.all([fetchConfig(), fetchLocations()]))
+  }, [fetchConfig, fetchLocations])
 
   const saveConfig = async () => {
     setSaving(true)
@@ -61,6 +81,9 @@ export default function SettingsPage() {
     }
   }
 
+  const startLocation = locations.find((location) => location.slug === config.default_start_slug)
+  const canSelectStartLocation = locations.length > 0
+
   return (
     <div className="flex flex-col gap-6">
       <AdminPageHeader
@@ -75,6 +98,15 @@ export default function SettingsPage() {
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       {saved && <AdminNotice tone="success">✓ Đã lưu cấu hình thành công.</AdminNotice>}
+
+      <AdminMetricStrip
+        metrics={[
+          { label: 'Điểm bắt đầu', value: startLocation?.name ?? config.default_start_slug, description: canSelectStartLocation ? 'Theo danh sách location' : 'Nhập slug thủ công' },
+          { label: 'Idle timeout', value: `${config.idle_timeout_minutes} phút`, color: '#053384' },
+          { label: 'Cảnh báo', value: `${config.warning_duration_seconds} giây`, color: '#b8891f' },
+          { label: 'Âm thanh', value: config.tts_enabled_default ? 'Bật' : 'Tắt', color: config.tts_enabled_default ? '#2c8b57' : '#52627f' },
+        ]}
+      />
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Timing Settings */}
@@ -133,12 +165,32 @@ export default function SettingsPage() {
               <p className="text-xs text-[#52627f]">
                 Slug của location sẽ hiển thị đầu tiên khi kiosk khởi động hoặc sau khi reset phiên.
               </p>
-              <Input
-                value={config.default_start_slug}
-                onChange={(event) => setConfig({ ...config, default_start_slug: event.target.value })}
-                placeholder="VD: cong-chinh"
-                className="rounded-xl font-mono"
-              />
+              {canSelectStartLocation ? (
+                <AdminSelect
+                  value={startLocation ? config.default_start_slug : '__custom__'}
+                  onChange={(event) => {
+                    if (event.target.value === '__custom__') return
+                    setConfig({ ...config, default_start_slug: event.target.value })
+                  }}
+                  disabled={loadingLocations}
+                >
+                  {!startLocation && (
+                    <option value="__custom__">Slug hiện tại: {config.default_start_slug}</option>
+                  )}
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.slug}>
+                      {location.name} / {location.slug}
+                    </option>
+                  ))}
+                </AdminSelect>
+              ) : (
+                <Input
+                  value={config.default_start_slug}
+                  onChange={(event) => setConfig({ ...config, default_start_slug: event.target.value })}
+                  placeholder="VD: cong-chinh"
+                  className="rounded-xl font-mono"
+                />
+              )}
             </label>
 
             <AdminSwitch
@@ -159,7 +211,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Save button */}
-      <div className="flex justify-end rounded-2xl border border-[#d7e0f0]/80 bg-white p-5 shadow-sm">
+      <div className="sticky bottom-4 z-10 flex justify-end rounded-2xl border border-[#d7e0f0]/80 bg-white/95 p-5 shadow-lg shadow-[#053384]/[0.06] backdrop-blur">
         <Button onClick={saveConfig} disabled={saving} className="rounded-xl px-6 shadow-sm">
           <Save className="mr-2 h-4 w-4" /> {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
         </Button>

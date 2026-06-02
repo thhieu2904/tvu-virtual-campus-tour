@@ -1,7 +1,16 @@
 'use client'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useEffect, useRef, useState, memo, Suspense } from 'react'
 import { Bot, Box } from 'lucide-react'
+
+export type MascotPreviewAnimation =
+  | 'Idle'
+  | 'Greeting'
+  | 'Thinking'
+  | 'Talking'
+  | 'Thankful'
 
 /* ─── Lazy-loaded Three.js modules (singleton) ─── */
 
@@ -9,7 +18,23 @@ let threeLoaded = false
 let CanvasComponent: React.ComponentType<any> | null = null
 let useGLTFHook: ((url: string) => any) | null = null
 let useAnimationsHook: ((animations: any, ref: any) => any) | null = null
+let OrbitControlsComponent: React.ComponentType<any> | null = null
 let THREEModule: any = null
+
+const CROSSFADE_SECONDS = 0.4
+const LOOPING_ANIMATIONS = new Set<MascotPreviewAnimation>(['Idle', 'Talking'])
+type SceneVector = [number, number, number]
+const CLIP_FALLBACKS: Record<MascotPreviewAnimation, string[]> = {
+  Idle: ['Idle', 'HeadNod'],
+  Greeting: ['Greeting', 'StandingUp'],
+  Thinking: ['Thinking', 'Texting'],
+  Talking: ['Talking', 'HeadNod', 'Texting'],
+  Thankful: ['Thankful'],
+}
+
+function resolveClipName(animation: MascotPreviewAnimation, names: string[]) {
+  return CLIP_FALLBACKS[animation].find((name) => names.includes(name))
+}
 
 function MascotPreviewFallback() {
   return (
@@ -24,27 +49,37 @@ function MascotPreviewFallback() {
 
 const MascotModelInner = memo(function MascotModelInner({
   modelUrl,
+  animation = 'Idle',
+  modelPosition = [0, -0.9, 0],
+  modelScale = 1,
+  onAnimationsLoaded,
+  onAnimationComplete,
 }: {
   modelUrl: string
+  animation?: MascotPreviewAnimation
+  modelPosition?: SceneVector
+  modelScale?: number
+  onAnimationsLoaded?: (names: string[]) => void
+  onAnimationComplete?: (animation: MascotPreviewAnimation) => void
 }) {
   const group = useRef<any>(null!)
+  const prevClipName = useRef<string | null>(null)
+  const onAnimationCompleteRef = useRef(onAnimationComplete)
 
-  if (!useGLTFHook || !useAnimationsHook || !THREEModule) return null
+  const useGLTF = useGLTFHook!
+  const useAnimations = useAnimationsHook!
+  const THREE = THREEModule!
 
-  const { scene, animations } = useGLTFHook(modelUrl)
-  const { actions, names } = useAnimationsHook(animations, group)
+  const { scene, animations } = useGLTF(modelUrl)
+  const { actions, names } = useAnimations(animations, group)
 
-  // Play Idle animation on mount
   useEffect(() => {
-    if (!actions || names.length === 0) return
-    const idleName = names.find(
-      (n: string) => n === 'Idle' || n === 'HeadNod'
-    )
-    if (!idleName || !actions[idleName]) return
-    const action = actions[idleName]
-    action.setLoop(THREEModule.LoopRepeat, Infinity)
-    action.reset().setEffectiveTimeScale(0.8).setEffectiveWeight(1).fadeIn(0.3).play()
-  }, [actions, names])
+    onAnimationCompleteRef.current = onAnimationComplete
+  }, [onAnimationComplete])
+
+  useEffect(() => {
+    onAnimationsLoaded?.(names)
+  }, [names, onAnimationsLoaded])
 
   // Tune materials — same as Avatar3D
   useEffect(() => {
@@ -56,7 +91,7 @@ const MascotModelInner = memo(function MascotModelInner({
         for (const mat of materials) {
           mat.metalness = 0.0
           mat.roughness = 0.85
-          mat.side = THREEModule.DoubleSide
+          mat.side = THREE.DoubleSide
           if (mat.transparent || mat.alphaTest > 0) {
             mat.alphaTest = 0.5
             mat.depthWrite = true
@@ -65,11 +100,53 @@ const MascotModelInner = memo(function MascotModelInner({
         }
       }
     })
-  }, [scene])
+  }, [scene, THREE.DoubleSide])
+
+  // Three.js AnimationAction objects are imperative runtime handles; switching clips requires mutating them.
+  // eslint-disable-next-line react-hooks/immutability
+  useEffect(() => {
+    if (!actions || names.length === 0) return
+
+    const clipName = resolveClipName(animation, names)
+    if (!clipName) return
+
+    const target = actions[clipName]
+    if (!target) return
+
+    const shouldLoop = LOOPING_ANIMATIONS.has(animation)
+    target.setLoop(shouldLoop ? THREE.LoopRepeat : THREE.LoopOnce, shouldLoop ? Infinity : 1)
+    // eslint-disable-next-line react-hooks/immutability
+    target.clampWhenFinished = !shouldLoop
+    target.enabled = true
+    target
+      .reset()
+      .setEffectiveTimeScale(animation === 'Idle' ? 0.85 : 1)
+      .setEffectiveWeight(1)
+      .fadeIn(CROSSFADE_SECONDS)
+      .play()
+
+    if (prevClipName.current && prevClipName.current !== clipName) {
+      const previous = actions[prevClipName.current]
+      if (previous) previous.fadeOut(CROSSFADE_SECONDS)
+    }
+
+    prevClipName.current = clipName
+
+    if (!shouldLoop) {
+      const mixer = target.getMixer()
+      const onFinished = (event: { action: unknown }) => {
+        if (event.action === target) {
+          onAnimationCompleteRef.current?.(animation)
+        }
+      }
+      mixer.addEventListener('finished', onFinished)
+      return () => mixer.removeEventListener('finished', onFinished)
+    }
+  }, [actions, animation, names, THREE.LoopOnce, THREE.LoopRepeat])
 
   return (
-    <group ref={group} dispose={null} position={[0, -0.9, 0]}>
-      <primitive object={scene} scale={1} />
+    <group ref={group} dispose={null} position={modelPosition}>
+      <primitive object={scene} scale={modelScale} />
     </group>
   )
 })
@@ -85,9 +162,27 @@ function normalizeModelUrl(url: string): string {
 const MascotPreview3D = memo(function MascotPreview3D({
   modelUrl,
   className,
+  animation = 'Idle',
+  controls = false,
+  cameraPosition = [0.15, 0.4, 3.4],
+  cameraTarget = [0, 0.2, 0],
+  fov = 35,
+  modelPosition,
+  modelScale,
+  onAnimationsLoaded,
+  onAnimationComplete,
 }: {
   modelUrl: string
   className?: string
+  animation?: MascotPreviewAnimation
+  controls?: boolean
+  cameraPosition?: SceneVector
+  cameraTarget?: SceneVector
+  fov?: number
+  modelPosition?: SceneVector
+  modelScale?: number
+  onAnimationsLoaded?: (names: string[]) => void
+  onAnimationComplete?: (animation: MascotPreviewAnimation) => void
 }) {
   const resolvedUrl = normalizeModelUrl(modelUrl)
   const [ready, setReady] = useState(threeLoaded)
@@ -104,6 +199,7 @@ const MascotPreview3D = memo(function MascotPreview3D({
         CanvasComponent = fiber.Canvas
         useGLTFHook = drei.useGLTF
         useAnimationsHook = drei.useAnimations
+        OrbitControlsComponent = drei.OrbitControls
         THREEModule = three
         threeLoaded = true
         setReady(true)
@@ -124,11 +220,12 @@ const MascotPreview3D = memo(function MascotPreview3D({
   }
 
   const Canvas = CanvasComponent
+  const OrbitControls = OrbitControlsComponent
 
   return (
     <div className={`relative h-full w-full overflow-hidden rounded-xl bg-gradient-to-b from-[#f0f4fa] via-[#e8eef8] to-[#dce4f2] ${className || ''}`}>
       <Canvas
-        camera={{ position: [0.15, 0.4, 3.4], fov: 35 }}
+        camera={{ position: cameraPosition, fov }}
         gl={{
           antialias: true,
           alpha: true,
@@ -143,8 +240,25 @@ const MascotPreview3D = memo(function MascotPreview3D({
         <hemisphereLight args={['#ffeedd', '#8899bb', 0.4]} />
         <directionalLight position={[3, 6, 4]} intensity={1.2} color="#ffffff" />
         <pointLight position={[-3, 3, 3]} intensity={0.4} color="#a8c8ff" />
+        {controls && OrbitControls && (
+          <OrbitControls
+            enablePan={false}
+            enableDamping
+            dampingFactor={0.08}
+            minDistance={1.5}
+            maxDistance={7}
+            target={cameraTarget}
+          />
+        )}
         <Suspense fallback={null}>
-          <MascotModelInner modelUrl={resolvedUrl} />
+          <MascotModelInner
+            modelUrl={resolvedUrl}
+            animation={animation}
+            modelPosition={modelPosition}
+            modelScale={modelScale}
+            onAnimationsLoaded={onAnimationsLoaded}
+            onAnimationComplete={onAnimationComplete}
+          />
         </Suspense>
       </Canvas>
       {/* Subtle label overlay */}

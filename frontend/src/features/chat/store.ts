@@ -22,7 +22,7 @@ interface ChatState {
 
   // === Actions ===
   toggleTTS: () => void;
-  initSession: () => Promise<void>;
+  initSession: () => Promise<string | null>;
   resetSession: () => void;
   sendMessage: (message: string, locationId?: string) => Promise<void>;
   addMessage: (message: ChatMessage) => void;
@@ -200,30 +200,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   /**
-   * Initialize a new chat session (only once per kiosk lifecycle).
+   * Initialize a new chat session on the first real question.
    */
   initSession: async () => {
-    if (get().sessionId) return;
+    const existingSessionId = get().sessionId;
+    if (existingSessionId) return existingSessionId;
 
     try {
       const res = await fetch(`${API_URL}/api/chat/session`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to init chat session");
       const data = await res.json();
       set({ sessionId: data.session_id });
+      return data.session_id;
     } catch (err) {
       console.error(err);
       set({ error: "Could not initialize chat session." });
+      return null;
     }
   },
 
   /**
-   * Reset session after idle timeout. Clears all messages, creates new session.
+   * Reset session after idle timeout. Clears all messages.
    * This is the ONLY place where messages are cleared.
    */
   resetSession: () => {
     set({ messages: [], sessionId: null, error: null });
-    // Re-init a fresh session
-    get().initSession();
     // Show welcome message from current location
     const location = useTourStore.getState().currentLocation();
     if (location) {
@@ -292,16 +293,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content: m.content,
     }));
 
+    const ensureSession = async () => {
+      const activeSessionId = get().sessionId || sessionId || await get().initSession();
+      if (!activeSessionId) {
+        throw new Error("Could not initialize chat session.");
+      }
+      return activeSessionId;
+    };
+
     // ── Audio-First Mode (TTS enabled) ──
     if (isTTSEnabled) {
       try {
+        const activeSessionId = await ensureSession();
         const res = await fetch(`${API_URL}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message,
             ...(locationId ? { location_id: locationId } : {}),
-            session_id: sessionId,
+            session_id: activeSessionId,
             tts: true,
             history,
           }),
@@ -466,13 +476,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // ── SSE Streaming Mode (TTS disabled / Muted) ──
     try {
+      const activeSessionId = await ensureSession();
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
           ...(locationId ? { location_id: locationId } : {}),
-          session_id: sessionId,
+          session_id: activeSessionId,
           stream: true,
           history,
         }),

@@ -70,7 +70,7 @@ class AdminApi {
       try {
         const errorData = await response.json();
         errorMsg = errorData.detail || errorMsg;
-      } catch (e) {
+      } catch {
         // Not JSON
       }
       throw new AdminApiError(response.status, errorMsg);
@@ -84,6 +84,29 @@ class AdminApi {
     return response.json();
   }
 
+  private async requestBlob(endpoint: string, options: RequestInit): Promise<{ blob: Blob; headers: Headers }> {
+    const url = `${this.baseUrl}/api/admin${endpoint}`;
+
+    const response = await fetch(url, options);
+
+    if (!response.ok) {
+      if (response.status === 401 && typeof window !== 'undefined') {
+        window.location.href = '/admin/login';
+      }
+
+      let errorMsg = response.statusText;
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.detail || errorMsg;
+      } catch {
+        // Not JSON
+      }
+      throw new AdminApiError(response.status, errorMsg);
+    }
+
+    return { blob: await response.blob(), headers: response.headers };
+  }
+
   // --- HTTP Methods ---
 
   async get<T>(endpoint: string): Promise<T> {
@@ -94,7 +117,7 @@ class AdminApi {
     });
   }
 
-  async post<T>(endpoint: string, body?: any): Promise<T> {
+  async post<T>(endpoint: string, body?: unknown): Promise<T> {
     const headers = await this.getHeaders();
     return this.request<T>(endpoint, {
       method: 'POST',
@@ -103,7 +126,16 @@ class AdminApi {
     });
   }
 
-  async put<T>(endpoint: string, body: any): Promise<T> {
+  async postBlob(endpoint: string, body?: unknown): Promise<{ blob: Blob; headers: Headers }> {
+    const headers = await this.getHeaders();
+    return this.requestBlob(endpoint, {
+      method: 'POST',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  async put<T>(endpoint: string, body: unknown): Promise<T> {
     const headers = await this.getHeaders();
     return this.request<T>(endpoint, {
       method: 'PUT',
@@ -120,7 +152,7 @@ class AdminApi {
     });
   }
 
-  async patch<T>(endpoint: string, body?: any): Promise<T> {
+  async patch<T>(endpoint: string, body?: unknown): Promise<T> {
     const headers = await this.getHeaders();
     return this.request<T>(endpoint, {
       method: 'PATCH',

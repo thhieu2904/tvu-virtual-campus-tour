@@ -11,9 +11,10 @@ import {
   AdminSelect,
   AdminSkeleton,
   AdminTextarea,
-  categoryStyle,
+  AdminWorkbench,
+  AdminResourceSidebar,
+  AdminMetricStrip,
 } from '../_components/admin-ui'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -38,9 +39,7 @@ import {
   Tags,
   Trash2,
   Upload,
-  X,
   ArrowRightLeft,
-  FileType2,
 } from 'lucide-react'
 
 const UNCATEGORIZED_ID = '__uncategorized__'
@@ -93,10 +92,10 @@ const defaultCategoryForm: CategoryForm = {
 }
 
 const statusConfig = {
-  pending: { icon: Clock, label: 'Chờ xử lý', variant: 'secondary' as const, color: '#52627f' },
-  processing: { icon: Loader2, label: 'Đang xử lý', variant: 'outline' as const, color: '#b8891f' },
-  ready: { icon: CheckCircle2, label: 'Sẵn sàng', variant: 'default' as const, color: '#2c8b57' },
-  error: { icon: AlertCircle, label: 'Lỗi', variant: 'destructive' as const, color: '#c14b4b' },
+  pending: { icon: Clock, label: 'Chờ xử lý', color: '#52627f', bg: '#f1f5f9' },
+  processing: { icon: Loader2, label: 'Đang xử lý', color: '#b8891f', bg: '#fef3c7' },
+  ready: { icon: CheckCircle2, label: 'Sẵn sàng', color: '#2c8b57', bg: '#d1fae5' },
+  error: { icon: AlertCircle, label: 'Lỗi', color: '#c14b4b', bg: '#fee2e2' },
 }
 
 const fileTypeIcons: Record<string, string> = {
@@ -181,6 +180,10 @@ export default function DocumentsPage() {
   )
 
   const readyCount = useMemo(() => documents.filter((doc) => doc.status === 'ready').length, [documents])
+  const pendingCount = useMemo(() => documents.filter((doc) => doc.status === 'pending').length, [documents])
+  const processingCount = useMemo(() => documents.filter((doc) => doc.status === 'processing').length, [documents])
+  const errorCount = useMemo(() => documents.filter((doc) => doc.status === 'error').length, [documents])
+
   const categorizedCount = useMemo(
     () => categories.reduce((sum, category) => sum + category.document_count, 0),
     [categories],
@@ -418,141 +421,126 @@ export default function DocumentsPage() {
     }
   }
 
+  const sidebarItems = categoryNodes.map(cat => ({
+    id: cat.id,
+    title: cat.name,
+    subtitle: cat.isUncategorized ? 'Cần phân loại' : `/${cat.slug}`,
+    count: cat.document_count,
+    color: cat.color,
+    icon: cat.isUncategorized ? FolderOpen : Tags,
+  }))
+
+  const metrics = [
+    { label: 'Trong danh mục', value: total, description: selectedCategory?.name ?? 'Đang chọn' },
+    { label: 'Sẵn sàng', value: readyCount, color: '#2c8b57' },
+    { label: 'Đang xử lý', value: processingCount + pendingCount, color: '#b8891f' },
+    { label: 'Lỗi', value: errorCount, color: '#c14b4b' },
+  ]
+
   return (
     <div className="flex flex-col gap-6">
       <AdminPageHeader
-        title="Danh mục tài liệu"
+        title="Kho tri thức RAG"
         description="Quản lý học liệu RAG theo cấu trúc danh mục cha và file tài liệu con."
-        meta={
-          <>
-            <Badge variant="outline" className="rounded-lg">{categories.length} danh mục</Badge>
-            <Badge variant="secondary" className="rounded-lg">{categorizedCount} đã phân loại</Badge>
-            {uncategorizedCount > 0 && <Badge variant="outline" className="rounded-lg">{uncategorizedCount} chưa phân loại</Badge>}
-          </>
-        }
-        actions={
-          <>
-            <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loading} className="rounded-xl">
-              <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} />
-              Làm mới
-            </Button>
-            <Button size="sm" onClick={openUpload} className="rounded-xl">
-              <Upload data-icon="inline-start" />
-              Tải tài liệu
-            </Button>
-          </>
-        }
       />
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
-      <AdminPanel className="overflow-hidden !rounded-2xl">
-        <div className="grid min-h-[560px] lg:grid-cols-[280px_minmax(0,1fr)]">
-          {/* ─── Sidebar: Categories ─── */}
-          <aside className="border-b border-[#d7e0f0]/70 bg-[#f6f8fb] lg:border-b-0 lg:border-r">
-            <div className="flex items-center justify-between gap-3 border-b border-[#d7e0f0]/70 px-4 py-3.5">
-              <h2 className="text-sm font-semibold text-[#10213f]">Danh mục</h2>
-              <Button size="icon-sm" onClick={openCreateCategory} aria-label="Tạo danh mục" className="rounded-xl">
-                <Plus />
+      <AdminWorkbench
+        sidebar={
+          <AdminResourceSidebar
+            kicker="RAG console"
+            title="Danh mục"
+            description="Phân loại học liệu để kiểm soát file nào đã sẵn sàng phục vụ AI."
+            items={sidebarItems}
+            activeId={activeCategoryId}
+            onSelect={selectCategory}
+            loading={loadingCategories}
+            headerActions={
+              <Button variant="ghost" size="icon" onClick={openCreateCategory} className="h-7 w-7 rounded-lg">
+                <Plus className="h-4 w-4" />
               </Button>
-            </div>
-
-            <div className="max-h-[620px] overflow-y-auto p-2">
-              {categoryNodes.map((category) => {
-                const isSelected = selectedCategory?.id === category.id
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => selectCategory(category.id)}
-                    className={`group mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-[#7a96c9]/30 ${
-                      isSelected
-                        ? 'bg-[#053384] text-white shadow-sm shadow-[#053384]/20'
-                        : 'text-[#10213f] hover:bg-white'
-                    }`}
-                  >
-                    {/* Color bar */}
-                    <span
-                      className={`h-8 w-1 shrink-0 rounded-full transition-colors ${isSelected ? 'bg-white/40' : ''}`}
-                      style={!isSelected ? { backgroundColor: category.color } : undefined}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <span className="block truncate text-[0.82rem] font-medium">{category.name}</span>
-                    </div>
-                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[0.7rem] font-semibold tabular-nums ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-[#eef3fb] text-[#52627f]'
-                    }`}>
-                      {category.document_count}
-                    </span>
-                  </button>
-                )
-              })}
-
-              {!loadingCategories && categoryNodes.length === 0 && (
-                <div className="px-3 py-8 text-center text-sm text-[#52627f]">
-                  Chưa có danh mục tài liệu.
+            }
+            summary={
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Danh mục</p>
+                  <p className="mt-1 text-base font-bold text-[#10213f]">{categories.length}</p>
                 </div>
-              )}
-            </div>
-          </aside>
-
-          {/* ─── Main: Documents ─── */}
-          <section className="min-w-0 bg-white">
-            {selectedCategory ? (
-              <>
-                {/* Category Header */}
-                <div className="border-b border-[#d7e0f0]/70 px-5 py-4">
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className="flex size-10 shrink-0 items-center justify-center rounded-xl"
-                        style={categoryStyle(selectedCategory.color)}
-                      >
-                        {selectedCategory.isUncategorized ? <FolderOpen className="h-5 w-5" /> : <Tags className="h-5 w-5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="text-lg font-bold text-[#10213f]">{selectedCategory.name}</h2>
-                        <p className="text-xs text-[#7a96c9]">
-                          {total} tài liệu · {readyCount} sẵn sàng
-                        </p>
-                      </div>
+                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Đã phân loại</p>
+                  <p className="mt-1 text-base font-bold text-[#10213f]">{categorizedCount}</p>
+                </div>
+                <div className="col-span-2 rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Chưa phân loại</p>
+                  <p className="mt-1 text-base font-bold text-[#10213f]">{uncategorizedCount}</p>
+                </div>
+              </div>
+            }
+          />
+        }
+        main={
+          <div className="flex flex-col gap-4">
+            <AdminPanel className="overflow-hidden">
+              <div className="border-b border-[#d7e0f0]/70 bg-white px-5 py-4">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className="flex size-11 shrink-0 items-center justify-center rounded-xl border"
+                      style={{
+                        borderColor: `${selectedCategory?.color ?? '#7a96c9'}55`,
+                        backgroundColor: `${selectedCategory?.color ?? '#7a96c9'}14`,
+                        color: selectedCategory?.color ?? '#053384',
+                      }}
+                    >
+                      {selectedCategory?.isUncategorized ? <FolderOpen className="h-5 w-5" /> : <Tags className="h-5 w-5" />}
                     </div>
-
-                    <div className="flex shrink-0 items-center gap-2">
-                      {!selectedCategory.isUncategorized && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={
-                            <Button variant="outline" size="sm" className="rounded-xl" />
-                          }>
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Tùy chọn danh mục</span>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditCategory(selectedCategory)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Sửa danh mục
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => deleteCategory(selectedCategory)}
-                              disabled={deletingCategoryId === selectedCategory.id}
-                              className="text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Xóa danh mục
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                      <Button size="sm" onClick={openUpload} className="rounded-xl">
-                        <Upload data-icon="inline-start" />
-                        Tải tài liệu
-                      </Button>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-bold text-[#10213f]">
+                        {selectedCategory?.name ?? 'Danh mục tài liệu'}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-[#7a96c9]">
+                        {total} tài liệu · {readyCount} sẵn sàng cho RAG
+                      </p>
                     </div>
                   </div>
 
-                  {/* Search */}
-                  <div className="mt-4 relative max-w-md">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedCategory && !selectedCategory.isUncategorized && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={
+                          <Button variant="outline" size="sm" className="rounded-xl" />
+                        }>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditCategory(selectedCategory)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Sửa danh mục
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => deleteCategory(selectedCategory)}
+                            disabled={deletingCategoryId === selectedCategory.id}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Xóa danh mục
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loading} className="rounded-xl">
+                      <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
+                    </Button>
+                    <Button size="sm" onClick={openUpload} className="rounded-xl">
+                      <Upload data-icon="inline-start" /> Tải tài liệu
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-4 max-w-md">
+                  <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
                     <Input
                       placeholder="Tìm file trong danh mục..."
@@ -562,145 +550,132 @@ export default function DocumentsPage() {
                     />
                   </div>
                 </div>
+              </div>
 
-                {/* Document List */}
-                <div className="divide-y divide-[#d7e0f0]/50">
-                  {documents.map((doc) => {
+              <div className="border-b border-[#d7e0f0]/70 bg-[#f8fbff] px-5 py-4">
+                <AdminMetricStrip metrics={metrics} />
+              </div>
+
+              <div className="divide-y divide-[#d7e0f0]/50">
+                {loadingDocuments ? (
+                  <div className="p-4 space-y-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex gap-4">
+                        <AdminSkeleton variant="circle" className="size-10 rounded-xl" />
+                        <div className="flex-1 space-y-2 py-1">
+                          <AdminSkeleton className="h-4 w-1/3" />
+                          <AdminSkeleton className="h-3 w-1/4" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : documents.length === 0 ? (
+                  <AdminEmptyState
+                    icon={search ? Search : FileText}
+                    title={search ? 'Không tìm thấy tài liệu' : `${selectedCategory?.name ?? 'Danh mục'} chưa có tài liệu`}
+                    description={search ? 'Thử thay đổi từ khóa tìm kiếm.' : 'Tải tài liệu lên để bắt đầu xây dựng kho học liệu RAG.'}
+                    action={!search ? (
+                      <Button size="sm" onClick={openUpload} className="rounded-xl">
+                        <Upload data-icon="inline-start" /> Tải tài liệu
+                      </Button>
+                    ) : undefined}
+                  />
+                ) : (
+                  documents.map((doc) => {
                     const config = statusConfig[doc.status]
                     const StatusIcon = config.icon
                     const emoji = fileTypeIcons[doc.file_type?.toLowerCase()] || '📄'
+                    const isBusy = doc.status === 'pending' || doc.status === 'processing'
 
                     return (
                       <div
                         key={doc.id}
-                        className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-[#f6f8fb]"
+                        className="group flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-[#f6f8fb] lg:flex-row lg:items-center"
                       >
-                        {/* File type icon */}
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb] text-lg">
-                          {emoji}
-                        </div>
-
-                        {/* Info */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-[0.88rem] font-semibold text-[#10213f]">{doc.title}</p>
-                            <span
-                              className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.68rem] font-medium"
-                              style={{ backgroundColor: `${config.color}14`, color: config.color }}
-                            >
-                              <StatusIcon className={`h-3 w-3 ${doc.status === 'processing' ? 'animate-spin' : ''}`} />
-                              {config.label}
-                            </span>
+                        <div className="flex items-start gap-4 min-w-0 flex-1">
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb] text-lg">
+                            {emoji}
                           </div>
-                          <p className="mt-0.5 text-xs text-[#7a96c9]">
-                            <span className="font-mono uppercase">{doc.file_type}</span>
-                            <span className="mx-1.5 text-[#d7e0f0]">·</span>
-                            {formatBytes(doc.file_size)}
-                            <span className="mx-1.5 text-[#d7e0f0]">·</span>
-                            {doc.chunk_count} chunks
-                            <span className="mx-1.5 text-[#d7e0f0]">·</span>
-                            {doc.created_at ? new Date(doc.created_at).toLocaleDateString('vi-VN') : '—'}
-                          </p>
-                          {doc.error_message && (
-                            <p className="mt-1 truncate text-xs text-red-600">{doc.error_message}</p>
-                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-[0.9rem] font-semibold text-[#10213f]">{doc.title}</p>
+                              <span
+                                className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.68rem] font-medium"
+                                style={{ backgroundColor: config.bg, color: config.color }}
+                              >
+                                <StatusIcon className={`h-3 w-3 ${isBusy ? 'animate-spin' : ''}`} />
+                                {config.label}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#7a96c9]">
+                              <span className="font-mono uppercase text-[#52627f]">{doc.file_type}</span>
+                              <span className="flex items-center gap-1.5 before:content-['·'] before:text-[#d7e0f0] before:mr-1.5">{formatBytes(doc.file_size)}</span>
+                              <span className="flex items-center gap-1.5 before:content-['·'] before:text-[#d7e0f0] before:mr-1.5 font-medium">{doc.chunk_count} chunks</span>
+                              <span className="flex items-center gap-1.5 before:content-['·'] before:text-[#d7e0f0] before:mr-1.5">{doc.created_at ? new Date(doc.created_at).toLocaleDateString('vi-VN') : '—'}</span>
+                            </div>
+                            {doc.error_message && (
+                              <p className="mt-1.5 truncate text-[0.78rem] text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 inline-block">
+                                Lỗi: {doc.error_message}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Actions — context menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={
-                            <Button
-                              variant="ghost" size="icon-sm"
-                              className="shrink-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                            />
-                          }>
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Tùy chọn</span>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56">
-                            {/* Reassign category sub-items */}
-                            {categories.filter(c => c.id !== doc.category_id).map((cat) => (
+                        <div className="ml-14 flex items-center gap-3 lg:ml-0 lg:self-center">
+                          <div className="hidden rounded-xl border border-[#d7e0f0]/70 bg-white px-3 py-2 text-right xl:block">
+                            <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Chunk</p>
+                            <p className="text-sm font-bold text-[#10213f]">{doc.chunk_count}</p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-8 w-8 rounded-lg text-[#7a96c9] hover:text-[#10213f] hover:bg-white"
+                              />
+                            }>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              {categories.filter(c => c.id !== doc.category_id).map((cat) => (
+                                <DropdownMenuItem
+                                  key={cat.id}
+                                  onClick={() => updateDocumentCategory(doc, cat.id)}
+                                  disabled={assigningId === doc.id}
+                                >
+                                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                                  Chuyển sang: {cat.name}
+                                </DropdownMenuItem>
+                              ))}
+                              {doc.category_id && (
+                                <DropdownMenuItem
+                                  onClick={() => updateDocumentCategory(doc, '')}
+                                  disabled={assigningId === doc.id}
+                                >
+                                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                                  Bỏ phân loại
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                key={cat.id}
-                                onClick={() => updateDocumentCategory(doc, cat.id)}
-                                disabled={assigningId === doc.id}
+                                onClick={() => handleDelete(doc.id, doc.title)}
+                                disabled={deletingId === doc.id}
+                                className="text-red-600 focus:text-red-600"
                               >
-                                <ArrowRightLeft className="mr-2 h-4 w-4" />
-                                Chuyển sang: {cat.name}
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Xóa tài liệu
                               </DropdownMenuItem>
-                            ))}
-                            {doc.category_id && (
-                              <DropdownMenuItem
-                                onClick={() => updateDocumentCategory(doc, '')}
-                                disabled={assigningId === doc.id}
-                              >
-                                <ArrowRightLeft className="mr-2 h-4 w-4" />
-                                Bỏ phân loại
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(doc.id, doc.title)}
-                              disabled={deletingId === doc.id}
-                              className="text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Xóa tài liệu
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     )
-                  })}
-
-                  {/* Loading skeleton */}
-                  {loadingDocuments && (
-                    <div className="space-y-1 p-5">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="flex items-center gap-4 rounded-xl p-3">
-                          <AdminSkeleton variant="circle" className="size-10 rounded-xl" />
-                          <div className="flex-1 space-y-2">
-                            <AdminSkeleton className="h-4 w-3/4" />
-                            <AdminSkeleton className="h-3 w-1/2" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Empty state */}
-                  {!loadingDocuments && documents.length === 0 && (
-                    <AdminEmptyState
-                      icon={search ? Search : FileText}
-                      title={search ? 'Không tìm thấy tài liệu' : 'Danh mục trống'}
-                      description={search
-                        ? 'Thử thay đổi từ khóa tìm kiếm.'
-                        : 'Tải tài liệu lên để bắt đầu xây dựng kho học liệu RAG.'
-                      }
-                      action={!search ? (
-                        <Button size="sm" onClick={openUpload} className="rounded-xl">
-                          <Upload data-icon="inline-start" /> Tải tài liệu
-                        </Button>
-                      ) : undefined}
-                    />
-                  )}
-                </div>
-              </>
-            ) : (
-              <AdminEmptyState
-                icon={FolderOpen}
-                title="Chọn một danh mục"
-                description="Chọn hoặc tạo danh mục tài liệu để bắt đầu quản lý học liệu RAG."
-                action={
-                  <Button size="sm" onClick={openCreateCategory} className="rounded-xl">
-                    <Plus data-icon="inline-start" /> Tạo danh mục
-                  </Button>
-                }
-              />
-            )}
-          </section>
-        </div>
-      </AdminPanel>
+                  })
+                )}
+              </div>
+            </AdminPanel>
+          </div>
+        }
+      />
 
       {/* ─── Category Modal ─── */}
       {categoryModalOpen && (
@@ -708,9 +683,7 @@ export default function DocumentsPage() {
           title={editingCategory ? `Chỉnh sửa: ${editingCategory.name}` : 'Tạo danh mục học liệu'}
           footer={
             <>
-              <Button variant="outline" onClick={closeCategoryModal} className="rounded-xl">
-                Hủy
-              </Button>
+              <Button variant="outline" onClick={closeCategoryModal} className="rounded-xl">Hủy</Button>
               <Button
                 onClick={saveCategory}
                 disabled={savingCategory || !categoryForm.name.trim() || !categoryForm.slug.trim()}
@@ -732,7 +705,7 @@ export default function DocumentsPage() {
                 type="color"
                 value={categoryForm.color}
                 onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })}
-                className="h-10 rounded-xl"
+                className="h-10 rounded-xl px-2 py-1 cursor-pointer"
               />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
@@ -770,9 +743,7 @@ export default function DocumentsPage() {
           title="Upload tài liệu RAG"
           footer={
             <>
-              <Button variant="outline" onClick={() => { setShowUpload(false); setUploadStatus(null) }} className="rounded-xl">
-                Hủy
-              </Button>
+              <Button variant="outline" onClick={() => { setShowUpload(false); setUploadStatus(null) }} className="rounded-xl">Hủy</Button>
               <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadTitle.trim()} className="rounded-xl">
                 {uploading ? 'Đang upload...' : 'Upload & Ingest'}
               </Button>

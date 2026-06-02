@@ -531,6 +531,36 @@ async def create_chat_session(
     return chat_session.id
 
 
+async def save_chat_exchange(
+    session: AsyncSession,
+    session_id: str | None,
+    location_id: str | None,
+    user_message: str,
+    assistant_message: str,
+    response_time_ms: int,
+    input_type: str = "text",
+    tool_calls_data: list[dict] | None = None,
+) -> None:
+    """Persist a chat exchange for analytics when the answer bypasses RAG generation."""
+    if not session_id:
+        return
+
+    try:
+        await _save_chat_messages(
+            session,
+            session_id=UUID(session_id),
+            location_id=UUID(location_id) if location_id else None,
+            user_message=user_message,
+            assistant_message=assistant_message,
+            response_time_ms=response_time_ms,
+            input_type=input_type,
+            tool_calls_data=tool_calls_data,
+        )
+        await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to save cached chat messages: {e}")
+
+
 async def _save_chat_messages(
     session: AsyncSession,
     session_id: UUID,
