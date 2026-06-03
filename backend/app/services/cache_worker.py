@@ -223,7 +223,7 @@ async def _build_location_work_items(
     artifact_map = await _current_artifact_map(session, fingerprint_items)
     work_items: list[CacheWorkItem] = []
 
-    if intro_item and focus in {"voice", "questions", "prompt", "all", "overview"} and _item_needs_work(intro_item, artifact_map, force):
+    if intro_item and focus in {"voice", "all", "overview"} and _item_needs_work(intro_item, artifact_map, force):
         work_items.append(
             CacheWorkItem(
                 kind="location_intro",
@@ -316,7 +316,12 @@ async def _build_mascot_work_items(
 
     locations = await _dependent_locations(session, mascot_id)
     for location in locations:
-        location_focus = "voice" if focus == "voice" else "questions"
+        if focus == "voice":
+            location_focus = "voice"
+        elif focus in {"all", "overview"}:
+            location_focus = "all"
+        else:
+            location_focus = "questions"
         work_items.extend(await _build_location_work_items(session, location.id, location_focus, force))
 
     return work_items

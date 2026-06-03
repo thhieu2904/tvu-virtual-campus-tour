@@ -534,7 +534,7 @@ export default function MascotsPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <a
-                            href={`/admin/cache?scope=mascot&mascotId=${m.id}&focus=voice`}
+                            href={`/admin/cache?scope=mascot&target_id=${m.id}&focus=voice`}
                             className="rounded-xl border border-[#d7e0f0] bg-white px-3 py-2 text-xs font-semibold text-[#053384] transition-colors hover:bg-[#eef3fb]"
                           >
                             Mở Cache Console
@@ -682,7 +682,7 @@ export default function MascotsPage() {
                 </div>
               </div>
               <a
-                href={`/admin/cache?scope=mascot&mascotId=${previewMascot.id}&focus=voice`}
+                href={`/admin/cache?scope=mascot&target_id=${previewMascot.id}&focus=voice`}
                 className="block rounded-xl border border-[#d7e0f0] bg-white px-3 py-2 text-center text-xs font-semibold text-[#053384] transition-colors hover:bg-[#eef3fb]"
               >
                 Mở Cache Console

@@ -282,7 +282,9 @@ async def _location_summary(
     items.extend(fingerprints.build_location_qa_items(location))
     if focus == "voice":
         items = [item for item in items if item.artifact_type in {"location_intro_audio", "qa_audio"}]
-    elif focus in {"questions", "prompt", "all", "overview"}:
+    elif focus in {"questions", "prompt"}:
+        items = [item for item in items if item.artifact_type in {"qa_answer", "qa_audio"}]
+    elif focus in {"all", "overview"}:
         items = [item for item in items if item.artifact_type in {"location_intro_audio", "qa_answer", "qa_audio"}]
 
     artifacts = await _artifact_statuses(session, items)
@@ -333,7 +335,9 @@ async def _mascot_summary(
         location_items.extend(fingerprints.build_location_qa_items(location))
         if focus == "voice":
             items.extend(item for item in location_items if item.artifact_type in {"location_intro_audio", "qa_audio"})
-        elif focus in {"questions", "prompt", "all", "overview"}:
+        elif focus in {"questions", "prompt"}:
+            items.extend(item for item in location_items if item.artifact_type in {"qa_answer", "qa_audio"})
+        elif focus in {"all", "overview"}:
             items.extend(location_items)
 
     artifacts = await _artifact_statuses(session, items)

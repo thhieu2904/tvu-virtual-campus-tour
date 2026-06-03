@@ -393,7 +393,7 @@ export default function LocationsPage() {
                   <Plus className="mr-1 h-4 w-4" /> Thêm câu hỏi
                 </Button>
                 <a
-                  href={`/admin/cache?scope=location&locationId=${editingId}&focus=questions`}
+                  href={`/admin/cache?scope=location&target_id=${editingId}&focus=questions`}
                   className="w-fit rounded-xl border border-[#d7e0f0] bg-white px-3 py-2 text-xs font-semibold text-[#053384] transition-colors hover:bg-[#eef3fb]"
                 >
                   Mở Cache Console cho câu hỏi này

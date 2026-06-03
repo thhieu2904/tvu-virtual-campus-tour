@@ -12,6 +12,7 @@ from uuid import UUID
 from app.services import cache_fingerprint_service as fingerprints
 from app.services import cache_worker
 from app.services import location_audio_service
+from scripts import backfill_cache_artifacts
 
 
 MASCOT_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -153,6 +154,39 @@ class CachePhase2BWorkerTests(unittest.TestCase):
             self.assertEqual(data["old"]["answer"], "keep")
             self.assertEqual(data["new"]["answer"], "added")
             reload_mock.assert_called_once()
+
+
+class CacheBackfillScriptTests(unittest.TestCase):
+    def test_qa_entry_voice_status_detects_match_mismatch_and_unknown(self):
+        self.assertEqual(
+            backfill_cache_artifacts.qa_entry_voice_status({"voice_name": "Puck"}, "Puck"),
+            "match",
+        )
+        self.assertEqual(
+            backfill_cache_artifacts.qa_entry_voice_status({"voice_name": "Leda"}, "Puck"),
+            "mismatch",
+        )
+        self.assertEqual(
+            backfill_cache_artifacts.qa_entry_voice_status({}, "Puck"),
+            "unknown",
+        )
+
+    def test_normalize_audio_key_rejects_inline_data_urls(self):
+        self.assertIsNone(backfill_cache_artifacts.normalize_audio_key("data:audio/wav;base64,abc"))
+
+    def test_tts_cache_candidates_include_sha_and_legacy_extensions(self):
+        candidates = backfill_cache_artifacts.tts_cache_candidates(
+            "Xin chào",
+            "Puck",
+            "friendly",
+            "Bạn là Kaito.",
+        )
+        keys = [key for key, _kind in candidates]
+
+        self.assertEqual(len(keys), 4)
+        self.assertTrue(all(key.startswith("tts-cache/") for key in keys))
+        self.assertTrue(any(key.endswith(".wav") for key in keys))
+        self.assertTrue(any(key.endswith(".mp3") for key in keys))
 
 
 if __name__ == "__main__":
