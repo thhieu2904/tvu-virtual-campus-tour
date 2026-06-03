@@ -414,17 +414,17 @@ function AdminCacheContent() {
                   <p className="mt-1 font-mono text-xs font-semibold text-[#10213f]">{shortHash(summary?.cached_fingerprint ?? null)}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-center text-emerald-800">
-                    <p className="text-[0.65rem] font-semibold uppercase">Hợp lệ</p>
-                    <p className="text-lg font-bold">{counts.valid}</p>
+                  <div className="flex flex-col rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-center text-emerald-800">
+                    <p className="flex flex-1 items-center justify-center text-[0.65rem] font-semibold uppercase leading-tight">Hợp lệ</p>
+                    <p className="mt-1 text-lg font-bold leading-none">{counts.valid}</p>
                   </div>
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-center text-amber-800">
-                    <p className="text-[0.65rem] font-semibold uppercase">Cần cập nhật</p>
-                    <p className="text-lg font-bold">{counts.stale}</p>
+                  <div className="flex flex-col rounded-xl border border-amber-200 bg-amber-50 p-2 text-center text-amber-800">
+                    <p className="flex flex-1 items-center justify-center text-[0.65rem] font-semibold uppercase leading-tight">Cần cập nhật</p>
+                    <p className="mt-1 text-lg font-bold leading-none">{counts.stale}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-center text-slate-700">
-                    <p className="text-[0.65rem] font-semibold uppercase">Chưa có</p>
-                    <p className="text-lg font-bold">{counts.missing}</p>
+                  <div className="flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-2 text-center text-slate-700">
+                    <p className="flex flex-1 items-center justify-center text-[0.65rem] font-semibold uppercase leading-tight">Chưa có</p>
+                    <p className="mt-1 text-lg font-bold leading-none">{counts.missing}</p>
                   </div>
                 </div>
               </div>
