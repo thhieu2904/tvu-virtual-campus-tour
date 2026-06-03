@@ -273,7 +273,7 @@ async def _location_summary(
     )
     location = result.scalar_one_or_none()
     if not location:
-        raise HTTPException(status_code=404, detail="Location not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy địa điểm")
 
     items = []
     intro_item = fingerprints.build_location_intro_item(location)
@@ -321,7 +321,7 @@ async def _mascot_summary(
 ) -> CacheSummaryResponse:
     mascot = await session.get(Mascot, target_id)
     if not mascot:
-        raise HTTPException(status_code=404, detail="Mascot not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy đại sứ ảo")
 
     items = [fingerprints.build_mascot_intro_item(mascot)]
     locations = await _dependent_locations(session, mascot)
@@ -392,11 +392,11 @@ async def _summary_for_request(
 ) -> CacheSummaryResponse:
     if scope == "location":
         if not target_id:
-            raise HTTPException(status_code=400, detail="target_id is required for location scope")
+            raise HTTPException(status_code=400, detail="Cần target_id cho phạm vi địa điểm")
         return await _location_summary(session, target_id, focus)
     if scope == "mascot":
         if not target_id:
-            raise HTTPException(status_code=400, detail="target_id is required for mascot scope")
+            raise HTTPException(status_code=400, detail="Cần target_id cho phạm vi đại sứ ảo")
         return await _mascot_summary(session, target_id, focus)
     return await _global_summary(session, focus)
 
@@ -463,7 +463,7 @@ async def create_cache_job(
 ):
     target_id = _as_uuid(payload.target_id, "target_id")
     if payload.scope == "global" and not payload.dry_run:
-        raise HTTPException(status_code=400, detail="Global rebuild jobs are intentionally disabled")
+        raise HTTPException(status_code=400, detail="Chưa bật rebuild toàn hệ thống; hãy chọn một địa điểm hoặc đại sứ ảo")
 
     summary = await _summary_for_request(session, payload.scope, target_id, payload.focus)
     detected_changes = _detected_changes(summary, payload.force)
@@ -495,21 +495,21 @@ async def create_cache_job(
             session,
             job.id,
             "info",
-            f"Dry-run complete: {total_items} affected artifact(s).",
+            f"Kiểm tra trước hoàn tất: {total_items} artifact bị ảnh hưởng.",
         )
     elif total_items == 0:
         await cache_worker.add_job_log(
             session,
             job.id,
             "info",
-            "No stale or missing artifact found; job completed without rebuild.",
+            "Không có artifact cần cập nhật hoặc chưa có; job kết thúc mà không rebuild.",
         )
     else:
         await cache_worker.add_job_log(
             session,
             job.id,
             "info",
-            f"Queued cache rebuild with {total_items} affected artifact(s).",
+            f"Đã đưa vào hàng chờ rebuild cache với {total_items} artifact bị ảnh hưởng.",
         )
 
     await session.commit()
@@ -528,7 +528,7 @@ async def get_cache_job(
 ):
     job = await session.get(CacheJob, _as_uuid(job_id, "job_id"))
     if not job:
-        raise HTTPException(status_code=404, detail="Cache job not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy cache job")
     return await _job_detail(session, job)
 
 
@@ -540,7 +540,7 @@ async def get_cache_job_logs(
 ):
     parsed_job_id = _as_uuid(job_id, "job_id")
     if not await session.get(CacheJob, parsed_job_id):
-        raise HTTPException(status_code=404, detail="Cache job not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy cache job")
     return await _logs_for_job(session, parsed_job_id, max(1, min(limit, 500)))
 
 
@@ -552,12 +552,12 @@ async def cancel_cache_job(
     parsed_job_id = _as_uuid(job_id, "job_id")
     job = await session.get(CacheJob, parsed_job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Cache job not found")
+        raise HTTPException(status_code=404, detail="Không tìm thấy cache job")
     if job.status not in {"queued", "running"}:
-        raise HTTPException(status_code=400, detail=f"Cannot cancel job with status {job.status}")
+        raise HTTPException(status_code=400, detail=f"Không thể hủy job ở trạng thái {job.status}")
     job.status = "cancelled"
     job.updated_at = datetime.now(timezone.utc)
-    await cache_worker.add_job_log(session, job.id, "warning", "Cancel requested by admin.")
+    await cache_worker.add_job_log(session, job.id, "warning", "Admin đã yêu cầu hủy job.")
     await session.commit()
     await session.refresh(job)
     return await _job_detail(session, job)

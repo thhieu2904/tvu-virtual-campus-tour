@@ -117,18 +117,42 @@ type CacheJobDetail = {
 }
 
 const statusMeta: Record<CacheStatus, { label: string; tone: 'success' | 'warning' | 'danger' | 'muted' | 'info'; icon: typeof CheckCircle2 }> = {
-  valid: { label: 'Valid', tone: 'success', icon: CheckCircle2 },
-  stale: { label: 'Stale', tone: 'warning', icon: AlertTriangle },
-  missing: { label: 'Missing', tone: 'warning', icon: ShieldAlert },
-  running: { label: 'Running', tone: 'info', icon: Activity },
-  failed: { label: 'Failed', tone: 'danger', icon: XCircle },
+  valid: { label: 'Hợp lệ', tone: 'success', icon: CheckCircle2 },
+  stale: { label: 'Cần cập nhật', tone: 'warning', icon: AlertTriangle },
+  missing: { label: 'Chưa có', tone: 'warning', icon: ShieldAlert },
+  running: { label: 'Đang chạy', tone: 'info', icon: Activity },
+  failed: { label: 'Thất bại', tone: 'danger', icon: XCircle },
 }
 
 const artifactLabels: Record<string, string> = {
-  intro_audio: 'Intro audio',
-  location_intro_audio: 'Location intro/revisit audio',
-  qa_answer: 'QA answer',
-  qa_audio: 'QA audio',
+  intro_audio: 'Audio giới thiệu đại sứ ảo',
+  location_intro_audio: 'Audio giới thiệu/quay lại địa điểm',
+  qa_answer: 'Câu trả lời gợi ý',
+  qa_audio: 'Audio câu trả lời',
+}
+
+const logLevelLabels: Record<string, string> = {
+  info: 'Thông tin',
+  warning: 'Cảnh báo',
+  error: 'Lỗi',
+}
+
+const jobTypeLabels: Record<string, string> = {
+  cache_observability: 'Kiểm tra cache',
+  location_intro_audio: 'Audio địa điểm',
+  mascot_intro: 'Đại sứ ảo',
+  location_qa: 'Hỏi đáp địa điểm',
+}
+
+function jobStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    queued: 'Chờ xử lý',
+    running: 'Đang chạy',
+    succeeded: 'Hoàn thành',
+    failed: 'Thất bại',
+    cancelled: 'Đã hủy',
+  }
+  return map[status] ?? status
 }
 
 const jobStatusTone: Record<CacheJobStatus, 'success' | 'warning' | 'danger' | 'muted' | 'info'> = {
@@ -150,7 +174,7 @@ function normalizeFocus(value: string | null): CacheFocus {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return 'Chua co'
+  if (!value) return 'Chưa có'
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
@@ -205,7 +229,7 @@ function AdminCacheContent() {
       setSummary(data)
     } catch (err) {
       setSummary(null)
-      setError(err instanceof Error ? err.message : 'Khong doc duoc cache summary')
+      setError(err instanceof Error ? err.message : 'Không đọc được cache summary')
     } finally {
       setLoading(false)
     }
@@ -226,7 +250,7 @@ function AdminCacheContent() {
           void loadSummary()
         }
       } catch (err) {
-        setJobError(err instanceof Error ? err.message : 'Khong doc duoc job progress')
+        setJobError(err instanceof Error ? err.message : 'Không đọc được tiến độ job')
       }
     }, 1800)
 
@@ -238,8 +262,8 @@ function AdminCacheContent() {
     if (!dryRun) {
       const ok = window.confirm(
         force
-          ? 'Force rebuild se goi lai RAG/TTS cho ca artifact dang valid. Tiep tuc?'
-          : 'Start rebuild se goi RAG/TTS/R2 cho cache stale hoặc missing. Tiep tuc?',
+          ? 'Tạo lại tất cả sẽ gọi lại RAG/TTS cho cả artifact đang hợp lệ. Tiếp tục?'
+          : 'Tạo lại cache sẽ gọi RAG/TTS/R2 cho cache cần cập nhật hoặc chưa có. Tiếp tục?',
       )
       if (!ok) return
     }
@@ -257,7 +281,7 @@ function AdminCacheContent() {
       setJobDetail(nextJob)
       await loadSummary()
     } catch (err) {
-      setJobError(err instanceof Error ? err.message : 'Khong tao duoc cache job')
+      setJobError(err instanceof Error ? err.message : 'Không tạo được cache job')
     } finally {
       setJobLoading(false)
     }
@@ -272,7 +296,7 @@ function AdminCacheContent() {
       setJobDetail(nextJob)
       await loadSummary()
     } catch (err) {
-      setJobError(err instanceof Error ? err.message : 'Khong cancel duoc cache job')
+      setJobError(err instanceof Error ? err.message : 'Không hủy được cache job')
     } finally {
       setJobLoading(false)
     }
@@ -280,9 +304,9 @@ function AdminCacheContent() {
 
   const focusedLabel = useMemo(() => {
     const targetName = typeof summary?.target?.name === 'string' ? summary.target.name : null
-    if (scope === 'location') return targetName ?? (targetId ? `Location ${targetId.slice(0, 8)}` : 'Chua chon')
-    if (scope === 'mascot') return targetName ?? (targetId ? `Mascot ${targetId.slice(0, 8)}` : 'Chua chon')
-    return 'Toan he thong'
+    if (scope === 'location') return targetName ?? (targetId ? `Địa điểm ${targetId.slice(0, 8)}` : 'Chưa chọn')
+    if (scope === 'mascot') return targetName ?? (targetId ? `Đại sứ ảo ${targetId.slice(0, 8)}` : 'Chưa chọn')
+    return 'Toàn hệ thống'
   }, [scope, summary?.target, targetId])
 
   const counts = useMemo(() => artifactStatusCounts(summary), [summary])
@@ -307,32 +331,32 @@ function AdminCacheContent() {
     <div className="flex flex-col gap-6">
       <AdminPageHeader
         title="Cache Console"
-        description="Theo doi fingerprint, stale state va runtime cache cho intro audio va suggested QA."
+        description="Theo dõi fingerprint, trạng thái stale và runtime cache cho intro audio và câu hỏi gợi ý."
         meta={summary && <AdminStatusPill status={meta.tone} label={<><StatusIcon className="mr-1 h-3 w-3" /> {meta.label}</>} />}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" className="rounded-xl" onClick={loadSummary} disabled={loading || !canFetch}>
               <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} />
-              Refresh
+              Làm mới
             </Button>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => createJob(true)} disabled={jobLoading || !canFetch}>
               <ListChecks data-icon="inline-start" />
-              Dry-run
+              Kiểm tra trước
             </Button>
             <Button size="sm" className="rounded-xl" onClick={() => createJob(false)} disabled={jobLoading || activeJobRunning || !canStartJob}>
               <Play data-icon="inline-start" />
-              Start rebuild
+              Tạo lại cache
             </Button>
             {canForceJob && (
               <Button variant="outline" size="sm" className="rounded-xl" onClick={() => createJob(false, true)} disabled={jobLoading || activeJobRunning}>
                 <ShieldAlert data-icon="inline-start" />
-                Force
+                Tạo lại tất cả
               </Button>
             )}
             {activeJobRunning && (
               <Button variant="outline" size="sm" className="rounded-xl" onClick={cancelJob} disabled={jobLoading}>
                 <XCircle data-icon="inline-start" />
-                Cancel
+                Hủy
               </Button>
             )}
           </div>
@@ -341,7 +365,7 @@ function AdminCacheContent() {
 
       {!canFetch && (
         <AdminNotice tone="info">
-          Chon location hoac mascot tu trang admin de xem cache theo target.
+          Chọn địa điểm hoặc đại sứ ảo từ trang admin để xem cache theo mục tiêu.
         </AdminNotice>
       )}
 
@@ -359,10 +383,10 @@ function AdminCacheContent() {
 
       <AdminMetricStrip
         metrics={[
-          { label: 'Scope', value: scope === 'location' ? 'Location' : scope === 'mascot' ? 'Mascot' : 'Global', color: '#053384' },
-          { label: 'Focus', value: focus, color: '#52627f' },
-          { label: 'Affected', value: summary ? summary.affected_items : '-', color: summary?.affected_items ? '#b8891f' : '#2c8b57' },
-          { label: 'Estimate', value: summary ? `${summary.estimated_cost.rag_requests} RAG / ${summary.estimated_cost.tts_requests} TTS` : '-', color: '#7a3f98' },
+          { label: 'Phạm vi', value: scope === 'location' ? 'Địa điểm' : scope === 'mascot' ? 'Đại sứ ảo' : 'Toàn hệ thống', color: '#053384' },
+          { label: 'Tập trung', value: focus === 'voice' ? 'Giọng nói' : focus === 'questions' ? 'Câu hỏi' : focus === 'prompt' ? 'Prompt' : focus === 'all' ? 'Tất cả' : 'Tổng quan', color: '#52627f' },
+          { label: 'Bị ảnh hưởng', value: summary ? summary.affected_items : '-', color: summary?.affected_items ? '#b8891f' : '#2c8b57' },
+          { label: 'Ước tính', value: summary ? `${summary.estimated_cost.rag_requests} RAG / ${summary.estimated_cost.tts_requests} TTS` : '-', color: '#7a3f98' },
         ]}
       />
 
@@ -382,24 +406,24 @@ function AdminCacheContent() {
 
               <div className="mt-4 grid gap-2 text-sm text-[#52627f]">
                 <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-3">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Current fingerprint</p>
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Fingerprint hiện tại</p>
                   <p className="mt-1 font-mono text-xs font-semibold text-[#10213f]">{shortHash(summary?.current_fingerprint ?? null)}</p>
                 </div>
                 <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-3">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Cached fingerprint</p>
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Fingerprint đã cache</p>
                   <p className="mt-1 font-mono text-xs font-semibold text-[#10213f]">{shortHash(summary?.cached_fingerprint ?? null)}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-center text-emerald-800">
-                    <p className="text-[0.65rem] font-semibold uppercase">Valid</p>
+                    <p className="text-[0.65rem] font-semibold uppercase">Hợp lệ</p>
                     <p className="text-lg font-bold">{counts.valid}</p>
                   </div>
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-center text-amber-800">
-                    <p className="text-[0.65rem] font-semibold uppercase">Stale</p>
+                    <p className="text-[0.65rem] font-semibold uppercase">Cần cập nhật</p>
                     <p className="text-lg font-bold">{counts.stale}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-center text-slate-700">
-                    <p className="text-[0.65rem] font-semibold uppercase">Missing</p>
+                    <p className="text-[0.65rem] font-semibold uppercase">Chưa có</p>
                     <p className="text-lg font-bold">{counts.missing}</p>
                   </div>
                 </div>
@@ -440,8 +464,8 @@ function AdminCacheContent() {
         <main className="grid gap-5">
           {jobDetail && (
             <AdminPanel
-              title="Job progress"
-              description={`${jobDetail.job.processed_items}/${jobDetail.job.total_items} processed · ${jobDetail.job.failed_items} failed`}
+              title="Tiến độ job"
+              description={`${jobDetail.job.processed_items}/${jobDetail.job.total_items} đã xử lý · ${jobDetail.job.failed_items} lỗi`}
               action={<AdminStatusPill status={jobStatusTone[jobDetail.job.status]} label={jobDetail.job.status} />}
             >
               <div className="grid gap-4 p-5">
@@ -458,7 +482,7 @@ function AdminCacheContent() {
                 )}
                 <div className="max-h-56 overflow-y-auto rounded-xl border border-[#d7e0f0]/80">
                   {jobDetail.logs.length === 0 ? (
-                    <div className="p-4 text-sm text-[#52627f]">Chua co log.</div>
+                    <div className="p-4 text-sm text-[#52627f]">Chưa có log.</div>
                   ) : (
                     <div className="divide-y divide-[#d7e0f0]/60">
                       {jobDetail.logs.map((log) => (
@@ -466,7 +490,7 @@ function AdminCacheContent() {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <AdminStatusPill
                               status={log.level === 'error' ? 'danger' : log.level === 'warning' ? 'warning' : 'info'}
-                              label={log.level}
+                            label={logLevelLabels[log.level] ?? log.level}
                             />
                             <span className="text-xs text-[#7a96c9]">{formatDate(log.created_at)}</span>
                           </div>
@@ -482,18 +506,18 @@ function AdminCacheContent() {
           )}
 
           <AdminPanel
-            title="Artifact status"
-            description={loading ? 'Dang tai summary...' : `${summary?.total_items ?? 0} artifact dang duoc theo doi`}
+            title="Trạng thái artifact"
+            description={loading ? 'Đang tải tóm tắt...' : `${summary?.total_items ?? 0} artifact đang được theo dõi`}
             action={summary && <AdminStatusPill status={meta.tone} label={meta.label} />}
           >
             <div className="grid gap-4 p-5">
               {!summary && !loading ? (
                 <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-                  Chua co summary de hien thi.
+                  Chưa có tóm tắt để hiển thị.
                 </div>
               ) : groupedArtifacts.length === 0 ? (
                 <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-                  Khong co artifact item trong pham vi nay.
+                  Không có artifact trong phạm vi này.
                 </div>
               ) : (
                 groupedArtifacts.map(([artifactType, artifacts]) => (
@@ -503,7 +527,7 @@ function AdminCacheContent() {
                         {artifactType === 'intro_audio' || artifactType === 'location_intro_audio' ? <Mic className="h-4 w-4 text-[#053384]" /> : <Sparkles className="h-4 w-4 text-[#053384]" />}
                         <h3 className="text-sm font-bold text-[#10213f]">{artifactLabels[artifactType] ?? artifactType}</h3>
                       </div>
-                      <span className="text-xs font-semibold text-[#7a96c9]">{artifacts.length} items</span>
+                      <span className="text-xs font-semibold text-[#7a96c9]">{artifacts.length} mục</span>
                     </div>
                     <div className="divide-y divide-[#d7e0f0]/60">
                       {artifacts.map((artifact) => {
@@ -516,8 +540,8 @@ function AdminCacheContent() {
                                 <AdminStatusPill status={itemStatus.tone} label={itemStatus.label} />
                               </div>
                               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[0.72rem] text-[#7a96c9]">
-                                <span className="font-mono">current {shortHash(artifact.current_fingerprint)}</span>
-                                <span className="font-mono">cached {shortHash(artifact.cached_fingerprint)}</span>
+                                <span className="font-mono">hiện tại {shortHash(artifact.current_fingerprint)}</span>
+                                <span className="font-mono">đã cache {shortHash(artifact.cached_fingerprint)}</span>
                                 {artifact.cache_key && <span className="font-mono">key {artifact.cache_key.slice(0, 10)}</span>}
                               </div>
                             </div>
@@ -525,7 +549,7 @@ function AdminCacheContent() {
                               <p>{formatDate(artifact.updated_at)}</p>
                               {artifact.storage_url && (
                                 <a className="font-semibold text-[#053384] hover:underline" href={artifact.storage_url} target="_blank" rel="noreferrer">
-                                  Open artifact
+                                  Mở artifact
                                 </a>
                               )}
                             </div>
@@ -540,19 +564,19 @@ function AdminCacheContent() {
           </AdminPanel>
 
           {summary?.dependent_locations.length ? (
-            <AdminPanel title="Dependent locations" description="Mascot dang duoc gan truc tiep vao cac location nay.">
+            <AdminPanel title="Địa điểm phụ thuộc" description="Đại sứ ảo đang được gán trực tiếp vào các địa điểm này.">
               <div className="grid gap-3 p-5 md:grid-cols-2">
                 {summary.dependent_locations.map((loc) => (
                   <div key={loc.id} className="rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-3">
                     <p className="truncate text-sm font-semibold text-[#10213f]">{loc.name}</p>
-                    <p className="mt-1 text-xs text-[#7a96c9]">{loc.slug} · {loc.question_count} questions</p>
+                    <p className="mt-1 text-xs text-[#7a96c9]">{loc.slug} · {loc.question_count} câu hỏi</p>
                   </div>
                 ))}
               </div>
             </AdminPanel>
           ) : null}
 
-          <AdminPanel title="Latest job" description="Job state duoc luu trong database va worker cap nhat progress/log.">
+          <AdminPanel title="Job gần nhất" description="Trạng thái job được lưu trong database và worker cập nhật tiến độ/log.">
             <div className="p-5">
               {summary?.latest_job ? (
                 <div className="grid gap-3 rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-4 text-sm text-[#52627f] md:grid-cols-4">
@@ -561,21 +585,21 @@ function AdminCacheContent() {
                     <p className="mt-1 font-mono text-xs text-[#10213f]">{summary.latest_job.id.slice(0, 12)}</p>
                   </div>
                   <div>
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Type</p>
-                    <p className="mt-1 font-semibold text-[#10213f]">{summary.latest_job.job_type}</p>
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Loại</p>
+                    <p className="mt-1 font-semibold text-[#10213f]">{jobTypeLabels[summary.latest_job.job_type] ?? summary.latest_job.job_type}</p>
                   </div>
                   <div>
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Status</p>
-                    <p className="mt-1 font-semibold text-[#10213f]">{summary.latest_job.status}</p>
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Trạng thái</p>
+                    <p className="mt-1 font-semibold text-[#10213f]">{jobStatusLabel(summary.latest_job.status)}</p>
                   </div>
                   <div>
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Updated</p>
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Cập nhật</p>
                     <p className="mt-1 font-semibold text-[#10213f]">{formatDate(summary.latest_job.updated_at)}</p>
                   </div>
                 </div>
               ) : (
                 <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-                  Chua co cache job cho pham vi nay.
+                  Chưa có cache job trong phạm vi này.
                 </div>
               )}
             </div>

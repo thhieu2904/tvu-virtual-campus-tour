@@ -327,12 +327,12 @@ async def _build_work_items(job: CacheJob) -> list[CacheWorkItem]:
     focus = job.focus or "overview"
     if job.scope == "location":
         if not job.target_id:
-            raise ValueError("target_id is required for location cache jobs")
+            raise ValueError("Cần target_id cho cache job địa điểm")
         async with async_session() as session:
             return await _build_location_work_items(session, job.target_id, focus, force)
     if job.scope == "mascot":
         if not job.target_id:
-            raise ValueError("target_id is required for mascot cache jobs")
+            raise ValueError("Cần target_id cho cache job đại sứ ảo")
         async with async_session() as session:
             return await _build_mascot_work_items(session, job.target_id, focus, force)
     return []
@@ -474,7 +474,7 @@ async def _process_mascot_intro(item: CacheWorkItem) -> None:
     async with async_session() as session:
         mascot = await session.get(Mascot, item.mascot_id)
         if not mascot:
-            raise ValueError(f"Mascot not found: {item.mascot_id}")
+            raise ValueError(f"Không tìm thấy đại sứ ảo: {item.mascot_id}")
         text = (
             f"Xin chào, mình là {mascot.name}. "
             "Mình sẽ đồng hành cùng bạn trong chuyến tham quan Đại học Trà Vinh hôm nay."
@@ -510,13 +510,13 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
     async with async_session() as session:
         location = await _load_location(session, item.location_id)
         if location.status != "active":
-            raise CacheItemSkipped("Location is inactive; intro audio is skipped")
+            raise CacheItemSkipped("Địa điểm đang inactive; bỏ qua intro audio")
         if not location.mascot:
-            raise CacheItemSkipped("Location has no assigned mascot; intro audio is skipped")
+            raise CacheItemSkipped("Địa điểm chưa gán đại sứ ảo; bỏ qua intro audio")
 
         intro_message = (location.intro_message or "").strip()
         if not intro_message:
-            raise CacheItemSkipped("Location intro_message is empty; intro audio is skipped")
+            raise CacheItemSkipped("intro_message rỗng; bỏ qua intro audio")
 
         voice, style, persona = _voice_for_location(location)
         intro_audio = await location_audio_service.synthesize_location_audio(
@@ -541,7 +541,7 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
 
         fp_item = fingerprints.build_location_intro_item(location)
         if fp_item is None:
-            raise CacheItemSkipped("Location intro is no longer cacheable")
+            raise CacheItemSkipped("Intro địa điểm không còn đủ điều kiện cache")
 
         await _upsert_artifact(
             session,
@@ -588,7 +588,7 @@ async def _process_location_qa_pair(item: CacheWorkItem) -> None:
 
         answer_text = str(result.get("answer") or "").strip()
         if not answer_text or result.get("error"):
-            raise ValueError("RAG did not return a cacheable answer")
+            raise ValueError("RAG không trả về câu trả lời có thể cache")
 
         audio_url, r2_key, content_type, cache_hit = await _ensure_tts_audio(answer_text, voice, style, persona)
         qa_cache_key = item.qa_cache_key or fingerprints.qa_cache_lookup_key(item.question or "", location.name)
@@ -653,7 +653,7 @@ async def _process_location_qa_audio(item: CacheWorkItem) -> None:
         qa_cache_key = item.qa_cache_key or fingerprints.qa_cache_lookup_key(item.question or "", location.name)
         cached_entry = qa_cache_store.get(qa_cache_key)
         if not cached_entry or not str(cached_entry.get("answer") or "").strip():
-            raise ValueError("QA answer is missing; run a questions rebuild first")
+            raise ValueError("Thiếu câu trả lời QA; hãy rebuild nhóm câu hỏi trước")
 
         answer_text = str(cached_entry["answer"])
         voice, style, persona = _voice_for_location(location)
@@ -704,7 +704,7 @@ async def _process_item(item: CacheWorkItem) -> None:
     elif item.kind == "location_qa_audio":
         await _process_location_qa_audio(item)
     else:
-        raise ValueError(f"Unsupported cache work item kind: {item.kind}")
+        raise ValueError(f"Loại mục cache chưa hỗ trợ: {item.kind}")
 
 
 async def run_cache_job(job_id: str) -> None:
@@ -724,7 +724,7 @@ async def run_cache_job(job_id: str) -> None:
                 job_row.error_message = str(exc)
                 job_row.finished_at = _now()
                 job_row.updated_at = _now()
-                await add_job_log(session, parsed_job_id, "error", f"Could not build job plan: {exc}")
+                await add_job_log(session, parsed_job_id, "error", f"Không lập được kế hoạch job: {exc}")
                 await session.commit()
         return
 
@@ -739,7 +739,7 @@ async def run_cache_job(job_id: str) -> None:
             await _commit_log(
                 parsed_job_id,
                 "info",
-                f"Processing {item.kind}: {item.label}",
+                f"Đang xử lý {item.kind}: {item.label}",
                 item.item_key,
             )
             await _process_item(item)
@@ -747,7 +747,7 @@ async def run_cache_job(job_id: str) -> None:
             await _commit_log(
                 parsed_job_id,
                 "info",
-                f"Completed {item.kind}: {item.label}",
+                f"Hoàn tất {item.kind}: {item.label}",
                 item.item_key,
                 {"elapsed_ms": elapsed_ms},
             )
@@ -756,7 +756,7 @@ async def run_cache_job(job_id: str) -> None:
             await _commit_log(
                 parsed_job_id,
                 "warning",
-                f"Skipped {item.kind}: {exc}",
+                f"Bỏ qua {item.kind}: {exc}",
                 item.item_key,
                 {"label": item.label},
             )
@@ -766,7 +766,7 @@ async def run_cache_job(job_id: str) -> None:
             await _commit_log(
                 parsed_job_id,
                 "error",
-                f"Failed {item.kind}: {exc}",
+                f"Lỗi {item.kind}: {exc}",
                 item.item_key,
                 {"label": item.label},
             )
