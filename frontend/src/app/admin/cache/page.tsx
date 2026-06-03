@@ -184,7 +184,7 @@ function formatDate(value: string | null) {
 }
 
 function shortHash(value: string | null) {
-  return value ? value.slice(0, 12) : 'None'
+  return value ? value.slice(0, 12) : 'Chưa có'
 }
 
 function artifactStatusCounts(summary: CacheSummary | null) {
