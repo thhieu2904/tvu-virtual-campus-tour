@@ -41,6 +41,17 @@ export default function ImageGallery({
   }, [images.length]);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (lightboxIndex === null) return;
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowRight") goNext();
+      if (e.key === "ArrowLeft") goPrev();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lightboxIndex, closeLightbox, goNext, goPrev]);
+
+  useEffect(() => {
     if (
       focusedIndex !== null &&
       focusedIndex >= 0 &&
@@ -62,7 +73,7 @@ export default function ImageGallery({
   return (
     <>
       {/* Grid */}
-      <div className={`grid gap-2.5 ${isFullscreen ? "grid-cols-3 flex-1 min-h-0 overflow-hidden" : "grid-cols-2"}`}>
+      <div className={`grid ${isFullscreen ? "gap-4 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]" : "gap-2.5 grid-cols-2"}`}>
         {images.map((img, index) => (
           <motion.div
             key={img.id}
@@ -98,7 +109,7 @@ export default function ImageGallery({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 25 }}
-              className="relative max-w-[85vw] max-h-[85vh]"
+              className="relative max-w-[80vw] max-h-[80vh]"
               onClick={(e) => e.stopPropagation()}
             >
               <img
@@ -106,6 +117,11 @@ export default function ImageGallery({
                 alt={images[lightboxIndex].caption}
                 className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain"
               />
+              {images.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-white/90 text-xs font-medium border border-white/10">
+                  {lightboxIndex + 1} / {images.length}
+                </div>
+              )}
             </motion.div>
 
             {/* Nav buttons */}
