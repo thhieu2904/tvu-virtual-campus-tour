@@ -8,7 +8,6 @@ import {
   AdminEmptyState,
   AdminModal,
   AdminNotice,
-  AdminPageHeader,
   AdminPanel,
   AdminSelect,
   AdminSkeleton,
@@ -218,91 +217,38 @@ export default function MediaPage() {
   const selectedLocationTotal = selectedLocation?.media_count ?? 0
 
   return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="Thư viện media"
-        description="Quản lý hình ảnh, video và GIF gắn với từng địa điểm trong trải nghiệm tham quan."
-      />
+    <>
+      <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
+        <div className="flex shrink-0 items-center justify-between">
+          <h1 className="text-[1.6rem] font-bold tracking-[-0.01em] text-[#10213f]">
+            Thư viện media
+          </h1>
+        </div>
 
-      {error && <AdminNotice tone="danger">{error}</AdminNotice>}
-
-      {/* ─── Upload Modal ─── */}
-      {showUpload && (
-        <AdminModal
-          title="Upload Media"
-          footer={
-            <>
-              <Button variant="outline" onClick={() => setShowUpload(false)} className="rounded-xl">Hủy</Button>
-              <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadLocationId} className="rounded-xl bg-[#053384] hover:bg-[#053384]/90 text-white">
-                {uploading ? 'Đang upload...' : 'Upload'}
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-[#10213f]">File *</label>
-              <label className="mt-1.5 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-[#d7e0f0] p-4 transition-colors hover:border-[#7a96c9] hover:bg-[#f6f8fb]">
-                <Upload className="h-5 w-5 text-[#7a96c9]" />
-                <span className="text-sm text-[#52627f]">{uploadFile ? uploadFile.name : 'Chọn hình/video/GIF'}</span>
-                <input type="file" accept="image/*,video/*,.gif" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
-              </label>
-            </div>
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
-              Location *
-              <AdminSelect value={uploadLocationId} onChange={e => setUploadLocationId(e.target.value)}>
-                <option value="">Chọn location</option>
-                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-              </AdminSelect>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
-              Caption
-              <Input value={uploadCaption} onChange={e => setUploadCaption(e.target.value)} placeholder="Mô tả hình ảnh" className="rounded-xl" />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
-              Keywords (cách nhau bởi dấu phẩy)
-              <Input value={uploadKeywords} onChange={e => setUploadKeywords(e.target.value)} placeholder="VD: thư viện, sách, sinh viên" className="rounded-xl" />
-            </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#d7e0f0] p-3.5 transition-colors hover:bg-[#f6f8fb]">
-              <input type="checkbox" checked={uploadIsIntro} onChange={e => setUploadIsIntro(e.target.checked)} className="rounded accent-[#053384]" />
-              <div>
-                <p className="text-sm font-medium text-[#10213f]">Ảnh giới thiệu (Intro)</p>
-                <p className="text-xs text-[#52627f]">Đặt làm ảnh đại diện của location trong giao diện kiosk</p>
-              </div>
-            </label>
-          </div>
-        </AdminModal>
-      )}
+        {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
       <AdminWorkbench
+        className="min-h-0 flex-1"
         sidebar={
           <AdminResourceSidebar
-            kicker="Media board"
-            title="Tư liệu theo địa điểm"
-            description="Theo dõi độ phủ hình ảnh, video và media intro cho từng điểm tham quan."
+            title="Địa điểm"
             items={sidebarItems}
             activeId={activeLocationId}
             onSelect={selectLocation}
             loading={loadingLocations}
             summary={
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Địa điểm</p>
-                  <p className="mt-1 text-base font-bold text-[#10213f]">{locations.length}</p>
-                </div>
-                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Media</p>
-                  <p className="mt-1 text-base font-bold text-[#10213f]">{locationNodes[0]?.media_count ?? 0}</p>
-                </div>
+              <div className="flex flex-wrap gap-2 text-xs text-[#52627f]">
+                <span>{locations.length} địa điểm</span>
+                <span>·</span>
+                <span>{locationNodes[0]?.media_count ?? 0} media</span>
               </div>
             }
           />
         }
         main={
-          <div className="flex flex-col gap-4">
-            <AdminPanel className="overflow-hidden">
-              <div className="border-b border-[#d7e0f0]/70 bg-white px-5 py-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <AdminPanel className="flex h-full flex-col overflow-hidden">
+              <div className="shrink-0 border-b border-[#d7e0f0]/70 bg-white px-5 py-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb] text-[#053384]">
                       {selectedLocation?.isAll ? <ImageIcon className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
@@ -333,13 +279,13 @@ export default function MediaPage() {
                     </Button>
                   </div>
                 </div>
+
+                <div className="mt-3">
+                  <AdminMetricStrip variant="compact" metrics={metrics} />
+                </div>
               </div>
 
-              <div className="border-b border-[#d7e0f0]/70 bg-[#f8fbff] px-5 py-4">
-                <AdminMetricStrip metrics={metrics} />
-              </div>
-
-              <div className="p-5">
+              <div className="min-h-0 flex-1 overflow-y-auto p-5">
                 {loadingMedia ? (
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                     {[1, 2, 3, 4, 5, 6].map(i => (
@@ -416,9 +362,57 @@ export default function MediaPage() {
                 )}
               </div>
             </AdminPanel>
-          </div>
         }
       />
+      </div>
+
+      {/* ─── Upload Modal ─── */}
+      {showUpload && (
+        <AdminModal
+          title="Upload Media"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setShowUpload(false)} className="rounded-xl">Hủy</Button>
+              <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadLocationId} className="rounded-xl bg-[#053384] hover:bg-[#053384]/90 text-white">
+                {uploading ? 'Đang upload...' : 'Upload'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-[#10213f]">File *</label>
+              <label className="mt-1.5 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-[#d7e0f0] p-4 transition-colors hover:border-[#7a96c9] hover:bg-[#f6f8fb]">
+                <Upload className="h-5 w-5 text-[#7a96c9]" />
+                <span className="text-sm text-[#52627f]">{uploadFile ? uploadFile.name : 'Chọn hình/video/GIF'}</span>
+                <input type="file" accept="image/*,video/*,.gif" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Location *
+              <AdminSelect value={uploadLocationId} onChange={e => setUploadLocationId(e.target.value)}>
+                <option value="">Chọn location</option>
+                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+              </AdminSelect>
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Caption
+              <Input value={uploadCaption} onChange={e => setUploadCaption(e.target.value)} placeholder="Mô tả hình ảnh" className="rounded-xl" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-[#10213f]">
+              Keywords (cách nhau bởi dấu phẩy)
+              <Input value={uploadKeywords} onChange={e => setUploadKeywords(e.target.value)} placeholder="VD: thư viện, sách, sinh viên" className="rounded-xl" />
+            </label>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#d7e0f0] p-3.5 transition-colors hover:bg-[#f6f8fb]">
+              <input type="checkbox" checked={uploadIsIntro} onChange={e => setUploadIsIntro(e.target.checked)} className="rounded accent-[#053384]" />
+              <div>
+                <p className="text-sm font-medium text-[#10213f]">Ảnh giới thiệu (Intro)</p>
+                <p className="text-xs text-[#52627f]">Đặt làm ảnh đại diện của location trong giao diện kiosk</p>
+              </div>
+            </label>
+          </div>
+        </AdminModal>
+      )}
 
       {previewOpen && selectedMediaItem && (
         <AdminModal
@@ -479,6 +473,6 @@ export default function MediaPage() {
           </div>
         </AdminModal>
       )}
-    </div>
+    </>
   )
 }

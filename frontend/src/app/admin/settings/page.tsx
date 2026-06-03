@@ -90,28 +90,38 @@ export default function SettingsPage() {
         title="Cấu hình Kiosk"
         description="Thiết lập timeout, màn hình bắt đầu và mặc định âm thanh cho môi trường kiosk tham quan."
         actions={
-          <Button variant="outline" size="sm" onClick={fetchConfig} disabled={loading} className="rounded-xl">
-            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
-          </Button>
+          <div className="flex items-center gap-2">
+            {saved && <span className="text-sm font-medium text-emerald-600">✓ Đã lưu</span>}
+            <Button variant="outline" size="sm" onClick={fetchConfig} disabled={loading} className="rounded-xl">
+              <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} /> Làm mới
+            </Button>
+            <Button size="sm" onClick={saveConfig} disabled={saving} className="rounded-xl">
+              <Save data-icon="inline-start" /> {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+            </Button>
+          </div>
         }
       />
 
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
-      {saved && <AdminNotice tone="success">✓ Đã lưu cấu hình thành công.</AdminNotice>}
 
-      <AdminMetricStrip
-        metrics={[
-          { label: 'Điểm bắt đầu', value: startLocation?.name ?? config.default_start_slug, description: canSelectStartLocation ? 'Theo danh sách location' : 'Nhập slug thủ công' },
-          { label: 'Idle timeout', value: `${config.idle_timeout_minutes} phút`, color: '#053384' },
-          { label: 'Cảnh báo', value: `${config.warning_duration_seconds} giây`, color: '#b8891f' },
-          { label: 'Âm thanh', value: config.tts_enabled_default ? 'Bật' : 'Tắt', color: config.tts_enabled_default ? '#2c8b57' : '#52627f' },
-        ]}
-      />
+      <AdminPanel>
+        <div className="border-b border-[#d7e0f0]/70 px-5 py-3">
+          <AdminMetricStrip
+            variant="compact"
+            metrics={[
+              { label: 'Điểm bắt đầu', value: startLocation?.name ?? config.default_start_slug },
+              { label: 'Idle timeout', value: `${config.idle_timeout_minutes} phút` },
+              { label: 'Cảnh báo', value: `${config.warning_duration_seconds}s` },
+              { label: 'TTS', value: config.tts_enabled_default ? 'Bật' : 'Tắt' },
+            ]}
+          />
+        </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Timing Settings */}
-        <AdminPanel title="Thời gian & Timeout" description="Cấu hình idle timeout và cảnh báo trước khi reset phiên.">
-          <div className="space-y-4 p-5">
+        <div className="grid gap-6 p-5 lg:grid-cols-2">
+          <div className="space-y-4">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-[#10213f]">
+              <Timer className="h-4 w-4 text-[#7a96c9]" /> Thời gian & Timeout
+            </h3>
             <label className="flex flex-col gap-2 rounded-xl border border-[#d7e0f0] p-4">
               <div className="flex items-center gap-2">
                 <Timer className="h-4 w-4 text-[#7a96c9]" />
@@ -152,11 +162,11 @@ export default function SettingsPage() {
               </div>
             </label>
           </div>
-        </AdminPanel>
 
-        {/* Display Settings */}
-        <AdminPanel title="Hiển thị & Mặc định" description="Cấu hình điểm bắt đầu mặc định và các tùy chọn kiosk.">
-          <div className="space-y-4 p-5">
+          <div className="space-y-4">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-[#10213f]">
+              <MapPin className="h-4 w-4 text-[#7a96c9]" /> Hiển thị & Mặc định
+            </h3>
             <label className="flex flex-col gap-2 rounded-xl border border-[#d7e0f0] p-4">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-[#7a96c9]" />
@@ -207,15 +217,8 @@ export default function SettingsPage() {
               description="Bật để tự động đọc phản hồi từ đại sứ ảo khi sinh viên hỏi."
             />
           </div>
-        </AdminPanel>
-      </div>
-
-      {/* Save button */}
-      <div className="sticky bottom-4 z-10 flex justify-end rounded-2xl border border-[#d7e0f0]/80 bg-white/95 p-5 shadow-lg shadow-[#053384]/[0.06] backdrop-blur">
-        <Button onClick={saveConfig} disabled={saving} className="rounded-xl px-6 shadow-sm">
-          <Save className="mr-2 h-4 w-4" /> {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
-        </Button>
-      </div>
+        </div>
+      </AdminPanel>
     </div>
   )
 }

@@ -295,22 +295,14 @@ export function AdminWorkbench({
   inspectorClassName?: string
 }) {
   return (
-    <div className={cn('grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]', className)}>
-      <aside className="xl:sticky xl:top-20 xl:self-start">
+    <div className={cn('grid min-h-0 gap-5 xl:grid-cols-[280px_minmax(0,1fr)]', className)}>
+      <aside className="min-h-0 overflow-hidden">
         {sidebar}
       </aside>
-      <div
-        className={cn(
-          'min-w-0 flex flex-col gap-5',
-          inspector && '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_320px] 2xl:items-start',
-          mainClassName,
-        )}
-      >
-        <div className="min-w-0">
-          {main}
-        </div>
+      <div className={cn('min-h-0 min-w-0 overflow-y-auto rounded-2xl', mainClassName)}>
+        {main}
         {inspector && (
-          <aside className={cn('min-w-0 2xl:sticky 2xl:top-20 2xl:self-start', inspectorClassName)}>
+          <aside className={cn('min-h-0 min-w-0 overflow-y-auto', inspectorClassName)}>
             {inspector}
           </aside>
         )}
@@ -321,9 +313,7 @@ export function AdminWorkbench({
 
 /* ─── Resource Sidebar ─── */
 export function AdminResourceSidebar({
-  kicker,
   title,
-  description,
   items,
   activeId,
   onSelect,
@@ -355,25 +345,15 @@ export function AdminResourceSidebar({
   footer?: ReactNode
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#d7e0f0]/80 bg-white shadow-sm shadow-[#053384]/[0.03]">
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            {kicker && (
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[#7a96c9]">
-                {kicker}
-              </p>
-            )}
-            <h2 className="mt-1 text-[1.15rem] font-bold leading-tight tracking-[-0.01em] text-[#10213f]">
-              {title}
-            </h2>
-          </div>
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#d7e0f0]/80 bg-white shadow-sm shadow-[#053384]/[0.03]">
+      <div className="shrink-0 p-3 pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="truncate text-sm font-bold text-[#10213f]">{title}</h2>
           {headerActions && <div>{headerActions}</div>}
         </div>
-        {description && <p className="mt-2 text-[0.8rem] leading-5 text-[#52627f]">{description}</p>}
-        {summary && <div className="mt-4">{summary}</div>}
+        {summary && <div className="mt-2">{summary}</div>}
       </div>
-      <div className="border-t border-[#d7e0f0]/70 p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto border-t border-[#d7e0f0]/70 p-2">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="rounded-xl px-3 py-3">
@@ -441,7 +421,7 @@ export function AdminResourceSidebar({
           })
         )}
       </div>
-      {footer && <div className="border-t border-[#d7e0f0]/70 p-3">{footer}</div>}
+      {footer && <div className="shrink-0 border-t border-[#d7e0f0]/70 p-3">{footer}</div>}
     </div>
   )
 }
@@ -470,6 +450,7 @@ export function AdminToolbar({
 /* ─── Metric Strip ─── */
 export function AdminMetricStrip({
   metrics,
+  variant = 'cards',
 }: {
   metrics: {
     label: string
@@ -477,7 +458,23 @@ export function AdminMetricStrip({
     color?: string
     description?: string
   }[]
+  variant?: 'cards' | 'compact'
 }) {
+  if (variant === 'compact') {
+    return (
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-sm">
+        {metrics.map((m, i) => (
+          <span key={i} className="inline-flex items-center gap-1.5">
+            <span className="text-[0.8rem] font-medium text-[#52627f]">{m.label}:</span>
+            <span className="text-[0.8rem] font-bold text-[#10213f]" style={m.color ? { color: m.color } : {}}>
+              {m.value}
+            </span>
+          </span>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {metrics.map((m, i) => (

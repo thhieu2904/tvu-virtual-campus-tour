@@ -6,7 +6,6 @@ import {
   AdminEmptyState,
   AdminModal,
   AdminNotice,
-  AdminPageHeader,
   AdminPanel,
   AdminSelect,
   AdminSkeleton,
@@ -438,20 +437,21 @@ export default function DocumentsPage() {
   ]
 
   return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="Kho tri thức RAG"
-        description="Quản lý học liệu RAG theo cấu trúc danh mục cha và file tài liệu con."
-      />
+    <>
+      <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
+        <div className="flex shrink-0 items-center justify-between">
+          <h1 className="text-[1.6rem] font-bold tracking-[-0.01em] text-[#10213f]">
+            Kho tri thức RAG
+          </h1>
+        </div>
 
-      {error && <AdminNotice tone="danger">{error}</AdminNotice>}
+        {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
-      <AdminWorkbench
+        <AdminWorkbench
+        className="min-h-0 flex-1"
         sidebar={
           <AdminResourceSidebar
-            kicker="RAG console"
             title="Danh mục"
-            description="Phân loại học liệu để kiểm soát file nào đã sẵn sàng phục vụ AI."
             items={sidebarItems}
             activeId={activeCategoryId}
             onSelect={selectCategory}
@@ -462,28 +462,20 @@ export default function DocumentsPage() {
               </Button>
             }
             summary={
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Danh mục</p>
-                  <p className="mt-1 text-base font-bold text-[#10213f]">{categories.length}</p>
-                </div>
-                <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Đã phân loại</p>
-                  <p className="mt-1 text-base font-bold text-[#10213f]">{categorizedCount}</p>
-                </div>
-                <div className="col-span-2 rounded-xl border border-[#d7e0f0]/70 bg-[#f6f8fb] px-3 py-2">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Chưa phân loại</p>
-                  <p className="mt-1 text-base font-bold text-[#10213f]">{uncategorizedCount}</p>
-                </div>
+              <div className="flex flex-wrap gap-2 text-xs text-[#52627f]">
+                <span>{categories.length} danh mục</span>
+                <span>·</span>
+                <span>{categorizedCount} đã phân loại</span>
+                <span>·</span>
+                <span>{uncategorizedCount} chưa phân loại</span>
               </div>
             }
           />
         }
         main={
-          <div className="flex flex-col gap-4">
-            <AdminPanel className="overflow-hidden">
-              <div className="border-b border-[#d7e0f0]/70 bg-white px-5 py-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <AdminPanel className="flex h-full flex-col overflow-hidden">
+              <div className="shrink-0 border-b border-[#d7e0f0]/70 bg-white px-5 py-3">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <div
                       className="flex size-11 shrink-0 items-center justify-center rounded-xl border"
@@ -539,8 +531,8 @@ export default function DocumentsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 max-w-md">
-                  <div className="relative">
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative max-w-xs">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
                     <Input
                       placeholder="Tìm file trong danh mục..."
@@ -549,14 +541,11 @@ export default function DocumentsPage() {
                       className="rounded-xl pl-9"
                     />
                   </div>
+                  <AdminMetricStrip variant="compact" metrics={metrics} />
                 </div>
               </div>
 
-              <div className="border-b border-[#d7e0f0]/70 bg-[#f8fbff] px-5 py-4">
-                <AdminMetricStrip metrics={metrics} />
-              </div>
-
-              <div className="divide-y divide-[#d7e0f0]/50">
+              <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-[#d7e0f0]/50">
                 {loadingDocuments ? (
                   <div className="p-4 space-y-4">
                     {[1, 2, 3].map(i => (
@@ -673,9 +662,9 @@ export default function DocumentsPage() {
                 )}
               </div>
             </AdminPanel>
-          </div>
         }
       />
+      </div>
 
       {/* ─── Category Modal ─── */}
       {categoryModalOpen && (
@@ -782,6 +771,6 @@ export default function DocumentsPage() {
           </div>
         </AdminModal>
       )}
-    </div>
+    </>
   )
 }

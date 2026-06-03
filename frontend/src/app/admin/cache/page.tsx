@@ -5,14 +5,19 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AdminMetricStrip,
   AdminNotice,
-  AdminPageHeader,
-  AdminPanel,
   AdminResourceSidebar,
   AdminStatusPill,
   AdminWorkbench,
 } from '../_components/admin-ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { adminApi } from '@/lib/admin-api'
 import {
   Activity,
@@ -27,6 +32,7 @@ import {
   ListChecks,
   MapPin,
   Mic,
+  MoreHorizontal,
   Play,
   RefreshCw,
   Search,
@@ -174,14 +180,6 @@ const jobTypeLabels: Record<string, string> = {
   mascot_dependent_cache: 'Cache phụ thuộc đại sứ',
 }
 
-const focusLabels: Record<CacheFocus, string> = {
-  overview: 'Tổng quan',
-  questions: 'Hỏi đáp',
-  voice: 'Giọng đọc',
-  prompt: 'Prompt',
-  all: 'Tất cả',
-}
-
 const focusOptionsByScope: Record<CacheScope, { id: CacheFocus; label: string }[]> = {
   global: [
     { id: 'overview', label: 'Tổng quan' },
@@ -300,6 +298,7 @@ function AdminCacheContent() {
 
   const [summary, setSummary] = useState<CacheSummary | null>(null)
   const [jobDetail, setJobDetail] = useState<CacheJobDetail | null>(null)
+  const [jobExpanded, setJobExpanded] = useState(true)
   const [locations, setLocations] = useState<LocationItem[]>([])
   const [mascots, setMascots] = useState<MascotItem[]>([])
   const [sidebarSummaries, setSidebarSummaries] = useState<Record<string, SidebarSummary>>({})
@@ -532,9 +531,7 @@ function AdminCacheContent() {
 
   const sidebar = (
     <AdminResourceSidebar
-      kicker="Phạm vi"
       title="Cache target"
-      description="Chọn trực tiếp địa điểm hoặc đại sứ ảo để xem fingerprint và artifact."
       items={resourceItems}
       activeId={activeResourceId}
       loading={resourcesLoading}
@@ -582,29 +579,96 @@ function AdminCacheContent() {
           )}
         </div>
       }
-      footer={
-        <Button variant="outline" size="sm" className="w-full rounded-xl" onClick={loadResources} disabled={resourcesLoading}>
-          <RefreshCw data-icon="inline-start" className={resourcesLoading ? 'animate-spin' : ''} />
-          Làm mới danh sách
-        </Button>
-      }
     />
   )
 
   const main = (
-    <main className="grid gap-5">
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_310px]">
-        <AdminPanel>
-          <div className="grid gap-4 p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-[#eef3fb] text-[#053384]">
-                <Database className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-bold text-[#10213f]">{focusedLabel}</h2>
-                <p className="text-xs text-[#7a96c9]">Phase 2B job runner</p>
-              </div>
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#d7e0f0]/80 bg-white shadow-sm shadow-[#053384]/[0.03]">
+      <div className="shrink-0 border-b border-[#d7e0f0]/70 px-5 py-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-[#eef3fb] text-[#053384]">
+              <Database className="h-5 w-5" />
             </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-bold text-[#10213f]">{focusedLabel}</h2>
+              <p className="text-xs text-[#7a96c9]">Phase 2B job runner</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="hidden rounded-xl border border-[#d7e0f0] bg-[#f8fbff] p-1 md:flex">
+              {focusOptionsByScope[scope].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => pushCacheRoute(scope, targetId, option.id)}
+                  className={`rounded-lg px-2.5 py-1 text-[0.72rem] font-semibold transition-colors ${
+                    focus === option.id
+                      ? 'bg-[#053384] text-white shadow-sm'
+                      : 'text-[#52627f] hover:bg-white hover:text-[#10213f]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <Button size="sm" className="rounded-xl" onClick={() => createJob(false)} disabled={jobLoading || activeJobRunning || !canStartJob}>
+              <Play data-icon="inline-start" />
+              Tạo lại cache
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger render={
+                <Button variant="outline" size="icon" className="rounded-xl" />
+              }>
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => { void loadSummary(); void loadResources() }} disabled={loading || resourcesLoading || !canFetch}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Làm mới
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => createJob(true)} disabled={jobLoading || !canFetch}>
+                  <ListChecks className="mr-2 h-4 w-4" />
+                  Kiểm tra trước
+                </DropdownMenuItem>
+                {canForceJob && (
+                  <DropdownMenuItem onClick={() => createJob(false, true)} disabled={jobLoading || activeJobRunning}>
+                    <ShieldAlert className="mr-2 h-4 w-4" />
+                    Tạo lại tất cả
+                  </DropdownMenuItem>
+                )}
+                {activeJobRunning && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={cancelJob} disabled={jobLoading} className="text-red-600 focus:text-red-600">
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Hủy job
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="mt-2">
+          <AdminMetricStrip
+            variant="compact"
+            metrics={[
+              { label: 'Phạm vi', value: scope === 'location' ? 'Địa điểm' : scope === 'mascot' ? 'Đại sứ ảo' : 'Hệ thống' },
+              { label: 'Ảnh hưởng', value: summary?.affected_items ?? '-' },
+              { label: 'Ước tính', value: summary ? `${summary.estimated_cost.rag_requests} RAG / ${summary.estimated_cost.tts_requests} TTS` : '-' },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="grid gap-4 p-5 2xl:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="grid gap-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-3">
                 <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Fingerprint hiện tại</p>
@@ -630,154 +694,176 @@ function AdminCacheContent() {
               </div>
             </div>
           </div>
-        </AdminPanel>
 
-        <AdminPanel title="Runtime cache">
-          <div className="grid gap-3 p-4 text-sm text-[#52627f]">
-            <div className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-2"><FileQuestion className="h-4 w-4 text-[#053384]" /> QA entries</span>
-              <strong className="text-[#10213f]">{summary?.runtime_cache.qa_cache_entries ?? '-'}</strong>
+          <div className="rounded-xl border border-[#d7e0f0]/80 bg-white">
+            <div className="border-b border-[#d7e0f0]/70 px-4 py-3">
+              <h3 className="text-sm font-bold text-[#10213f]">Runtime cache</h3>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-2"><HardDrive className="h-4 w-4 text-[#053384]" /> TTS keys</span>
-              <strong className="text-[#10213f]">{summary?.runtime_cache.tts_key_count ?? '-'}</strong>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-2"><ListChecks className="h-4 w-4 text-[#053384]" /> R2 index</span>
-              <AdminStatusPill
-                status={summary?.runtime_cache.tts_key_cache_loaded ? 'success' : 'warning'}
-                label={summary?.runtime_cache.tts_key_cache_loaded ? 'Loaded' : 'Fallback'}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-[#053384]" /> Loaded at</span>
-              <strong className="text-right text-xs text-[#10213f]">{formatDate(summary?.runtime_cache.tts_key_loaded_at ?? null)}</strong>
-            </div>
-            {summary?.runtime_cache.tts_key_last_error && (
-              <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                {summary.runtime_cache.tts_key_last_error}
-              </p>
-            )}
-          </div>
-        </AdminPanel>
-      </div>
-
-      {jobDetail && (
-        <AdminPanel
-          title="Tiến độ job"
-          description={`${jobDetail.job.processed_items}/${jobDetail.job.total_items} đã xử lý · ${jobDetail.job.failed_items} lỗi`}
-          action={<AdminStatusPill status={jobStatusTone[jobDetail.job.status]} label={jobDetail.job.status} />}
-        >
-          <div className="grid gap-4 p-5">
-            <div className="h-3 overflow-hidden rounded-full bg-[#eef3fb]">
-              <div
-                className="h-full bg-[#053384] transition-all"
-                style={{ width: `${Math.round(jobDetail.progress * 100)}%` }}
-              />
-            </div>
-            {jobDetail.job.error_message && (
-              <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {jobDetail.job.error_message}
-              </p>
-            )}
-            <div className="max-h-56 overflow-y-auto rounded-xl border border-[#d7e0f0]/80">
-              {jobDetail.logs.length === 0 ? (
-                <div className="p-4 text-sm text-[#52627f]">Chưa có log.</div>
-              ) : (
-                <div className="divide-y divide-[#d7e0f0]/60">
-                  {jobDetail.logs.map((log) => (
-                    <div key={log.id} className="grid gap-1 p-3 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <AdminStatusPill
-                          status={log.level === 'error' ? 'danger' : log.level === 'warning' ? 'warning' : 'info'}
-                          label={logLevelLabels[log.level] ?? log.level}
-                        />
-                        <span className="text-xs text-[#7a96c9]">{formatDate(log.created_at)}</span>
-                      </div>
-                      <p className="text-[#10213f]">{log.message}</p>
-                      {log.item_key && <p className="font-mono text-[0.68rem] text-[#7a96c9]">{log.item_key}</p>}
-                    </div>
-                  ))}
-                </div>
+            <div className="grid gap-3 p-4 text-sm text-[#52627f]">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2"><FileQuestion className="h-4 w-4 text-[#053384]" /> QA entries</span>
+                <strong className="text-[#10213f]">{summary?.runtime_cache.qa_cache_entries ?? '-'}</strong>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2"><HardDrive className="h-4 w-4 text-[#053384]" /> TTS keys</span>
+                <strong className="text-[#10213f]">{summary?.runtime_cache.tts_key_count ?? '-'}</strong>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2"><ListChecks className="h-4 w-4 text-[#053384]" /> R2 index</span>
+                <AdminStatusPill
+                  status={summary?.runtime_cache.tts_key_cache_loaded ? 'success' : 'warning'}
+                  label={summary?.runtime_cache.tts_key_cache_loaded ? 'Loaded' : 'Fallback'}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-[#053384]" /> Loaded at</span>
+                <strong className="text-right text-xs text-[#10213f]">{formatDate(summary?.runtime_cache.tts_key_loaded_at ?? null)}</strong>
+              </div>
+              {summary?.runtime_cache.tts_key_last_error && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  {summary.runtime_cache.tts_key_last_error}
+                </p>
               )}
             </div>
           </div>
-        </AdminPanel>
-      )}
-
-      <AdminPanel
-        title="Trạng thái artifact"
-        description={loading ? 'Đang tải tóm tắt...' : `${summary?.total_items ?? 0} artifact đang được theo dõi`}
-        action={summary && <AdminStatusPill status={meta.tone} label={meta.label} />}
-      >
-        <div className="grid gap-4 p-5">
-          {!summary && !loading ? (
-            <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-              Chưa có tóm tắt để hiển thị.
-            </div>
-          ) : groupedArtifacts.length === 0 ? (
-            <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-              Không có artifact trong phạm vi này.
-            </div>
-          ) : (
-            groupedArtifacts.map(([artifactType, artifacts]) => (
-              <div key={artifactType} className="rounded-xl border border-[#d7e0f0]/80 bg-white">
-                <div className="flex items-center justify-between gap-3 border-b border-[#d7e0f0]/70 px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {artifactType === 'intro_audio' || artifactType === 'location_intro_audio' ? <Mic className="h-4 w-4 text-[#053384]" /> : <Sparkles className="h-4 w-4 text-[#053384]" />}
-                    <h3 className="text-sm font-bold text-[#10213f]">{artifactLabels[artifactType] ?? artifactType}</h3>
-                  </div>
-                  <span className="text-xs font-semibold text-[#7a96c9]">{artifacts.length} mục</span>
-                </div>
-                <div className="divide-y divide-[#d7e0f0]/60">
-                  {artifacts.map((artifact) => {
-                    const itemStatus = statusMeta[artifact.status]
-                    return (
-                      <div key={`${artifact.artifact_type}:${artifact.item_key}`} className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-[#10213f]">{artifact.label}</p>
-                            <AdminStatusPill status={itemStatus.tone} label={itemStatus.label} />
-                          </div>
-                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[0.72rem] text-[#7a96c9]">
-                            <span className="font-mono">hiện tại {shortHash(artifact.current_fingerprint)}</span>
-                            <span className="font-mono">đã cache {shortHash(artifact.cached_fingerprint)}</span>
-                            {artifact.cache_key && <span className="font-mono">key {artifact.cache_key.slice(0, 10)}</span>}
-                          </div>
-                        </div>
-                        <div className="text-left text-[0.72rem] text-[#52627f] md:text-right">
-                          <p>{formatDate(artifact.updated_at)}</p>
-                          {artifact.storage_url && (
-                            <a className="font-semibold text-[#053384] hover:underline" href={artifact.storage_url} target="_blank" rel="noreferrer">
-                              Mở artifact
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))
-          )}
         </div>
-      </AdminPanel>
 
-      {summary?.dependent_locations.length ? (
-        <AdminPanel title="Địa điểm phụ thuộc" description="Đại sứ ảo đang được gán trực tiếp vào các địa điểm này.">
-          <div className="grid gap-3 p-5 md:grid-cols-2">
-            {summary.dependent_locations.map((loc) => (
-              <div key={loc.id} className="rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-3">
-                <p className="truncate text-sm font-semibold text-[#10213f]">{loc.name}</p>
-                <p className="mt-1 text-xs text-[#7a96c9]">{loc.slug} · {loc.question_count} câu hỏi</p>
+        {jobDetail && (
+          <div className="border-t border-[#d7e0f0]/70">
+            <button
+              type="button"
+              onClick={() => setJobExpanded(!jobExpanded)}
+              className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-[#f6f8fb]"
+            >
+              <span className="text-sm font-semibold text-[#10213f]">
+                Tiến độ · {jobDetail.job.processed_items}/{jobDetail.job.total_items} · {jobDetail.job.failed_items} lỗi
+              </span>
+              <AdminStatusPill status={jobStatusTone[jobDetail.job.status]} label={jobStatusLabel(jobDetail.job.status)} />
+            </button>
+            {jobExpanded && (
+              <div className="grid gap-4 px-5 pb-5">
+                <div className="h-3 overflow-hidden rounded-full bg-[#eef3fb]">
+                  <div
+                    className="h-full bg-[#053384] transition-all"
+                    style={{ width: `${Math.round(jobDetail.progress * 100)}%` }}
+                  />
+                </div>
+                {jobDetail.job.error_message && (
+                  <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {jobDetail.job.error_message}
+                  </p>
+                )}
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-[#d7e0f0]/80">
+                  {jobDetail.logs.length === 0 ? (
+                    <div className="p-4 text-sm text-[#52627f]">Chưa có log.</div>
+                  ) : (
+                    <div className="divide-y divide-[#d7e0f0]/60">
+                      {jobDetail.logs.map((log) => (
+                        <div key={log.id} className="grid gap-1 p-3 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <AdminStatusPill
+                              status={log.level === 'error' ? 'danger' : log.level === 'warning' ? 'warning' : 'info'}
+                              label={logLevelLabels[log.level] ?? log.level}
+                            />
+                            <span className="text-xs text-[#7a96c9]">{formatDate(log.created_at)}</span>
+                          </div>
+                          <p className="text-[#10213f]">{log.message}</p>
+                          {log.item_key && <p className="font-mono text-[0.68rem] text-[#7a96c9]">{log.item_key}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </AdminPanel>
-      ) : null}
+        )}
 
-      <AdminPanel title="Job gần nhất" description="Trạng thái job được lưu trong database và worker cập nhật tiến độ/log.">
-        <div className="p-5">
+        <div className="border-t border-[#d7e0f0]/70 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-[#10213f]">Trạng thái artifact</h3>
+              <p className="mt-0.5 text-xs text-[#7a96c9]">
+                {loading ? 'Đang tải tóm tắt...' : `${summary?.total_items ?? 0} artifact đang được theo dõi`}
+              </p>
+            </div>
+            {summary && <AdminStatusPill status={meta.tone} label={meta.label} />}
+          </div>
+          <div className="grid gap-4">
+            {!summary && !loading ? (
+              <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
+                Chưa có tóm tắt để hiển thị.
+              </div>
+            ) : groupedArtifacts.length === 0 ? (
+              <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
+                Không có artifact trong phạm vi này.
+              </div>
+            ) : (
+              groupedArtifacts.map(([artifactType, artifacts]) => (
+                <div key={artifactType} className="rounded-xl border border-[#d7e0f0]/80 bg-white">
+                  <div className="flex items-center justify-between gap-3 border-b border-[#d7e0f0]/70 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {artifactType === 'intro_audio' || artifactType === 'location_intro_audio' ? <Mic className="h-4 w-4 text-[#053384]" /> : <Sparkles className="h-4 w-4 text-[#053384]" />}
+                      <h3 className="text-sm font-bold text-[#10213f]">{artifactLabels[artifactType] ?? artifactType}</h3>
+                    </div>
+                    <span className="text-xs font-semibold text-[#7a96c9]">{artifacts.length} mục</span>
+                  </div>
+                  <div className="divide-y divide-[#d7e0f0]/60">
+                    {artifacts.map((artifact) => {
+                      const itemStatus = statusMeta[artifact.status]
+                      return (
+                        <div key={`${artifact.artifact_type}:${artifact.item_key}`} className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-[#10213f]">{artifact.label}</p>
+                              <AdminStatusPill status={itemStatus.tone} label={itemStatus.label} />
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[0.72rem] text-[#7a96c9]">
+                              <span className="font-mono">hiện tại {shortHash(artifact.current_fingerprint)}</span>
+                              <span className="font-mono">đã cache {shortHash(artifact.cached_fingerprint)}</span>
+                              {artifact.cache_key && <span className="font-mono">key {artifact.cache_key.slice(0, 10)}</span>}
+                            </div>
+                          </div>
+                          <div className="text-left text-[0.72rem] text-[#52627f] md:text-right">
+                            <p>{formatDate(artifact.updated_at)}</p>
+                            {artifact.storage_url && (
+                              <a className="font-semibold text-[#053384] hover:underline" href={artifact.storage_url} target="_blank" rel="noreferrer">
+                                Mở artifact
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {summary?.dependent_locations.length ? (
+          <div className="border-t border-[#d7e0f0]/70 p-5">
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-[#10213f]">Địa điểm phụ thuộc</h3>
+              <p className="mt-0.5 text-xs text-[#7a96c9]">Đại sứ ảo đang được gán trực tiếp vào các địa điểm này.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {summary.dependent_locations.map((loc) => (
+                <div key={loc.id} className="rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-3">
+                  <p className="truncate text-sm font-semibold text-[#10213f]">{loc.name}</p>
+                  <p className="mt-1 text-xs text-[#7a96c9]">{loc.slug} · {loc.question_count} câu hỏi</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="border-t border-[#d7e0f0]/70 p-5">
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-[#10213f]">Job gần nhất</h3>
+            <p className="mt-0.5 text-xs text-[#7a96c9]">Trạng thái job được lưu trong database và worker cập nhật tiến độ/log.</p>
+          </div>
           {summary?.latest_job ? (
             <div className="grid gap-3 rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-4 text-sm text-[#52627f] md:grid-cols-4">
               <div>
@@ -803,45 +889,23 @@ function AdminCacheContent() {
             </div>
           )}
         </div>
-      </AdminPanel>
-    </main>
+      </div>
+    </div>
   )
 
   return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="Cache Console"
-        description="Theo dõi fingerprint, trạng thái stale và runtime cache cho intro audio và câu hỏi gợi ý."
-        meta={summary && <AdminStatusPill status={meta.tone} label={<><StatusIcon className="mr-1 h-3 w-3" /> {meta.label}</>} />}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { void loadSummary(); void loadResources() }} disabled={loading || resourcesLoading || !canFetch}>
-              <RefreshCw data-icon="inline-start" className={loading || resourcesLoading ? 'animate-spin' : ''} />
-              Làm mới
-            </Button>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => createJob(true)} disabled={jobLoading || !canFetch}>
-              <ListChecks data-icon="inline-start" />
-              Kiểm tra trước
-            </Button>
-            <Button size="sm" className="rounded-xl" onClick={() => createJob(false)} disabled={jobLoading || activeJobRunning || !canStartJob}>
-              <Play data-icon="inline-start" />
-              Tạo lại cache
-            </Button>
-            {canForceJob && (
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => createJob(false, true)} disabled={jobLoading || activeJobRunning}>
-                <ShieldAlert data-icon="inline-start" />
-                Tạo lại tất cả
-              </Button>
-            )}
-            {activeJobRunning && (
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={cancelJob} disabled={jobLoading}>
-                <XCircle data-icon="inline-start" />
-                Hủy
-              </Button>
-            )}
-          </div>
-        }
-      />
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-4">
+        <h1 className="text-[1.6rem] font-bold tracking-[-0.01em] text-[#10213f]">
+          Cache Console
+        </h1>
+        {summary && (
+          <AdminStatusPill
+            status={meta.tone}
+            label={<><StatusIcon className="mr-1 h-3 w-3" /> {meta.label}</>}
+          />
+        )}
+      </div>
 
       {!canFetch && (
         <AdminNotice tone="info">
@@ -861,34 +925,8 @@ function AdminCacheContent() {
         </AdminNotice>
       )}
 
-      <AdminMetricStrip
-        metrics={[
-          { label: 'Phạm vi', value: scope === 'location' ? 'Địa điểm' : scope === 'mascot' ? 'Đại sứ ảo' : 'Toàn hệ thống', color: '#053384' },
-          { label: 'Tập trung', value: focusLabels[focus], color: '#52627f' },
-          { label: 'Bị ảnh hưởng', value: summary ? summary.affected_items : '-', color: summary?.affected_items ? '#b8891f' : '#2c8b57' },
-          { label: 'Ước tính', value: summary ? `${summary.estimated_cost.rag_requests} RAG / ${summary.estimated_cost.tts_requests} TTS` : '-', color: '#7a3f98' },
-        ]}
-      />
-
-      <div className="flex flex-wrap gap-2 rounded-xl border border-[#d7e0f0]/70 bg-white p-2 shadow-sm shadow-[#053384]/[0.02]">
-        {focusOptionsByScope[scope].map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => pushCacheRoute(scope, targetId, option.id)}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-              focus === option.id
-                ? 'bg-[#053384] text-white shadow-sm shadow-[#053384]/20'
-                : 'text-[#52627f] hover:bg-[#eef3fb] hover:text-[#10213f]'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
       <AdminWorkbench
-        className="xl:grid-cols-[320px_minmax(0,1fr)]"
+        className="min-h-0 flex-1 xl:grid-cols-[300px_minmax(0,1fr)]"
         sidebar={sidebar}
         main={main}
       />
