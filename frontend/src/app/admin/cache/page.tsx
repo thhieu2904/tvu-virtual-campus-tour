@@ -126,7 +126,7 @@ const statusMeta: Record<CacheStatus, { label: string; tone: 'success' | 'warnin
 
 const artifactLabels: Record<string, string> = {
   intro_audio: 'Intro audio',
-  location_intro_audio: 'Location intro audio',
+  location_intro_audio: 'Location intro/revisit audio',
   qa_answer: 'QA answer',
   qa_audio: 'QA audio',
 }

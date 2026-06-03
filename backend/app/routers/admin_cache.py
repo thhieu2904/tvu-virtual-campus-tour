@@ -204,7 +204,12 @@ def _summary_status(artifacts: list[CacheArtifactStatus], latest_job: CacheLates
 
 def _estimate_cost(artifacts: list[CacheArtifactStatus], focus: str) -> CacheEstimatedCost:
     invalid = [item for item in artifacts if item.status != "valid"]
-    tts_requests = sum(1 for item in invalid if item.artifact_type in {"intro_audio", "location_intro_audio", "qa_audio"})
+    tts_requests = 0
+    for item in invalid:
+        if item.artifact_type == "location_intro_audio":
+            tts_requests += 2
+        elif item.artifact_type in {"intro_audio", "qa_audio"}:
+            tts_requests += 1
     rag_requests = 0
     if focus in {"questions", "prompt", "all", "overview"}:
         rag_requests = sum(1 for item in invalid if item.artifact_type == "qa_answer")

@@ -24,6 +24,7 @@ from app.cache import qa_cache_store, tts_key_cache
 from app.db.database import async_session
 from app.db.tables import CacheArtifact, CacheJob, CacheJobLog, Location, Mascot
 from app.services import cache_fingerprint_service as fingerprints
+from app.services import location_audio_service
 from app.services import rag_service, storage_service
 
 logger = logging.getLogger(__name__)
@@ -399,31 +400,6 @@ def _audio_extension(content_type: str) -> str:
     return "mp3" if content_type == CONTENT_TYPE_MP3 else "wav"
 
 
-async def _synthesize_location_intro_audio(
-    text: str,
-    location_slug: str,
-    voice: str,
-    style: str,
-    persona: str,
-) -> tuple[str, str, str, bool]:
-    result = await tts_engine.synthesize(
-        text=text,
-        voice_name=voice,
-        voice_style=style,
-        personality_prompt=persona,
-    )
-    extension = _audio_extension(result.content_type)
-    r2_key = storage_service.build_intro_key(location_slug, extension)
-    await storage_service.upload_file(
-        file_bytes=result.audio_data,
-        key=r2_key,
-        content_type=result.content_type,
-        cache_control="no-cache, no-store, must-revalidate",
-    )
-    audio_url = f"{storage_service.get_public_url(r2_key)}?v={int(time.time())}"
-    return audio_url, r2_key, result.content_type, result.cached
-
-
 async def _find_cached_tts_key(candidates: list[dict[str, str]]) -> tuple[str, str] | None:
     for candidate in candidates:
         for key_name, content_type in (("wav_r2_key", CONTENT_TYPE_WAV), ("mp3_r2_key", CONTENT_TYPE_MP3)):
@@ -543,14 +519,25 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
             raise CacheItemSkipped("Location intro_message is empty; intro audio is skipped")
 
         voice, style, persona = _voice_for_location(location)
-        audio_url, r2_key, content_type, cache_hit = await _synthesize_location_intro_audio(
-            intro_message,
-            location.slug,
-            voice,
-            style,
-            persona,
+        intro_audio = await location_audio_service.synthesize_location_audio(
+            text=intro_message,
+            location_slug=location.slug,
+            kind="intro",
+            voice=voice,
+            style=style,
+            persona=persona,
         )
-        location.intro_audio_url = audio_url
+        revisit_text = location_audio_service.build_revisit_audio_text(location.name)
+        revisit_audio = await location_audio_service.synthesize_location_audio(
+            text=revisit_text,
+            location_slug=location.slug,
+            kind="revisit",
+            voice=voice,
+            style=style,
+            persona=persona,
+        )
+        location.intro_audio_url = intro_audio.audio_url
+        location.revisit_audio_url = revisit_audio.audio_url
 
         fp_item = fingerprints.build_location_intro_item(location)
         if fp_item is None:
@@ -563,14 +550,21 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
             target_id=location.id,
             item_key=fp_item.item_key,
             fingerprint=fp_item.fingerprint,
-            storage_url=audio_url,
-            cache_key=r2_key,
+            storage_url=intro_audio.audio_url,
+            cache_key=intro_audio.r2_key,
             metadata={
                 **(fp_item.metadata or {}),
+                "revisit_text": revisit_text,
+                "revisit_audio_url": revisit_audio.audio_url,
+                "revisit_cache_key": revisit_audio.r2_key,
                 "voice_name": voice,
                 "voice_style": style,
-                "content_type": content_type,
-                "tts_cache_hit": cache_hit,
+                "content_type": intro_audio.content_type,
+                "revisit_content_type": revisit_audio.content_type,
+                "tts_provider": intro_audio.provider,
+                "revisit_tts_provider": revisit_audio.provider,
+                "tts_cache_hit": intro_audio.cache_hit,
+                "revisit_tts_cache_hit": revisit_audio.cache_hit,
                 "updated_by": "cache_worker",
             },
         )
