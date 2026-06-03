@@ -50,6 +50,7 @@ class CacheWorkItem:
     question: str | None = None
     sort_order: int = 0
     qa_cache_key: str | None = None
+    force: bool = False
 
 
 def job_type_for(scope: str, focus: str) -> str:
@@ -232,6 +233,7 @@ async def _build_location_work_items(
                 location_id=location.id,
                 item_key=intro_item.item_key,
                 label=intro_item.label,
+                force=force,
             )
         )
 
@@ -531,6 +533,7 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
             voice=voice,
             style=style,
             persona=persona,
+            force=item.force,
         )
         revisit_text = location_audio_service.build_revisit_audio_text(location.name)
         revisit_audio = await location_audio_service.synthesize_location_audio(
@@ -540,6 +543,7 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
             voice=voice,
             style=style,
             persona=persona,
+            force=item.force,
         )
         location.intro_audio_url = intro_audio.audio_url
         location.revisit_audio_url = revisit_audio.audio_url

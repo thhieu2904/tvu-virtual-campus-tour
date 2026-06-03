@@ -27,6 +27,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  FileSpreadsheet,
   FileText,
   FolderOpen,
   Loader2,
@@ -82,6 +83,9 @@ type CategoryForm = {
   sort_order: number
 }
 
+type DocumentSortBy = 'created_at' | 'title' | 'file_size' | 'chunk_count'
+type SortOrder = 'asc' | 'desc'
+
 const defaultCategoryForm: CategoryForm = {
   name: '',
   slug: '',
@@ -97,12 +101,13 @@ const statusConfig = {
   error: { icon: AlertCircle, label: 'Lỗi', color: '#c14b4b', bg: '#fee2e2' },
 }
 
-const fileTypeIcons: Record<string, string> = {
-  pdf: '📄',
-  docx: '📝',
-  doc: '📝',
-  md: '📋',
-  txt: '📃',
+function getDocumentIcon(fileType: string) {
+  const ext = fileType.toLowerCase()
+  if (ext === 'pdf') return { icon: FileText, color: '#e74c3c' }
+  if (ext === 'md' || ext === 'markdown') return { icon: FileText, color: '#52627f' }
+  if (ext === 'docx' || ext === 'doc') return { icon: FileText, color: '#2b5797' }
+  if (ext === 'xlsx' || ext === 'csv') return { icon: FileSpreadsheet, color: '#1d6f42' }
+  return { icon: FileText, color: '#7a96c9' }
 }
 
 function formatBytes(bytes: number): string {
@@ -134,6 +139,8 @@ export default function DocumentsPage() {
   const [loadingDocuments, setLoadingDocuments] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<DocumentSortBy>('created_at')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
@@ -216,8 +223,8 @@ export default function DocumentsPage() {
     setLoadingDocuments(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ limit: '50' })
-      if (search) params.set('search', search)
+      const params = new URLSearchParams({ limit: '50', sort_by: sortBy, sort_order: sortOrder })
+      if (search.trim()) params.set('search', search.trim())
       if (activeCategoryId === UNCATEGORIZED_ID) {
         params.set('uncategorized', 'true')
       } else {
@@ -234,7 +241,7 @@ export default function DocumentsPage() {
     } finally {
       setLoadingDocuments(false)
     }
-  }, [activeCategoryId, search])
+  }, [activeCategoryId, search, sortBy, sortOrder])
 
   useEffect(() => {
     void Promise.resolve().then(fetchCategories)
@@ -435,6 +442,7 @@ export default function DocumentsPage() {
     { label: 'Đang xử lý', value: processingCount + pendingCount, color: '#b8891f' },
     { label: 'Lỗi', value: errorCount, color: '#c14b4b' },
   ]
+  const sortValue = `${sortBy}_${sortOrder}`
 
   return (
     <>
@@ -532,14 +540,33 @@ export default function DocumentsPage() {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="relative max-w-xs">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
-                    <Input
-                      placeholder="Tìm file trong danh mục..."
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      className="rounded-xl pl-9"
-                    />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="relative max-w-xs">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a96c9]" />
+                      <Input
+                        placeholder="Tìm file trong danh mục..."
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        className="rounded-xl pl-9"
+                      />
+                    </div>
+                    <AdminSelect
+                      value={sortValue}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        const separator = value.lastIndexOf('_')
+                        setSortBy(value.slice(0, separator) as DocumentSortBy)
+                        setSortOrder(value.slice(separator + 1) as SortOrder)
+                      }}
+                      className="w-40"
+                    >
+                      <option value="created_at_desc">Mới nhất</option>
+                      <option value="created_at_asc">Cũ nhất</option>
+                      <option value="title_asc">Tên A-Z</option>
+                      <option value="title_desc">Tên Z-A</option>
+                      <option value="file_size_desc">Lớn nhất</option>
+                      <option value="chunk_count_desc">Nhiều chunk nhất</option>
+                    </AdminSelect>
                   </div>
                   <AdminMetricStrip variant="compact" metrics={metrics} />
                 </div>
@@ -573,7 +600,7 @@ export default function DocumentsPage() {
                   documents.map((doc) => {
                     const config = statusConfig[doc.status]
                     const StatusIcon = config.icon
-                    const emoji = fileTypeIcons[doc.file_type?.toLowerCase()] || '📄'
+                    const { icon: DocIcon, color } = getDocumentIcon(doc.file_type)
                     const isBusy = doc.status === 'pending' || doc.status === 'processing'
 
                     return (
@@ -582,8 +609,8 @@ export default function DocumentsPage() {
                         className="group flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-[#f6f8fb] lg:flex-row lg:items-center"
                       >
                         <div className="flex items-start gap-4 min-w-0 flex-1">
-                          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3fb] text-lg">
-                            {emoji}
+                          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#f6f8fb]">
+                            <DocIcon className="h-4 w-4" style={{ color }} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">

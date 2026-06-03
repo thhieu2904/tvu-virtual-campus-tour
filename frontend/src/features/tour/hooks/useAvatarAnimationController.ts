@@ -266,9 +266,6 @@ export function useAvatarAnimationController({
 
       if (avatarState === "speaking") {
         requestAnimation("Talking", { force: true });
-      } else if (avatarState === "thinking") {
-        // Keep the clamped thinking pose, do not reset to Idle!
-        return;
       } else {
         requestAnimation("Idle", { force: true });
       }

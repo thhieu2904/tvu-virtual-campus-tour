@@ -13,6 +13,13 @@ import { create } from "zustand";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
+// Navigation event listeners — allows chat store to stop audio without circular imports.
+const _navigationListeners = new Set<() => void>();
+export function onNavigationStart(listener: () => void) {
+  _navigationListeners.add(listener);
+  return () => { _navigationListeners.delete(listener); };
+}
+
 // ===== Types =====
 
 export interface LocationNode {
@@ -332,6 +339,9 @@ export const useTourStore = create<TourState>((set, get) => ({
 
     const target = locations.find((l) => l.slug === slug);
     if (!target || target.status === "inactive") return;
+
+    // Stop any playing audio BEFORE transition (avoids old location voice bleeding into new one).
+    _navigationListeners.forEach((listener) => listener());
 
     // Transition animation: fade out → swap data → wait until the new panorama reports ready.
     // NOTE: Do NOT reset isAppReady here — the map overlay already covers the transition visually.

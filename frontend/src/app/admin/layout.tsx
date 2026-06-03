@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 const navigation = [
@@ -67,8 +67,9 @@ export default function AdminLayout({
   }, [isLoginPage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/admin/login')
+    await supabase.auth.signOut({ scope: 'local' })
+    setEmail(null)
+    router.replace('/admin/login')
     router.refresh()
   }
 
@@ -160,17 +161,21 @@ export default function AdminLayout({
               <span className="sr-only">Mở menu tài khoản</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="font-medium">Tài khoản quản trị</DropdownMenuLabel>
-              {email && (
-                <div className="px-2 py-1.5 text-xs text-[#52627f]">
-                  {email}
-                </div>
-              )}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="font-medium">Tài khoản quản trị</DropdownMenuLabel>
+                {email && (
+                  <div className="px-2 py-1.5 text-xs text-[#52627f]">
+                    {email}
+                  </div>
+                )}
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600">
-                <LogOut className="mr-2 h-4 w-4" />
-                Đăng xuất
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Đăng xuất
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </header>

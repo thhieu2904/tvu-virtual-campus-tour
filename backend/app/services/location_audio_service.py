@@ -47,7 +47,23 @@ async def synthesize_location_audio(
     voice: str,
     style: str,
     persona: str,
+    force: bool = False,
 ) -> LocationAudioResult:
+    # Check if audio already exists in R2 — reuse to avoid non-deterministic TTS regeneration.
+    if not force:
+        for ext in ("wav", "mp3"):
+            candidate_key = _build_audio_key(location_slug, kind, ext)
+            content_type = "audio/mpeg" if ext == "mp3" else "audio/wav"
+            if await storage_service.file_exists(candidate_key):
+                audio_url = f"{storage_service.get_public_url(candidate_key)}?v=cached"
+                return LocationAudioResult(
+                    audio_url=audio_url,
+                    r2_key=candidate_key,
+                    content_type=content_type,
+                    provider="cache",
+                    cache_hit=True,
+                )
+
     result = await tts_engine.synthesize(
         text=text,
         voice_name=voice,

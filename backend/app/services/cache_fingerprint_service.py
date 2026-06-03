@@ -17,7 +17,7 @@ from app.config import get_settings
 from app.services.location_audio_service import REVISIT_AUDIO_TEMPLATE_VERSION
 
 MASCOT_INTRO_TEMPLATE_VERSION = "mascot-intro-v1"
-LOCATION_INTRO_FINGERPRINT_VERSION = "location-intro-v2"
+LOCATION_INTRO_FINGERPRINT_VERSION = "location-intro-v3"
 LOCATION_QA_FINGERPRINT_VERSION = "location-qa-v1"
 QA_ITEM_FINGERPRINT_VERSION = "qa-item-v1"
 ANSWER_PROMPT_VERSION = "rag-answer-v1"

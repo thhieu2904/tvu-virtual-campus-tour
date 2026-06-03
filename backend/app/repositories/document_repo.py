@@ -15,6 +15,13 @@ from app.db.tables import Document, DocumentChunk
 
 logger = logging.getLogger(__name__)
 
+DOCUMENT_SORT_FIELDS = {
+    "created_at": Document.created_at,
+    "title": Document.title,
+    "file_size": Document.file_size,
+    "chunk_count": Document.chunk_count,
+}
+
 
 async def insert_document(
     session: AsyncSession,
@@ -122,11 +129,13 @@ async def list_documents(
     search: str | None = None,
     category_id: UUID | None = None,
     uncategorized: bool = False,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
     page: int = 1,
     limit: int = 10,
 ) -> dict:
     """List documents with filtering and pagination."""
-    query = select(Document).options(selectinload(Document.category)).order_by(Document.created_at.desc())
+    query = select(Document).options(selectinload(Document.category))
 
     if status:
         query = query.where(Document.status == status)
@@ -144,6 +153,8 @@ async def list_documents(
 
     # Paginate
     offset = (page - 1) * limit
+    sort_column = DOCUMENT_SORT_FIELDS.get(sort_by, Document.created_at)
+    query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
     query = query.offset(offset).limit(limit)
     result = await session.execute(query)
     documents = result.scalars().all()

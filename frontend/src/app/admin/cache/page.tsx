@@ -19,25 +19,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { adminApi } from '@/lib/admin-api'
+import { cn } from '@/lib/utils'
 import {
   Activity,
   AlertTriangle,
   Bot,
   CheckCircle2,
-  Clock3,
   Database,
-  FileQuestion,
   Globe2,
-  HardDrive,
   ListChecks,
   MapPin,
-  Mic,
   MoreHorizontal,
   Play,
   RefreshCw,
   Search,
   ShieldAlert,
-  Sparkles,
   XCircle,
 } from 'lucide-react'
 
@@ -148,8 +144,6 @@ type CacheJobDetail = {
   artifacts: CacheSummary['artifacts']
 }
 
-type SidebarSummary = Pick<CacheSummary, 'status' | 'affected_items' | 'total_items'>
-
 const statusMeta: Record<CacheStatus, { label: string; tone: 'success' | 'warning' | 'danger' | 'muted' | 'info'; icon: typeof CheckCircle2 }> = {
   valid: { label: 'Hợp lệ', tone: 'success', icon: CheckCircle2 },
   stale: { label: 'Cần cập nhật', tone: 'warning', icon: AlertTriangle },
@@ -169,15 +163,6 @@ const logLevelLabels: Record<string, string> = {
   info: 'Thông tin',
   warning: 'Cảnh báo',
   error: 'Lỗi',
-}
-
-const jobTypeLabels: Record<string, string> = {
-  cache_observability: 'Kiểm tra cache',
-  location_intro_audio: 'Audio địa điểm',
-  location_qa_audio: 'Audio hỏi đáp địa điểm',
-  location_suggested_qa: 'Hỏi đáp địa điểm',
-  mascot_intro_audio: 'Audio đại sứ ảo',
-  mascot_dependent_cache: 'Cache phụ thuộc đại sứ',
 }
 
 const focusOptionsByScope: Record<CacheScope, { id: CacheFocus; label: string }[]> = {
@@ -240,50 +225,8 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function shortHash(value: string | null) {
-  return value ? value.slice(0, 12) : 'Chưa có'
-}
-
-function artifactStatusCounts(summary: CacheSummary | null) {
-  const counts = { valid: 0, stale: 0, missing: 0 }
-  for (const item of summary?.artifacts ?? []) {
-    counts[item.status] += 1
-  }
-  return counts
-}
-
 function sidebarKey(scope: CacheScope, targetId?: string | null) {
   return scope === 'global' ? 'global' : `${scope}:${targetId ?? ''}`
-}
-
-function summaryTone(summary: SidebarSummary | undefined): 'success' | 'warning' | 'danger' | 'muted' | 'info' {
-  if (!summary) return 'muted'
-  return statusMeta[summary.status].tone
-}
-
-async function fetchSidebarSummaries(locations: LocationItem[], mascots: MascotItem[]) {
-  const jobs = [
-    { key: 'global', endpoint: '/cache/summary?scope=global&focus=overview' },
-    ...locations.map((location) => ({
-      key: sidebarKey('location', location.id),
-      endpoint: `/cache/summary?scope=location&target_id=${location.id}&focus=overview`,
-    })),
-    ...mascots.map((mascot) => ({
-      key: sidebarKey('mascot', mascot.id),
-      endpoint: `/cache/summary?scope=mascot&target_id=${mascot.id}&focus=overview`,
-    })),
-  ]
-  const results = await Promise.allSettled(jobs.map((job) => adminApi.get<CacheSummary>(job.endpoint)))
-  const summaries: Record<string, SidebarSummary> = {}
-  results.forEach((result, index) => {
-    if (result.status !== 'fulfilled') return
-    summaries[jobs[index].key] = {
-      status: result.value.status,
-      affected_items: result.value.affected_items,
-      total_items: result.value.total_items,
-    }
-  })
-  return summaries
 }
 
 function AdminCacheContent() {
@@ -301,7 +244,6 @@ function AdminCacheContent() {
   const [jobExpanded, setJobExpanded] = useState(true)
   const [locations, setLocations] = useState<LocationItem[]>([])
   const [mascots, setMascots] = useState<MascotItem[]>([])
-  const [sidebarSummaries, setSidebarSummaries] = useState<Record<string, SidebarSummary>>({})
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [resourcesLoading, setResourcesLoading] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -327,8 +269,6 @@ function AdminCacheContent() {
       ])
       setLocations(locationData.locations)
       setMascots(mascotData.mascots)
-      const nextSummaries = await fetchSidebarSummaries(locationData.locations, mascotData.mascots)
-      setSidebarSummaries(nextSummaries)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không tải được danh sách cache target')
     } finally {
@@ -409,13 +349,12 @@ function AdminCacheContent() {
       })
       setJobDetail(nextJob)
       await loadSummary()
-      await loadResources()
     } catch (err) {
       setJobError(err instanceof Error ? err.message : 'Không tạo được cache job')
     } finally {
       setJobLoading(false)
     }
-  }, [canFetch, focus, loadResources, loadSummary, scope, targetId])
+  }, [canFetch, focus, loadSummary, scope, targetId])
 
   const cancelJob = useCallback(async () => {
     if (!jobDetail || !['queued', 'running'].includes(jobDetail.job.status)) return
@@ -425,13 +364,12 @@ function AdminCacheContent() {
       const nextJob = await adminApi.post<CacheJobDetail>(`/cache/jobs/${jobDetail.job.id}/cancel`)
       setJobDetail(nextJob)
       await loadSummary()
-      await loadResources()
     } catch (err) {
       setJobError(err instanceof Error ? err.message : 'Không hủy được cache job')
     } finally {
       setJobLoading(false)
     }
-  }, [jobDetail, loadResources, loadSummary])
+  }, [jobDetail, loadSummary])
 
   const focusedLabel = useMemo(() => {
     const targetName = typeof summary?.target?.name === 'string' ? summary.target.name : null
@@ -440,19 +378,8 @@ function AdminCacheContent() {
     return 'Toàn hệ thống'
   }, [scope, summary?.target, targetId])
 
-  const counts = useMemo(() => artifactStatusCounts(summary), [summary])
   const meta = statusMeta[summary?.status ?? 'missing']
   const StatusIcon = meta.icon
-
-  const groupedArtifacts = useMemo(() => {
-    const groups = new Map<string, CacheSummary['artifacts']>()
-    for (const artifact of summary?.artifacts ?? []) {
-      const existing = groups.get(artifact.artifact_type) ?? []
-      existing.push(artifact)
-      groups.set(artifact.artifact_type, existing)
-    }
-    return Array.from(groups.entries())
-  }, [summary?.artifacts])
 
   const selectScope = useCallback((nextScope: CacheScope) => {
     setSidebarSearch('')
@@ -479,28 +406,28 @@ function AdminCacheContent() {
     }[] = []
 
     if (scope === 'global' && (!query || matches('toàn hệ thống global'))) {
-      const globalSummary = sidebarSummaries.global
       items.push({
         id: 'global',
         title: 'Toàn hệ thống',
         subtitle: 'Tổng quan artifact/job',
         icon: Globe2,
-        count: globalSummary?.total_items,
-        meta: <AdminStatusPill status={summaryTone(globalSummary)} label={globalSummary ? statusMeta[globalSummary.status].label : 'Chưa tải'} />,
       })
     }
 
     if (scope === 'location') {
       for (const location of locations) {
         if (query && !matches(`${location.name} ${location.slug}`)) continue
-        const itemSummary = sidebarSummaries[sidebarKey('location', location.id)]
         items.push({
           id: sidebarKey('location', location.id),
           title: location.name,
           subtitle: `/${location.slug}`,
           icon: MapPin,
-          count: itemSummary?.total_items ?? location.question_count,
-          meta: <AdminStatusPill status={summaryTone(itemSummary)} label={itemSummary ? statusMeta[itemSummary.status].label : location.status === 'active' ? 'Đang mở' : 'Tạm đóng'} />,
+          count: location.question_count,
+          meta: (
+            <span className="text-xs text-[#7a96c9]">
+              {location.status === 'active' ? 'Đang mở' : 'Tạm đóng'} · {location.question_count ?? 0} câu hỏi
+            </span>
+          ),
         })
       }
     }
@@ -508,20 +435,23 @@ function AdminCacheContent() {
     if (scope === 'mascot') {
       for (const mascot of mascots) {
         if (query && !matches(`${mascot.name} ${mascot.slug} ${mascot.voice_name}`)) continue
-        const itemSummary = sidebarSummaries[sidebarKey('mascot', mascot.id)]
         items.push({
           id: sidebarKey('mascot', mascot.id),
           title: mascot.name,
           subtitle: `${mascot.voice_name}${mascot.voice_style ? ` (${mascot.voice_style})` : ''}`,
           icon: Bot,
-          count: itemSummary?.total_items ?? mascot.location_count,
-          meta: <AdminStatusPill status={summaryTone(itemSummary)} label={itemSummary ? statusMeta[itemSummary.status].label : mascot.is_default ? 'Mặc định' : 'Mascot'} />,
+          count: mascot.location_count,
+          meta: (
+            <span className="text-xs text-[#7a96c9]">
+              {mascot.is_default ? 'Mặc định' : 'Mascot'} · {mascot.location_count} địa điểm
+            </span>
+          ),
         })
       }
     }
 
     return items
-  }, [locations, mascots, scope, sidebarSearch, sidebarSummaries])
+  }, [locations, mascots, scope, sidebarSearch])
 
   const activeResourceId = sidebarKey(scope, targetId)
   const sidebarSearchPlaceholder = scope === 'mascot' ? 'Tìm mascot hoặc voice...' : 'Tìm tên hoặc slug...'
@@ -591,7 +521,10 @@ function AdminCacheContent() {
               <Database className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-base font-bold text-[#10213f]">{focusedLabel}</h2>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h2 className="truncate text-base font-bold text-[#10213f]">{focusedLabel}</h2>
+                {summary && <AdminStatusPill status={meta.tone} label={meta.label} />}
+              </div>
               <p className="text-xs text-[#7a96c9]">Phase 2B job runner</p>
             </div>
           </div>
@@ -666,74 +599,46 @@ function AdminCacheContent() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-4 p-5 2xl:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="grid gap-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-3">
-                <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Fingerprint hiện tại</p>
-                <p className="mt-1 font-mono text-xs font-semibold text-[#10213f]">{shortHash(summary?.current_fingerprint ?? null)}</p>
-              </div>
-              <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-3">
-                <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Fingerprint đã cache</p>
-                <p className="mt-1 font-mono text-xs font-semibold text-[#10213f]">{shortHash(summary?.cached_fingerprint ?? null)}</p>
-              </div>
+      <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-[#d7e0f0]/50">
+        <div className="p-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-center">
+              <p className="text-xs font-semibold uppercase text-emerald-600">Hợp lệ</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-700">
+                {summary ? Math.max(summary.total_items - summary.affected_items, 0) : '-'}
+              </p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="flex flex-col rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-center text-emerald-800">
-                <p className="flex flex-1 items-center justify-center text-[0.65rem] font-semibold uppercase leading-tight">Hợp lệ</p>
-                <p className="mt-1 text-lg font-bold leading-none">{counts.valid}</p>
-              </div>
-              <div className="flex flex-col rounded-xl border border-amber-200 bg-amber-50 p-2 text-center text-amber-800">
-                <p className="flex flex-1 items-center justify-center text-[0.65rem] font-semibold uppercase leading-tight">Cần cập nhật</p>
-                <p className="mt-1 text-lg font-bold leading-none">{counts.stale}</p>
-              </div>
-              <div className="flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-2 text-center text-slate-700">
-                <p className="flex flex-1 items-center justify-center text-[0.65rem] font-semibold uppercase leading-tight">Chưa có</p>
-                <p className="mt-1 text-lg font-bold leading-none">{counts.missing}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-[#d7e0f0]/80 bg-white">
-            <div className="border-b border-[#d7e0f0]/70 px-4 py-3">
-              <h3 className="text-sm font-bold text-[#10213f]">Runtime cache</h3>
-            </div>
-            <div className="grid gap-3 p-4 text-sm text-[#52627f]">
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2"><FileQuestion className="h-4 w-4 text-[#053384]" /> QA entries</span>
-                <strong className="text-[#10213f]">{summary?.runtime_cache.qa_cache_entries ?? '-'}</strong>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2"><HardDrive className="h-4 w-4 text-[#053384]" /> TTS keys</span>
-                <strong className="text-[#10213f]">{summary?.runtime_cache.tts_key_count ?? '-'}</strong>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2"><ListChecks className="h-4 w-4 text-[#053384]" /> R2 index</span>
-                <AdminStatusPill
-                  status={summary?.runtime_cache.tts_key_cache_loaded ? 'success' : 'warning'}
-                  label={summary?.runtime_cache.tts_key_cache_loaded ? 'Loaded' : 'Fallback'}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-[#053384]" /> Loaded at</span>
-                <strong className="text-right text-xs text-[#10213f]">{formatDate(summary?.runtime_cache.tts_key_loaded_at ?? null)}</strong>
-              </div>
-              {summary?.runtime_cache.tts_key_last_error && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                  {summary.runtime_cache.tts_key_last_error}
-                </p>
+            <div
+              className={cn(
+                'rounded-xl border p-4 text-center',
+                summary && summary.affected_items > 0
+                  ? 'border-amber-300 bg-amber-50/50'
+                  : 'border-[#d7e0f0] bg-[#f6f8fb]',
               )}
+            >
+              <p className="text-xs font-semibold uppercase text-amber-600">Cần cập nhật</p>
+              <p className="mt-1 text-2xl font-bold text-amber-700">
+                {summary?.affected_items ?? '-'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#d7e0f0] bg-[#f6f8fb] p-4 text-center">
+              <p className="text-xs font-semibold uppercase text-[#52627f]">Runtime</p>
+              <p className="mt-1 text-2xl font-bold text-[#10213f]">
+                {summary?.runtime_cache.qa_cache_entries ?? '-'} QA
+              </p>
+              <p className="mt-0.5 text-xs text-[#7a96c9]">
+                {summary?.runtime_cache.tts_key_count ?? '-'} TTS keys
+              </p>
             </div>
           </div>
         </div>
 
         {jobDetail && (
-          <div className="border-t border-[#d7e0f0]/70">
+          <div className="p-5">
             <button
               type="button"
               onClick={() => setJobExpanded(!jobExpanded)}
-              className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-[#f6f8fb]"
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] px-4 py-3 text-left transition-colors hover:bg-[#f6f8fb]"
             >
               <span className="text-sm font-semibold text-[#10213f]">
                 Tiến độ · {jobDetail.job.processed_items}/{jobDetail.job.total_items} · {jobDetail.job.failed_items} lỗi
@@ -741,7 +646,7 @@ function AdminCacheContent() {
               <AdminStatusPill status={jobStatusTone[jobDetail.job.status]} label={jobStatusLabel(jobDetail.job.status)} />
             </button>
             {jobExpanded && (
-              <div className="grid gap-4 px-5 pb-5">
+              <div className="mt-4 grid gap-4">
                 <div className="h-3 overflow-hidden rounded-full bg-[#eef3fb]">
                   <div
                     className="h-full bg-[#053384] transition-all"
@@ -779,116 +684,55 @@ function AdminCacheContent() {
           </div>
         )}
 
-        <div className="border-t border-[#d7e0f0]/70 p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-[#10213f]">Trạng thái artifact</h3>
-              <p className="mt-0.5 text-xs text-[#7a96c9]">
-                {loading ? 'Đang tải tóm tắt...' : `${summary?.total_items ?? 0} artifact đang được theo dõi`}
-              </p>
-            </div>
+        <div className="p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-[#10213f]">
+              Chi tiết artifact · {summary?.artifacts.length ?? 0} items
+            </h3>
             {summary && <AdminStatusPill status={meta.tone} label={meta.label} />}
           </div>
-          <div className="grid gap-4">
-            {!summary && !loading ? (
-              <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-                Chưa có tóm tắt để hiển thị.
-              </div>
-            ) : groupedArtifacts.length === 0 ? (
-              <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-                Không có artifact trong phạm vi này.
-              </div>
-            ) : (
-              groupedArtifacts.map(([artifactType, artifacts]) => (
-                <div key={artifactType} className="rounded-xl border border-[#d7e0f0]/80 bg-white">
-                  <div className="flex items-center justify-between gap-3 border-b border-[#d7e0f0]/70 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {artifactType === 'intro_audio' || artifactType === 'location_intro_audio' ? <Mic className="h-4 w-4 text-[#053384]" /> : <Sparkles className="h-4 w-4 text-[#053384]" />}
-                      <h3 className="text-sm font-bold text-[#10213f]">{artifactLabels[artifactType] ?? artifactType}</h3>
-                    </div>
-                    <span className="text-xs font-semibold text-[#7a96c9]">{artifacts.length} mục</span>
-                  </div>
-                  <div className="divide-y divide-[#d7e0f0]/60">
-                    {artifacts.map((artifact) => {
-                      const itemStatus = statusMeta[artifact.status]
-                      return (
-                        <div key={`${artifact.artifact_type}:${artifact.item_key}`} className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="truncate text-sm font-semibold text-[#10213f]">{artifact.label}</p>
-                              <AdminStatusPill status={itemStatus.tone} label={itemStatus.label} />
-                            </div>
-                            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[0.72rem] text-[#7a96c9]">
-                              <span className="font-mono">hiện tại {shortHash(artifact.current_fingerprint)}</span>
-                              <span className="font-mono">đã cache {shortHash(artifact.cached_fingerprint)}</span>
-                              {artifact.cache_key && <span className="font-mono">key {artifact.cache_key.slice(0, 10)}</span>}
-                            </div>
-                          </div>
-                          <div className="text-left text-[0.72rem] text-[#52627f] md:text-right">
-                            <p>{formatDate(artifact.updated_at)}</p>
-                            {artifact.storage_url && (
-                              <a className="font-semibold text-[#053384] hover:underline" href={artifact.storage_url} target="_blank" rel="noreferrer">
-                                Mở artifact
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {summary?.dependent_locations.length ? (
-          <div className="border-t border-[#d7e0f0]/70 p-5">
-            <div className="mb-3">
-              <h3 className="text-sm font-bold text-[#10213f]">Địa điểm phụ thuộc</h3>
-              <p className="mt-0.5 text-xs text-[#7a96c9]">Đại sứ ảo đang được gán trực tiếp vào các địa điểm này.</p>
+          {!summary && !loading ? (
+            <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
+              Chưa có tóm tắt để hiển thị.
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              {summary.dependent_locations.map((loc) => (
-                <div key={loc.id} className="rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-3">
-                  <p className="truncate text-sm font-semibold text-[#10213f]">{loc.name}</p>
-                  <p className="mt-1 text-xs text-[#7a96c9]">{loc.slug} · {loc.question_count} câu hỏi</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="border-t border-[#d7e0f0]/70 p-5">
-          <div className="mb-3">
-            <h3 className="text-sm font-bold text-[#10213f]">Job gần nhất</h3>
-            <p className="mt-0.5 text-xs text-[#7a96c9]">Trạng thái job được lưu trong database và worker cập nhật tiến độ/log.</p>
-          </div>
-          {summary?.latest_job ? (
-            <div className="grid gap-3 rounded-xl border border-[#d7e0f0]/80 bg-[#f8fbff] p-4 text-sm text-[#52627f] md:grid-cols-4">
-              <div>
-                <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Job</p>
-                <p className="mt-1 font-mono text-xs text-[#10213f]">{summary.latest_job.id.slice(0, 12)}</p>
-              </div>
-              <div>
-                <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Loại</p>
-                <p className="mt-1 font-semibold text-[#10213f]">{jobTypeLabels[summary.latest_job.job_type] ?? summary.latest_job.job_type}</p>
-              </div>
-              <div>
-                <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Trạng thái</p>
-                <p className="mt-1 font-semibold text-[#10213f]">{jobStatusLabel(summary.latest_job.status)}</p>
-              </div>
-              <div>
-                <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Cập nhật</p>
-                <p className="mt-1 font-semibold text-[#10213f]">{formatDate(summary.latest_job.updated_at)}</p>
-              </div>
+          ) : !summary?.artifacts.length ? (
+            <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
+              Không có artifact trong phạm vi này.
             </div>
           ) : (
-            <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
-              Chưa có cache job trong phạm vi này.
+            <div className="overflow-hidden rounded-xl border border-[#d7e0f0]/80">
+              <table className="w-full text-sm">
+                <thead className="bg-[#f6f8fb] text-left text-xs font-semibold text-[#52627f]">
+                  <tr>
+                    <th className="px-3 py-2">Artifact</th>
+                    <th className="px-3 py-2">Trạng thái</th>
+                    <th className="px-3 py-2 text-right">Cập nhật</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#d7e0f0]/50">
+                  {summary.artifacts.map((artifact) => {
+                    const itemStatus = statusMeta[artifact.status]
+                    return (
+                      <tr key={`${artifact.artifact_type}-${artifact.item_key}`}>
+                        <td className="px-3 py-2">
+                          <p className="font-medium text-[#10213f]">{artifact.label}</p>
+                          <p className="text-xs text-[#7a96c9]">{artifactLabels[artifact.artifact_type] ?? artifact.artifact_type}</p>
+                        </td>
+                        <td className="px-3 py-2">
+                          <AdminStatusPill status={itemStatus.tone} label={itemStatus.label} />
+                        </td>
+                        <td className="px-3 py-2 text-right text-xs text-[#7a96c9]">
+                          {formatDate(artifact.updated_at)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
+
       </div>
     </div>
   )

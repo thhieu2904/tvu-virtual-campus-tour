@@ -27,6 +27,7 @@ import {
   MapPin,
   Star,
   Play,
+  Search,
 } from 'lucide-react'
 
 interface MediaItem {
@@ -57,6 +58,10 @@ export default function MediaPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [filterType, setFilterType] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'created_at' | 'caption'>('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null)
@@ -87,11 +92,15 @@ export default function MediaPage() {
   }, [locations])
 
   const activeLocationId = useMemo(() => {
+    if (loadingLocations && locations.length === 0) {
+      return null
+    }
     if (selectedLocationId && locationNodes.some((loc) => loc.id === selectedLocationId)) {
       return selectedLocationId
     }
-    return locationNodes[0]?.id ?? null
-  }, [locationNodes, selectedLocationId])
+    const firstWithMedia = locationNodes.find((loc) => !loc.isAll && loc.media_count > 0)
+    return firstWithMedia?.id ?? locationNodes[0]?.id ?? null
+  }, [loadingLocations, locationNodes, locations.length, selectedLocationId])
 
   const selectedLocation = useMemo(
     () => locationNodes.find((loc) => loc.id === activeLocationId) ?? null,
@@ -104,10 +113,11 @@ export default function MediaPage() {
     }
     setLoadingMedia(true); setError(null)
     try {
-      let url = '/media?limit=100'
-      if (activeLocationId !== ALL_LOCATIONS_ID) url += `&location_id=${activeLocationId}`
-      if (filterType) url += `&type=${filterType}`
-      const data = await adminApi.get<{ total: number; media: MediaItem[] }>(url)
+      const params = new URLSearchParams({ limit: '100', sort_by: sortBy, sort_order: sortOrder })
+      if (activeLocationId !== ALL_LOCATIONS_ID) params.set('location_id', activeLocationId)
+      if (filterType) params.set('type', filterType)
+      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+      const data = await adminApi.get<{ total: number; media: MediaItem[] }>(`/media?${params.toString()}`)
       setMedia(data.media); setTotal(data.total)
       if (data.media.length > 0) {
         setSelectedMediaId(data.media[0].id)
@@ -118,7 +128,7 @@ export default function MediaPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải')
     } finally { setLoadingMedia(false) }
-  }, [activeLocationId, filterType])
+  }, [activeLocationId, filterType, searchQuery, sortBy, sortOrder])
 
   const fetchLocations = useCallback(async () => {
     setLoadingLocations(true)
@@ -131,6 +141,10 @@ export default function MediaPage() {
 
   useEffect(() => { void Promise.resolve().then(fetchLocations) }, [fetchLocations])
   useEffect(() => { void Promise.resolve().then(fetchMedia) }, [fetchMedia])
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setSearchQuery(searchInput), 300)
+    return () => window.clearTimeout(timeout)
+  }, [searchInput])
 
   const selectLocation = (locationId: string) => {
     setMedia([]); setTotal(0); setSelectedLocationId(locationId); setSelectedMediaId(null)
@@ -215,6 +229,11 @@ export default function MediaPage() {
 
   const selectedMediaItem = media.find(m => m.id === selectedMediaId)
   const selectedLocationTotal = selectedLocation?.media_count ?? 0
+  const sortValue = sortBy === 'created_at' && sortOrder === 'desc'
+    ? 'newest'
+    : sortBy === 'created_at' && sortOrder === 'asc'
+      ? 'oldest'
+      : 'name'
 
   return (
     <>
@@ -265,11 +284,40 @@ export default function MediaPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#7a96c9]" />
+                      <Input
+                        placeholder="Tìm theo caption..."
+                        value={searchInput}
+                        onChange={(event) => setSearchInput(event.target.value)}
+                        className="h-8 w-48 rounded-xl pl-9 text-sm"
+                      />
+                    </div>
                     <AdminSelect value={filterType} onChange={e => setFilterType(e.target.value)} className="w-40">
                       <option value="">Tất cả loại</option>
                       <option value="image">Hình ảnh</option>
                       <option value="video">Video</option>
                       <option value="gif">GIF</option>
+                    </AdminSelect>
+                    <AdminSelect
+                      value={sortValue}
+                      onChange={(event) => {
+                        if (event.target.value === 'newest') {
+                          setSortBy('created_at')
+                          setSortOrder('desc')
+                        } else if (event.target.value === 'oldest') {
+                          setSortBy('created_at')
+                          setSortOrder('asc')
+                        } else {
+                          setSortBy('caption')
+                          setSortOrder('asc')
+                        }
+                      }}
+                      className="w-36"
+                    >
+                      <option value="newest">Mới nhất</option>
+                      <option value="oldest">Cũ nhất</option>
+                      <option value="name">Theo tên</option>
                     </AdminSelect>
                     <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loadingMedia || loadingLocations} className="rounded-xl">
                       <RefreshCw data-icon="inline-start" className={loadingMedia || loadingLocations ? 'animate-spin' : ''} /> Làm mới
@@ -296,7 +344,7 @@ export default function MediaPage() {
                   <AdminEmptyState
                     icon={ImageIcon}
                     title={selectedLocation?.isAll ? 'Thư viện chưa có media' : `${selectedLocation?.name ?? 'Địa điểm'} chưa có media`}
-                    description={filterType ? 'Không có file phù hợp với bộ lọc hiện tại.' : 'Upload hình ảnh, video hoặc GIF để hoàn thiện trải nghiệm tham quan.'}
+                    description={filterType || searchQuery ? 'Không có file phù hợp với bộ lọc hiện tại.' : 'Upload hình ảnh, video hoặc GIF để hoàn thiện trải nghiệm tham quan.'}
                     action={
                       <Button size="sm" onClick={openUpload} className="rounded-xl">
                         <Upload data-icon="inline-start" /> Upload media

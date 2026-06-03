@@ -45,6 +45,10 @@ DEFAULT_KIOSK_CONFIG = KioskConfigResponse().model_dump()
 BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 PATHS_PATH = BACKEND_ROOT / "data" / "paths.json"
 PATHS_BACKUP_PATH = BACKEND_ROOT / "data" / "paths_backup.json"
+MEDIA_SORT_FIELDS = {
+    "created_at": Media.created_at,
+    "caption": Media.caption,
+}
 
 
 async def _read_payload(request: Request) -> dict[str, Any]:
@@ -312,6 +316,7 @@ async def regenerate_location_audio(location_id: str, session: AsyncSession = De
         voice=voice,
         style=style,
         persona=persona,
+        force=True,  # Manual regenerate always creates fresh audio
     )
     revisit_audio = await location_audio_service.synthesize_location_audio(
         text=location_audio_service.build_revisit_audio_text(loc.name),
@@ -320,6 +325,7 @@ async def regenerate_location_audio(location_id: str, session: AsyncSession = De
         voice=voice,
         style=style,
         persona=persona,
+        force=True,  # Manual regenerate always creates fresh audio
     )
     loc.intro_audio_url = intro_audio.audio_url
     loc.revisit_audio_url = revisit_audio.audio_url
@@ -470,6 +476,8 @@ async def list_documents(
     search: str | None = None,
     category_id: str | None = None,
     uncategorized: bool = False,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
     page: int = 1,
     limit: int = 10,
     session: AsyncSession = Depends(get_db),
@@ -481,6 +489,8 @@ async def list_documents(
         search=search,
         category_id=parsed_category_id,
         uncategorized=uncategorized,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=max(page, 1),
         limit=max(min(limit, 100), 1),
     )
@@ -542,6 +552,9 @@ async def delete_document(document_id: str, session: AsyncSession = Depends(get_
 async def list_media(
     location_id: str | None = None,
     type: str | None = None,
+    search: str | None = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
     page: int = 1,
     limit: int = 50,
     session: AsyncSession = Depends(get_db),
@@ -549,16 +562,19 @@ async def list_media(
     stmt = (
         select(Media, Location.name.label("location_name"))
         .join(Location, Media.location_id == Location.id)
-        .order_by(Media.created_at.desc())
     )
     if location_id:
         stmt = stmt.where(Media.location_id == _as_uuid(location_id, "location_id"))
     if type and type != "all":
         stmt = stmt.where(Media.type == type)
+    if search and search.strip():
+        stmt = stmt.where(Media.caption.ilike(f"%{search.strip()}%"))
 
     count_q = select(func.count()).select_from(stmt.subquery())
     total = (await session.execute(count_q)).scalar() or 0
     offset = (max(page, 1) - 1) * max(min(limit, 100), 1)
+    sort_column = MEDIA_SORT_FIELDS.get(sort_by, Media.created_at)
+    stmt = stmt.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
     result = await session.execute(stmt.offset(offset).limit(max(min(limit, 100), 1)))
     return {
         "total": total,

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useTourStore } from "@/features/tour/store";
+import { useTourStore, onNavigationStart } from "@/features/tour/store";
 import { ChatMessage } from "./types";
 import {
   CHAT_CONNECTION_ERROR_MESSAGE,
@@ -77,6 +77,9 @@ export function playPrecachedAudio(url: string) {
     }
   });
 }
+
+// Stop audio when user navigates to a different location (avoids voice bleed).
+onNavigationStart(_stopCurrentAudio);
 
 // ── Tool Call Queue ──
 type ToolCall = { name: string; args: Record<string, unknown> };
