@@ -44,19 +44,21 @@ export default function InfoPanel() {
       const videoIdx = videos.findIndex((item) => item.id === focusedMediaId);
       const imageIdx = images.findIndex((item) => item.id === focusedMediaId);
 
-      if (videoIdx >= 0) {
-        setMode("video");
-        setExpandedVideoIdx(videoIdx);
-        setFocusedImageIndex(null);
-      } else if (imageIdx >= 0) {
-        setMode("info");
-        setFocusedImageIndex(imageIdx);
-      } else {
-        setMode(preferredMediaTab);
-        setFocusedImageIndex(null);
-      }
+      queueMicrotask(() => {
+        if (videoIdx >= 0) {
+          setMode("video");
+          setExpandedVideoIdx(videoIdx);
+          setFocusedImageIndex(null);
+        } else if (imageIdx >= 0) {
+          setMode("info");
+          setFocusedImageIndex(imageIdx);
+        } else {
+          setMode(preferredMediaTab);
+          setFocusedImageIndex(null);
+        }
 
-      setActiveOverlay("info");
+        setActiveOverlay("info");
+      });
     }
   }, [focusedMediaId, preferredMediaTab, setActiveOverlay, videos, images]);
 
@@ -81,9 +83,11 @@ export default function InfoPanel() {
 
   // Reset mini index when location changes
   useEffect(() => {
-    setMiniSlideIndex(0);
-    setExpandedVideoIdx(0);
-    setFocusedImageIndex(null);
+    queueMicrotask(() => {
+      setMiniSlideIndex(0);
+      setExpandedVideoIdx(0);
+      setFocusedImageIndex(null);
+    });
   }, [location?.slug]);
 
   if (!location) return null;
