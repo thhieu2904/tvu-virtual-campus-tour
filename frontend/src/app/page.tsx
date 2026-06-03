@@ -83,8 +83,9 @@ export default function TourPage() {
   }, [isLoading, location, isPanoramaReady, isAvatarReady, isAppReady, setAppReady]);
 
   // Safety timeout: force ready if a third-party asset event never fires.
+  // Only activates AFTER user clicks Start — no reason to force-bypass while still on the welcome screen.
   useEffect(() => {
-    if (!isLoading && location && !isAppReady) {
+    if (!isLoading && location && !isAppReady && hasStarted) {
       const safety = setTimeout(() => {
         if (!useTourStore.getState().isAppReady) {
           console.warn("[Page] Safety timeout — forcing app ready");
@@ -93,10 +94,10 @@ export default function TourPage() {
           state.setAvatarReady(true);
           state.setAppReady(true);
         }
-      }, 8000);
+      }, 12000);
       return () => clearTimeout(safety);
     }
-  }, [isLoading, location, isAppReady]);
+  }, [isLoading, location, isAppReady, hasStarted]);
 
   // Preload 360° images of adjacent locations into browser cache.
   // Runs after a 3s delay so it doesn't compete with the current panorama load.
@@ -232,11 +233,30 @@ export default function TourPage() {
             với sự hướng dẫn của các Đại sứ ảo.
           </p>
           <button
-            onClick={() => setHasStarted(true)}
-            className="px-10 py-4 bg-[#053384] hover:bg-[#042263] rounded-full text-xl font-bold transition-all shadow-[0_0_30px_rgba(5,51,132,0.6)] hover:scale-105 active:scale-95"
+            onClick={() => isAppReady && setHasStarted(true)}
+            disabled={!isAppReady}
+            className={`px-10 py-4 rounded-full text-xl font-bold transition-all ${
+              isAppReady
+                ? "bg-[#053384] hover:bg-[#042263] shadow-[0_0_30px_rgba(5,51,132,0.6)] hover:scale-105 active:scale-95 cursor-pointer"
+                : "bg-[#053384]/50 cursor-not-allowed"
+            }`}
           >
-            Chạm để bắt đầu
+            {isAppReady ? "Chạm để bắt đầu" : (
+              <span className="flex items-center gap-3">
+                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Đang tải không gian...
+              </span>
+            )}
           </button>
+          {!isAppReady && !isNetworkError && !isFatalError && location && (
+            <p className="mt-4 text-sm text-white/40">
+              {!isPanoramaReady && !isAvatarReady
+                ? "Đang tải ảnh 360° và đại sứ ảo..."
+                : !isPanoramaReady
+                  ? "Đang tải ảnh 360°..."
+                  : "Đang tải đại sứ ảo..."}
+            </p>
+          )}
         </div>
       )}
 
@@ -324,7 +344,10 @@ export default function TourPage() {
         />
       )}
 
-      {/* === Global Asset Loading Gate === */}
+      {/* === Global Asset Loading Gate === 
+       * Now that the Start overlay blocks interaction until isAppReady,
+       * this gate only handles edge cases (e.g., kiosk reset mid-session).
+       */}
       {hasStarted && location && !isAppReady && !isNetworkError && !isFatalError && (
         <div className="absolute inset-0 z-[90] flex items-center justify-center bg-[#08142b] text-white">
           <div className="flex flex-col items-center text-center">

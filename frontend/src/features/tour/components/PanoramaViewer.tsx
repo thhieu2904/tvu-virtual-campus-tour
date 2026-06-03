@@ -101,6 +101,9 @@ export default function PanoramaViewer({
   const onLoadRef = useRef(onLoad);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
+  // Track if the image has been pre-downloaded into browser cache
+  const [isImageCached, setIsImageCached] = useState(false);
   
   const locations = useTourStore((s) => s.locations);
 
@@ -132,10 +135,85 @@ export default function PanoramaViewer({
     viewer.setHfov?.(initialHfov, 800);
   };
 
+  // ── Phase 1: Pre-download image into browser cache with progress tracking ──
   useEffect(() => {
-    if (!containerRef.current || !imageUrl) return;
+    if (!imageUrl) return;
 
-    // Dynamic import pannellum (client-side only)
+    let cancelled = false;
+    setIsImageCached(false);
+    setIsLoaded(false);
+    setHasError(false);
+    setDownloadProgress(null);
+
+    const predownload = async () => {
+      try {
+        // Use fetch with progress tracking for large 360° images
+        const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const contentLength = response.headers.get("content-length");
+        const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+
+        if (totalBytes > 0 && response.body) {
+          // Stream-read with progress
+          const reader = response.body.getReader();
+          const chunks: Uint8Array[] = [];
+          let receivedBytes = 0;
+
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done || cancelled) break;
+            if (value) {
+              chunks.push(value);
+              receivedBytes += value.length;
+              const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
+              const receivedMB = (receivedBytes / 1024 / 1024).toFixed(2);
+              setDownloadProgress(`${receivedMB} / ${totalMB} MB`);
+            }
+          }
+
+          if (cancelled) return;
+
+          // Create blob and decode into browser's image cache
+          const blob = new Blob(chunks as BlobPart[], { type: response.headers.get("content-type") || "image/jpeg" });
+          const img = new Image();
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error("Image decode failed"));
+            img.src = URL.createObjectURL(blob);
+          });
+          URL.revokeObjectURL(img.src);
+        } else {
+          // Fallback: simple Image preload (no progress, but still ensures cache)
+          await new Promise<void>((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error("Image load failed"));
+            img.src = imageUrl;
+          });
+        }
+
+        if (!cancelled) {
+          setDownloadProgress(null);
+          setIsImageCached(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[PanoramaViewer] Image pre-download failed:", err);
+          // Still allow Pannellum to try loading the image directly
+          setIsImageCached(true);
+        }
+      }
+    };
+
+    predownload();
+    return () => { cancelled = true; };
+  }, [imageUrl]);
+
+  // ── Phase 2: Init Pannellum only AFTER image is cached ──
+  useEffect(() => {
+    if (!containerRef.current || !imageUrl || !isImageCached) return;
+
     const loadPannellum = async () => {
       // Import CSS
       if (!document.querySelector('link[href*="pannellum"]')) {
@@ -152,9 +230,6 @@ export default function PanoramaViewer({
     };
 
     const initViewer = () => {
-      setIsLoaded(false);
-      setHasError(false);
-
       // Destroy previous viewer
       if (viewerRef.current) {
         try {
@@ -167,7 +242,8 @@ export default function PanoramaViewer({
         viewerRef.current = null;
       }
 
-      // Create new viewer (same config as reference project)
+      // Create new viewer — image is already in browser cache,
+      // so Pannellum will load from cache almost instantly.
       const pannellum = window.pannellum;
       if (!pannellum || !containerRef.current) return;
 
@@ -224,16 +300,16 @@ export default function PanoramaViewer({
         viewerRef.current = null;
       }
     };
-  }, [imageUrl, initialHfov, initialPitch, initialYaw]);
+  }, [imageUrl, isImageCached, initialHfov, initialPitch, initialYaw]);
 
   return (
     <div className="absolute inset-0 z-0">
-      {/* Pannellum container */}
-      <div ref={containerRef} className="w-full h-full" />
+      {/* Pannellum container — hide built-in loading UI since we handle it ourselves */}
+      <div ref={containerRef} className="w-full h-full [&_.pnlm-load-box]:!hidden [&_.pnlm-lbar]:!hidden [&_.pnlm-lbar-fill]:!hidden [&_.pnlm-lmsg]:!hidden" />
 
       <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,rgba(0,0,0,0.08)_0%,rgba(0,0,0,0)_35%,rgba(0,0,0,0)_58%,rgba(0,0,0,0.24)_100%)]" />
 
-      {/* Loading overlay */}
+      {/* Loading overlay — shows our own progress instead of Pannellum's */}
       <AnimatePresence>
         {(!isLoaded || isTransitioning) && (
           <motion.div
@@ -245,6 +321,9 @@ export default function PanoramaViewer({
             <div className="text-center">
               <div className="w-10 h-10 border-3 border-white/10 border-t-[#053384] rounded-full animate-spin mx-auto mb-3" />
               <p className="text-white/50 text-sm">Đang tải ảnh 360°...</p>
+              {downloadProgress && (
+                <p className="text-white/30 text-xs mt-1">{downloadProgress}</p>
+              )}
             </div>
           </motion.div>
         )}
