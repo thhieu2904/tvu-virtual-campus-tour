@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
 import Image from "next/image";
-import { Sparkles } from "lucide-react";
+import { Info, Map as MapIcon, Navigation, Route, X } from "lucide-react";
 
 import CampusMap, {
   getCoordsBySlug,
   getPathPoints,
 } from "./CampusMap";
-import { CloseButton } from "@/components/ui/close-button";
 
 const AStarExplainer = lazy(() => import("./AStarExplainer"));
 
@@ -51,6 +50,9 @@ export default function Minimap() {
   const pendingNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAgentNavRef = useRef(false); // Tracks if current navigation was AI-triggered
   const [showAStarExplainer, setShowAStarExplainer] = useState(false);
+  const targetLocation = navTarget
+    ? locations.find((l) => l.slug === navTarget)
+    : null;
 
   // Active path key for CampusMap
   const activePathKey = useMemo(() => {
@@ -223,12 +225,16 @@ export default function Minimap() {
     return slugs;
   }, [navNodes]);
 
-  const mapNodes = useMemo(
+  const visibleMapNodes = useMemo(
     () =>
       locations
-        .filter((l) => dynamicCoordSlugs.has(l.slug) || getCoordsBySlug(l.slug))
+        .filter(
+          (l) =>
+            (l.status === "active" || l.slug === currentSlug) &&
+            (dynamicCoordSlugs.has(l.slug) || getCoordsBySlug(l.slug)),
+        )
         .map((l) => ({ slug: l.slug, name: l.name, status: l.status })),
-    [locations, dynamicCoordSlugs],
+    [locations, currentSlug, dynamicCoordSlugs],
   );
 
   return (
@@ -237,6 +243,8 @@ export default function Minimap() {
       {!expanded && (
         <motion.button
           onClick={() => setExpanded(true)}
+          aria-label="Mở sơ đồ Khu 1"
+          title="Mở sơ đồ Khu 1"
           className="absolute top-5 right-5 z-30 w-[148px] rounded-2xl bg-[#111512]/45 backdrop-blur-2xl border border-white/20 p-1.5 shadow-[0_14px_38px_rgba(0,0,0,0.3)] overflow-hidden cursor-pointer hover:shadow-[0_18px_48px_rgba(0,0,0,0.38)] hover:border-white/40 transition-all flex flex-col"
           whileHover={{ scale: 1.025 }}
           whileTap={{ scale: 0.97 }}
@@ -279,7 +287,7 @@ export default function Minimap() {
                     priority
                     className="object-cover"
                   />
-                  {locations.map((loc) => {
+                  {visibleMapNodes.map((loc) => {
                     const coords = getCoordsBySlug(loc.slug);
                     if (!coords) return null;
                     return (
@@ -325,81 +333,114 @@ export default function Minimap() {
 
             {/* Modal */}
             <motion.div
-              className="relative bg-white rounded-xl shadow-[0_24px_80px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col"
-              style={{ width: "min(85vw, 900px)", height: "min(90vh, 850px)" }}
+              className="relative flex flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0a1628]/75 text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
+              style={{ width: "min(96vw, 1200px)", height: "min(92vh, 900px)" }}
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
             >
               {/* Header */}
-              <div className="flex items-center justify-center relative px-5 py-2.5 bg-[#f0f3f8] border-b border-gray-200 shrink-0 min-h-[44px]">
+              <div className="relative flex min-h-[52px] shrink-0 items-center justify-center border-b border-white/10 bg-white/[0.06] px-5 py-3">
                 {/* Title + current location (Centered) */}
-                <div className="flex items-center justify-center gap-3 min-w-0 px-12">
-                  <h2 className="text-sm font-bold text-[#053384] whitespace-nowrap">
-                    🗺️ Sơ đồ Khu 1
+                <div className="flex min-w-0 items-center justify-center gap-3 px-12">
+                  <h2 className="flex items-center gap-2 whitespace-nowrap text-sm font-bold text-white">
+                    <MapIcon className="h-4 w-4 text-[#8eb2f0]" />
+                    Sơ đồ Khu 1
                   </h2>
-                  <span className="text-gray-300">|</span>
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="relative flex h-2 w-2 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#053384] opacity-40" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#053384]" />
+                  <span className="hidden text-white/20 sm:inline">|</span>
+                  <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
+                    <span className="relative flex h-2.5 w-2.5 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#8eb2f0] opacity-40" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#8eb2f0]" />
                     </span>
-                    <span className="text-xs text-gray-500 truncate">
+                    <span className="truncate text-xs text-white/60">
                       {currentLocation?.name || "Đang tải..."}
                     </span>
                   </div>
                 </div>
 
-                {/* Close button (Absolute Right) */}
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                  <button
-                    onClick={() => setShowAStarExplainer(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#053384]/10 hover:bg-[#053384]/20 text-[#053384] text-[11px] font-semibold transition-all"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    Thuật toán A*
-                  </button>
-                  <CloseButton
-                    onClick={() => setExpanded(false)}
-                    disabled={!!navTarget || isPathResolving}
-                  />
-                </div>
+                <button
+                  onClick={() => setExpanded(false)}
+                  disabled={!!navTarget || isPathResolving}
+                  className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/70 transition-all hover:border-red-400/80 hover:bg-red-500/90 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label="Đóng bản đồ"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
 
-              {/* Content: Map centered as square */}
-              <div className="flex-1 min-h-0 p-2 bg-[#f0f3f8] relative">
+              {/* Content: balanced panels with map centered */}
+              <div className="flex min-h-0 flex-1 bg-[#07111f]/35">
+                <MapLegendPanel
+                  currentName={currentLocation?.name || "Đang tải..."}
+                  targetName={targetLocation?.name || null}
+                  isNavigating={!!navTarget}
+                  isPathResolving={isPathResolving}
+                />
+
                 {/* Map — must stay aspect-square for SVG paths */}
-                <div className="h-full w-full flex items-center justify-center">
-                  <div className="h-full aspect-square rounded-lg overflow-hidden border border-gray-200 bg-white">
+                <div className="relative flex min-w-0 flex-1 items-center justify-center p-3 sm:p-4">
+                  <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-col gap-2 lg:hidden">
+                    <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-[#0a1628]/75 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-xl">
+                      <span className="relative flex h-2.5 w-2.5 shrink-0">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#8eb2f0] opacity-40" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#8eb2f0]" />
+                      </span>
+                      <span className="truncate">
+                        {currentLocation?.name || "Đang tải..."}
+                      </span>
+                    </div>
+                    {(navTarget || isPathResolving) && (
+                      <MapStatusBadge
+                        isPathResolving={isPathResolving}
+                        isNavigating={!!navTarget}
+                      />
+                    )}
+                  </div>
+
+                  <div
+                    className="relative aspect-square overflow-hidden rounded-xl border border-white/15 bg-white shadow-[0_22px_65px_rgba(0,0,0,0.35)]"
+                    style={{
+                      width: "min(100%, calc(min(92vh, 900px) - 96px))",
+                    }}
+                  >
                     <CampusMap
                       className="h-full w-full"
                       currentSlug={currentSlug}
                       activePathKey={activePathKey}
                       animProgress={animProgress}
                       showAvailablePaths={!navTarget && !isPathResolving}
-                      nodes={mapNodes}
+                      nodes={visibleMapNodes}
                       navTargetSlug={navTarget}
                       onNodeClick={handleNavigate}
                       disabled={!!navTarget || isPathResolving}
                     />
                   </div>
+
+                  <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 flex items-end justify-between gap-2 lg:hidden">
+                    <div className="rounded-full border border-white/15 bg-[#0a1628]/75 px-3 py-2 text-[11px] font-medium text-white/80 shadow-lg backdrop-blur-xl">
+                      Chạm tên tòa nhà để xem đường đi
+                    </div>
+                    <button
+                      onClick={() => setShowAStarExplainer(true)}
+                      className="pointer-events-auto rounded-full border border-white/15 bg-[#0a1628]/75 px-3 py-2 text-[11px] font-semibold text-[#b8d1ff] shadow-lg backdrop-blur-xl transition-all hover:bg-white/10 hover:text-white"
+                    >
+                      A*
+                    </button>
+                  </div>
+
+                  {(navTarget || isPathResolving) && (
+                    <div className="absolute left-1/2 top-4 z-10 hidden -translate-x-1/2 rounded-full border border-white/15 bg-[#0a1628]/75 px-5 py-2 shadow-lg backdrop-blur-xl lg:flex">
+                      <MapStatusBadge
+                        isPathResolving={isPathResolving}
+                        isNavigating={!!navTarget}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* Help tooltip button — bottom-right */}
-                <HelpTooltip />
-
-                {/* Navigation status overlay */}
-                {(navTarget || isPathResolving) && (
-                  <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 bg-white/95 backdrop-blur shadow-lg rounded-full px-5 py-2 flex items-center gap-2.5 border border-gray-100">
-                    <span className="text-sm">🚶</span>
-                    <span className="text-xs font-medium text-[#053384] animate-pulse">
-                      {isPathResolving
-                        ? "Đang tính đường bằng A*..."
-                        : "Đang dẫn đường..."}
-                    </span>
-                  </div>
-                )}
+                <MapGuidePanel onShowAStar={() => setShowAStarExplainer(true)} />
               </div>
             </motion.div>
           </motion.div>
@@ -418,63 +459,140 @@ export default function Minimap() {
   );
 }
 
-// ── Help tooltip ──
-function HelpTooltip() {
-  const [show, setShow] = useState(false);
+function MapLegendPanel({
+  currentName,
+  targetName,
+  isNavigating,
+  isPathResolving,
+}: {
+  currentName: string;
+  targetName: string | null;
+  isNavigating: boolean;
+  isPathResolving: boolean;
+}) {
+  return (
+    <aside className="hidden w-[220px] shrink-0 flex-col gap-4 border-r border-white/10 bg-white/[0.04] p-4 lg:flex">
+      <section>
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+          Chú giải
+        </p>
+        <div className="space-y-2.5">
+          <LegendItem color="#053384" label="Vị trí hiện tại của bạn" pulse />
+          <LegendItem color="#f5c518" label="Điểm có thể đến" />
+          <LegendItem color="#ec4899" label="Giảng đường D5" />
+          <LegendItem color="#22c55e" label="Cổng chính TVU" />
+          <LegendItem color="#3b82f6" label="Thư viện TVU" />
+          <LegendItem color="#f59e0b" label="Khoa CNTT" />
+          <LineLegendItem dashed label="Tuyến đường có thể đi" />
+          <LineLegendItem label="Đường đang dẫn" />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-white/10 bg-black/20 p-3">
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+          Vị trí
+        </p>
+        <p className="text-sm font-semibold leading-snug text-white">
+          {currentName}
+        </p>
+        {targetName && (
+          <p className="mt-2 text-xs leading-relaxed text-white/60">
+            Điểm đến:{" "}
+            <span className="font-semibold text-white/80">{targetName}</span>
+          </p>
+        )}
+      </section>
+
+      <section className="mt-auto rounded-xl border border-white/10 bg-black/20 p-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+          Trạng thái
+        </p>
+        <MapStatusBadge
+          isPathResolving={isPathResolving}
+          isNavigating={isNavigating}
+        />
+      </section>
+    </aside>
+  );
+}
+
+function MapGuidePanel({ onShowAStar }: { onShowAStar: () => void }) {
+  return (
+    <aside className="hidden w-[220px] shrink-0 flex-col border-l border-white/10 bg-white/[0.04] p-4 lg:flex">
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <Info className="h-4 w-4 text-[#8eb2f0]" />
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+            Hướng dẫn
+          </p>
+        </div>
+        <div className="space-y-3">
+          <GuideStep index={1}>
+            Nhấn vào tên tòa nhà trên bản đồ để xem đường đi.
+          </GuideStep>
+          <GuideStep index={2}>
+            Đường đi được vẽ tự động từ vị trí hiện tại.
+          </GuideStep>
+          <GuideStep index={3}>
+            Chấm nhấp nháy là vị trí của bạn trên sơ đồ.
+          </GuideStep>
+        </div>
+      </section>
+
+      <button
+        onClick={onShowAStar}
+        className="mt-auto rounded-xl border border-white/10 bg-black/20 p-3 text-left transition-all hover:border-[#8eb2f0]/50 hover:bg-[#8eb2f0]/10"
+      >
+        <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#b8d1ff]">
+          <Route className="h-3.5 w-3.5" />
+          Cách hệ thống tìm đường
+        </div>
+        <p className="text-[11px] leading-relaxed text-white/50">
+          Xem mô phỏng A* khi hệ thống chọn tuyến ngắn nhất.
+        </p>
+      </button>
+    </aside>
+  );
+}
+
+function GuideStep({
+  index,
+  children,
+}: {
+  index: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex gap-2.5 text-xs leading-relaxed text-white/70">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[10px] font-bold text-white/70">
+        {index}
+      </span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function MapStatusBadge({
+  isPathResolving,
+  isNavigating,
+}: {
+  isPathResolving: boolean;
+  isNavigating: boolean;
+}) {
+  const label = isPathResolving
+    ? "Đang tính đường bằng A*"
+    : isNavigating
+      ? "Đang dẫn đường"
+      : "Sẵn sàng chọn điểm đến";
 
   return (
-    <div className="absolute bottom-5 right-5 z-10">
-      {/* Tooltip content */}
-      <AnimatePresence>
-        {show && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.95 }}
-            className="absolute bottom-12 right-0 w-[200px] bg-white/95 backdrop-blur shadow-xl rounded-lg border border-gray-100 p-3 mb-1"
-          >
-            <p className="text-[10px] font-bold text-[#053384] uppercase tracking-wide text-center mb-2">
-              Hướng dẫn
-            </p>
-            <div className="flex flex-col gap-2 text-[10px] text-gray-500 leading-relaxed">
-              <div className="flex gap-2">
-                <span className="shrink-0">👆</span>
-                <span>
-                  Nhấn <strong className="text-[#053384]">tên tòa nhà</strong>{" "}
-                  để xem đường đi
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <span className="shrink-0">🚶</span>
-                <span>
-                  Đường đi được{" "}
-                  <strong className="text-[#053384]">vẽ tự động</strong> trên
-                  bản đồ
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <span className="shrink-0">📍</span>
-                <span>
-                  <strong className="text-[#053384]">Chấm nhấp nháy</strong> là
-                  vị trí của bạn
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ? button */}
-      <button
-        onClick={() => setShow(!show)}
-        className={`w-9 h-9 flex items-center justify-center rounded-full shadow-lg border border-gray-100 text-sm font-bold transition-all cursor-pointer ${
-          show
-            ? "bg-[#053384] text-white"
-            : "bg-white/95 backdrop-blur text-[#053384] hover:bg-[#053384] hover:text-white"
+    <div className="inline-flex items-center gap-2 text-xs font-semibold text-white/80">
+      <Navigation
+        className={`h-3.5 w-3.5 text-[#8eb2f0] ${
+          isPathResolving || isNavigating ? "animate-pulse" : ""
         }`}
-      >
-        ?
-      </button>
+      />
+      <span>{label}</span>
     </div>
   );
 }
@@ -492,17 +610,36 @@ function LegendItem({
   return (
     <div className="flex items-center gap-2">
       <div
-        className="relative w-2.5 h-2.5 rounded-full shrink-0"
+        className="relative h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/40"
         style={{ backgroundColor: color }}
       >
         {pulse && (
           <span
-            className="absolute inset-0 rounded-full animate-ping opacity-40"
+            className="absolute inset-0 animate-ping rounded-full opacity-40"
             style={{ backgroundColor: color }}
           />
         )}
       </div>
-      <span className="text-[9px] text-gray-500">{label}</span>
+      <span className="text-[11px] leading-snug text-white/60">{label}</span>
+    </div>
+  );
+}
+
+function LineLegendItem({
+  label,
+  dashed,
+}: {
+  label: string;
+  dashed?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`h-0 w-7 shrink-0 border-t-2 ${
+          dashed ? "border-dashed border-[#8eb2f0]/70" : "border-[#8eb2f0]"
+        }`}
+      />
+      <span className="text-[11px] leading-snug text-white/60">{label}</span>
     </div>
   );
 }
