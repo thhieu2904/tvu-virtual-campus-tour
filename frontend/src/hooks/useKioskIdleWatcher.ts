@@ -36,9 +36,11 @@ export function useKioskIdleWatcher({
   const onDismissRef = useRef(onDismiss);
 
   // Keep refs in sync
-  onResetRef.current = onReset;
-  onWarningRef.current = onWarning;
-  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    onResetRef.current = onReset;
+    onWarningRef.current = onWarning;
+    onDismissRef.current = onDismiss;
+  }, [onReset, onWarning, onDismiss]);
 
   const clearAllTimers = useCallback(() => {
     if (idleTimerRef.current) {

@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "src/app/map-editor/**", // Bỏ qua thư mục map-editor (test)
   ]),
 ]);
 
