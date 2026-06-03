@@ -342,7 +342,47 @@ async def _build_work_items(job: CacheJob) -> list[CacheWorkItem]:
             raise ValueError("Cần target_id cho cache job đại sứ ảo")
         async with async_session() as session:
             return await _build_mascot_work_items(session, job.target_id, focus, force)
+    if job.scope == "global":
+        async with async_session() as session:
+            return await _build_global_work_items(session, focus, force)
     return []
+
+async def _build_global_work_items(session: AsyncSession, focus: str, force: bool) -> list[CacheWorkItem]:
+    work_items: list[CacheWorkItem] = []
+    
+    mas_res = await session.execute(select(Mascot))
+    mascots = list(mas_res.scalars().all())
+    
+    for mascot in mascots:
+        intro_item = fingerprints.build_mascot_intro_item(mascot)
+        artifact_map = await _current_artifact_map(session, [intro_item])
+        if focus in {"voice", "all", "overview"} and _item_needs_work(intro_item, artifact_map, force):
+            work_items.append(
+                CacheWorkItem(
+                    kind="mascot_intro",
+                    scope="mascot",
+                    target_id=mascot.id,
+                    mascot_id=mascot.id,
+                    item_key=intro_item.item_key,
+                    label=intro_item.label,
+                    force=force,
+                )
+            )
+            
+    loc_res = await session.execute(select(Location).where(Location.status == "active"))
+    locations = list(loc_res.scalars().all())
+    
+    for location in locations:
+        location_focus = focus
+        if focus == "voice":
+            location_focus = "voice"
+        elif focus in {"all", "overview"}:
+            location_focus = "all"
+        else:
+            location_focus = "questions"
+        work_items.extend(await _build_location_work_items(session, location.id, location_focus, force))
+        
+    return work_items
 
 
 async def _upsert_artifact(

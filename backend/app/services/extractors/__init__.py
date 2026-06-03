@@ -21,6 +21,7 @@ from typing import Dict, List, Any, Type
 
 from app.services.extractors.pdf_extractor import PDFExtractor
 from app.services.extractors.docx_extractor import DocxExtractor
+from app.services.extractors.md_extractor import MarkdownExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 _EXTRACTOR_REGISTRY: Dict[str, Type] = {
     ".pdf": PDFExtractor,
     ".docx": DocxExtractor,
+    ".md": MarkdownExtractor,
 }
 
 

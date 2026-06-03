@@ -1,4 +1,5 @@
-import type { ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes, ComponentType, SVGProps } from 'react'
+import { useState, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, type ComponentType, type SVGProps } from 'react'
+import Link from 'next/link'
 
 import { cn } from '@/lib/utils'
 
@@ -252,14 +253,19 @@ export function AdminStatCard({
   title,
   value,
   color = '#053384',
+  href,
 }: {
   icon: ComponentType<SVGProps<SVGSVGElement> & { className?: string }>
   title: string
   value: string | number
   color?: string
+  href?: string
 }) {
-  return (
-    <div className="rounded-2xl border border-[#d7e0f0]/80 bg-white p-5 shadow-sm shadow-[#053384]/[0.02] transition-shadow hover:shadow-md">
+  const content = (
+    <div className={cn(
+      "rounded-2xl border border-[#d7e0f0]/80 bg-white p-5 shadow-sm shadow-[#053384]/[0.02] transition-all",
+      href && "hover:shadow-md hover:border-[#7a96c9]/50 cursor-pointer active:scale-[0.98]"
+    )}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[0.8rem] font-medium text-[#52627f]">{title}</p>
@@ -276,6 +282,11 @@ export function AdminStatCard({
       </div>
     </div>
   )
+
+  if (href) {
+    return <Link href={href} className="block">{content}</Link>
+  }
+  return content
 }
 
 /* ─── Workbench ─── */
@@ -322,6 +333,7 @@ export function AdminResourceSidebar({
   headerActions,
   summary,
   footer,
+  collapsibleLimit,
 }: {
   kicker?: string
   title: string
@@ -343,7 +355,11 @@ export function AdminResourceSidebar({
   headerActions?: ReactNode
   summary?: ReactNode
   footer?: ReactNode
+  collapsibleLimit?: number
 }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const visibleItems = collapsibleLimit && !isExpanded ? items.slice(0, collapsibleLimit) : items
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#d7e0f0]/80 bg-white shadow-sm shadow-[#053384]/[0.03]">
       <div className="shrink-0 p-3 pb-2">
@@ -364,7 +380,8 @@ export function AdminResourceSidebar({
         ) : items.length === 0 ? (
           <div className="p-4 text-center text-sm text-[#7a96c9]">{emptyText}</div>
         ) : (
-          items.map((item) => {
+          <>
+            {visibleItems.map((item) => {
             const isActive = activeId === item.id
             const Icon = item.icon
             return (
@@ -418,7 +435,19 @@ export function AdminResourceSidebar({
                 )}
               </button>
             )
-          })
+          })}
+            {collapsibleLimit && items.length > collapsibleLimit && (
+              <div className="mt-2 flex justify-center pb-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-xs font-semibold text-[#053384] hover:underline"
+                >
+                  {isExpanded ? 'Thu gọn' : `Xem thêm ${items.length - collapsibleLimit} mục`}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
       {footer && <div className="shrink-0 border-t border-[#d7e0f0]/70 p-3">{footer}</div>}

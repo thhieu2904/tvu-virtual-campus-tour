@@ -112,7 +112,7 @@ export default function SettingsPage() {
               { label: 'Điểm bắt đầu', value: startLocation?.name ?? config.default_start_slug },
               { label: 'Idle timeout', value: `${config.idle_timeout_minutes} phút` },
               { label: 'Cảnh báo', value: `${config.warning_duration_seconds}s` },
-              { label: 'TTS', value: config.tts_enabled_default ? 'Bật' : 'Tắt' },
+              { label: 'Tự động phát âm thanh', value: config.tts_enabled_default ? 'Bật' : 'Tắt' },
             ]}
           />
         </div>
@@ -213,8 +213,8 @@ export default function SettingsPage() {
             <AdminSwitch
               checked={config.tts_enabled_default}
               onChange={(checked) => setConfig({ ...config, tts_enabled_default: checked })}
-              label="Text-to-Speech mặc định"
-              description="Bật để tự động đọc phản hồi từ đại sứ ảo khi sinh viên hỏi."
+              label="Tự động phát giọng nói (Auto-play)"
+              description="Kiosk sẽ tự động phát âm thanh (AI Voice chất lượng cao) khi Đại sứ ảo trả lời."
             />
           </div>
         </div>

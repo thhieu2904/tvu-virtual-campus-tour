@@ -156,6 +156,9 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
 
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; action: () => void } | null>(null)
+
   const categoryNodes = useMemo<CategoryNode[]>(() => {
     return [
       ...categories,
@@ -349,23 +352,28 @@ export default function DocumentsPage() {
 
   const deleteCategory = async (category: CategoryNode) => {
     if (category.isUncategorized) return
-    if (!confirm(`Xóa danh mục "${category.name}"? Tài liệu trong nhóm này sẽ chuyển về Chưa phân loại.`)) return
-
-    setDeletingCategoryId(category.id)
-    setError(null)
-    try {
-      await adminApi.delete(`/categories/${category.id}`)
-      if (selectedCategoryId === category.id) {
-        setSelectedCategoryId(null)
-        setDocuments([])
-        setTotal(0)
+    setConfirmDialog({
+      title: 'Xác nhận xóa danh mục',
+      message: `Bạn có chắc chắn muốn xóa danh mục "${category.name}"? Tài liệu trong nhóm này sẽ tự động chuyển về Chưa phân loại.`,
+      action: async () => {
+        setDeletingCategoryId(category.id)
+        setError(null)
+        try {
+          await adminApi.delete(`/categories/${category.id}`)
+          if (selectedCategoryId === category.id) {
+            setSelectedCategoryId(null)
+            setDocuments([])
+            setTotal(0)
+          }
+          await fetchCategories()
+          setToast({ message: 'Xóa danh mục thành công', type: 'success' })
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Không thể xóa danh mục')
+        } finally {
+          setDeletingCategoryId(null)
+        }
       }
-      await fetchCategories()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể xóa danh mục')
-    } finally {
-      setDeletingCategoryId(null)
-    }
+    })
   }
 
   const updateDocumentCategory = async (doc: DocumentItem, categoryId: string) => {
@@ -384,42 +392,47 @@ export default function DocumentsPage() {
   }
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Xóa "${title}"? Thao tác không thể hoàn tác.`)) return
-    setDeletingId(id)
-    setError(null)
-    try {
-      await adminApi.delete(`/documents/${id}`)
-      setDocuments((prev) => prev.filter((doc) => doc.id !== id))
-      setTotal((prev) => Math.max(prev - 1, 0))
-      await fetchCategories()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể xóa tài liệu')
-    } finally {
-      setDeletingId(null)
-    }
+    setConfirmDialog({
+      title: 'Xác nhận xóa tài liệu',
+      message: `Bạn có chắc chắn muốn xóa tài liệu "${title}"? Thao tác này không thể hoàn tác.`,
+      action: async () => {
+        setDeletingId(id)
+        setError(null)
+        try {
+          await adminApi.delete(`/documents/${id}`)
+          setDocuments((prev) => prev.filter((doc) => doc.id !== id))
+          setTotal((prev) => Math.max(prev - 1, 0))
+          await fetchCategories()
+          setToast({ message: 'Xóa tài liệu thành công', type: 'success' })
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Không thể xóa tài liệu')
+        } finally {
+          setDeletingId(null)
+        }
+      }
+    })
   }
 
   const handleUpload = async () => {
     if (!uploadFile || !uploadTitle.trim()) return
     setUploading(true)
-    setUploadStatus('Đang upload...')
+    setUploadStatus(null)
     try {
       const formData = new FormData()
       formData.append('file', uploadFile)
       formData.append('title', uploadTitle.trim())
       if (uploadCategoryId) formData.append('category_id', uploadCategoryId)
 
-      const result = await adminApi.upload<{ document_id: string; status: string }>('/ingest', formData)
-      setUploadStatus(`Upload thành công. ID: ${result.document_id}. Đang xử lý embedding...`)
+      await adminApi.upload<{ document_id: string; status: string }>('/ingest', formData)
 
-      setTimeout(() => {
-        setShowUpload(false)
-        setUploadFile(null)
-        setUploadTitle('')
-        setUploadCategoryId('')
-        setUploadStatus(null)
-        void refreshAll()
-      }, 1800)
+      setShowUpload(false)
+      setUploadFile(null)
+      setUploadTitle('')
+      setUploadCategoryId('')
+      setUploadStatus(null)
+      setToast({ message: 'Tải lên thành công! File đang được xử lý nền.', type: 'success' })
+      setTimeout(() => setToast(null), 3500)
+      void refreshAll()
     } catch (err) {
       setUploadStatus(`Lỗi: ${err instanceof Error ? err.message : 'Upload thất bại'}`)
     } finally {
@@ -623,11 +636,19 @@ export default function DocumentsPage() {
                                 {config.label}
                               </span>
                             </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#7a96c9]">
-                              <span className="font-mono uppercase text-[#52627f]">{doc.file_type}</span>
-                              <span className="flex items-center gap-1.5 before:content-['·'] before:text-[#d7e0f0] before:mr-1.5">{formatBytes(doc.file_size)}</span>
-                              <span className="flex items-center gap-1.5 before:content-['·'] before:text-[#d7e0f0] before:mr-1.5 font-medium">{doc.chunk_count} chunks</span>
-                              <span className="flex items-center gap-1.5 before:content-['·'] before:text-[#d7e0f0] before:mr-1.5">{doc.created_at ? new Date(doc.created_at).toLocaleDateString('vi-VN') : '—'}</span>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.72rem] text-[#7a96c9]">
+                              <span className="font-mono font-bold uppercase text-[#053384] bg-[#eef3fb] px-1.5 py-0.5 rounded text-[0.65rem] border border-[#053384]/15">
+                                {doc.file_type}
+                              </span>
+                              <span className="font-medium text-[#52627f]">{formatBytes(doc.file_size)}</span>
+                              
+                              <span className="xl:hidden text-[#d7e0f0]">•</span>
+                              <span className="xl:hidden font-medium text-[#52627f]">{doc.chunk_count} chunks</span>
+                              
+                              <span className="text-[#d7e0f0]">•</span>
+                              <span>
+                                {doc.created_at ? new Date(doc.created_at).toLocaleString('vi-VN') : '—'}
+                              </span>
                             </div>
                             {doc.error_message && (
                               <p className="mt-1.5 truncate text-[0.78rem] text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 inline-block">
@@ -638,9 +659,9 @@ export default function DocumentsPage() {
                         </div>
 
                         <div className="ml-14 flex items-center gap-3 lg:ml-0 lg:self-center">
-                          <div className="hidden rounded-xl border border-[#d7e0f0]/70 bg-white px-3 py-2 text-right xl:block">
-                            <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">Chunk</p>
-                            <p className="text-sm font-bold text-[#10213f]">{doc.chunk_count}</p>
+                          <div className="hidden rounded-xl border border-[#d7e0f0]/70 bg-[#f8fafc] px-3 py-1.5 text-center shadow-sm xl:block">
+                            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-[#7a96c9]">Chunks</p>
+                            <p className="text-sm font-black text-[#053384]">{doc.chunk_count}</p>
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger render={
@@ -783,11 +804,11 @@ export default function DocumentsPage() {
               </AdminSelect>
             </label>
             <div>
-              <p className="text-sm font-medium text-[#10213f]">File PDF/DOCX</p>
+              <p className="text-sm font-medium text-[#10213f]">File PDF / DOCX / MD</p>
               <label className="mt-1.5 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-[#d7e0f0] p-4 text-sm transition-colors hover:border-[#7a96c9] hover:bg-[#f6f8fb]">
                 <Upload className="h-5 w-5 text-[#7a96c9]" />
                 <span className="text-[#52627f]">{uploadFile ? `${uploadFile.name} (${formatBytes(uploadFile.size)})` : 'Chọn file, tối đa 10MB'}</span>
-                <input type="file" accept=".pdf,.docx" className="hidden" onChange={(event) => setUploadFile(event.target.files?.[0] || null)} />
+                <input type="file" accept=".pdf,.docx,.md" className="hidden" onChange={(event) => setUploadFile(event.target.files?.[0] || null)} />
               </label>
             </div>
             {uploadStatus && (
@@ -797,6 +818,41 @@ export default function DocumentsPage() {
             )}
           </div>
         </AdminModal>
+      )}
+
+      {/* ─── Confirm Dialog Modal ─── */}
+      {confirmDialog && (
+        <AdminModal
+          title={confirmDialog.title}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setConfirmDialog(null)} className="rounded-xl">Hủy</Button>
+              <Button 
+                onClick={() => {
+                  confirmDialog.action()
+                  setConfirmDialog(null)
+                }} 
+                className="rounded-xl bg-red-600 hover:bg-red-700 text-white"
+              >
+                Xác nhận xóa
+              </Button>
+            </>
+          }
+        >
+          <div className="text-[0.92rem] text-[#52627f] leading-relaxed">
+            {confirmDialog.message}
+          </div>
+        </AdminModal>
+      )}
+
+      {/* ─── Floating Toast Notification ─── */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl bg-white p-4 py-3.5 shadow-xl border border-[#d7e0f0] animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${toast.type === 'success' ? 'bg-[#d1fae5] text-[#2c8b57]' : 'bg-[#fee2e2] text-[#c14b4b]'}`}>
+            {toast.type === 'success' ? <CheckCircle2 className="size-5" /> : <AlertCircle className="size-5" />}
+          </div>
+          <p className="text-[0.92rem] font-medium text-[#10213f]">{toast.message}</p>
+        </div>
       )}
     </>
   )

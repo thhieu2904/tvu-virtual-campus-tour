@@ -8,16 +8,11 @@ import {
   AdminResourceSidebar,
   AdminStatusPill,
   AdminWorkbench,
+  AdminModal,
+  AdminSwitch,
 } from '../_components/admin-ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { adminApi } from '@/lib/admin-api'
 import { cn } from '@/lib/utils'
 import {
@@ -27,9 +22,7 @@ import {
   CheckCircle2,
   Database,
   Globe2,
-  ListChecks,
   MapPin,
-  MoreHorizontal,
   Play,
   RefreshCw,
   Search,
@@ -251,6 +244,13 @@ function AdminCacheContent() {
   const [error, setError] = useState<string | null>(null)
   const [jobError, setJobError] = useState<string | null>(null)
 
+  // Modal & configuration state
+  const [showRebuildModal, setShowRebuildModal] = useState(false)
+  const [dryRun, setDryRun] = useState(false)
+  const [forceRebuild, setForceRebuild] = useState(false)
+  const [expandedLocations, setExpandedLocations] = useState(false)
+  const [expandedMascots, setExpandedMascots] = useState(false)
+
   const canFetch = scope === 'global' || Boolean(targetId)
 
   const pushCacheRoute = useCallback((nextScope: CacheScope, nextTargetId: string | null, nextFocus: CacheFocus = 'overview') => {
@@ -317,6 +317,11 @@ function AdminCacheContent() {
         if (!['queued', 'running'].includes(nextJob.job.status)) {
           void loadSummary()
           void loadResources()
+          if (nextJob.job.status === 'succeeded' && nextJob.job.params?.dry_run && nextJob.job.total_items > 0) {
+            setDryRun(false)
+            setForceRebuild(false)
+            setShowRebuildModal(true)
+          }
         }
       } catch (err) {
         setJobError(err instanceof Error ? err.message : 'Không đọc được tiến độ job')
@@ -328,14 +333,6 @@ function AdminCacheContent() {
 
   const createJob = useCallback(async (dryRun: boolean, force = false) => {
     if (!canFetch || (scope !== 'global' && !targetId)) return
-    if (!dryRun) {
-      const ok = window.confirm(
-        force
-          ? 'Tạo lại tất cả sẽ gọi lại RAG/TTS cho cả artifact đang hợp lệ. Tiếp tục?'
-          : 'Tạo lại cache sẽ gọi RAG/TTS/R2 cho cache cần cập nhật hoặc chưa có. Tiếp tục?',
-      )
-      if (!ok) return
-    }
 
     setJobLoading(true)
     setJobError(null)
@@ -370,6 +367,17 @@ function AdminCacheContent() {
       setJobLoading(false)
     }
   }, [jobDetail, loadSummary])
+
+  const handleOpenRebuildModal = useCallback(() => {
+    setDryRun(scope === 'global')
+    setForceRebuild(false)
+    setShowRebuildModal(true)
+  }, [scope])
+
+  const handleStartRebuild = useCallback(() => {
+    setShowRebuildModal(false)
+    void createJob(dryRun, forceRebuild)
+  }, [createJob, dryRun, forceRebuild])
 
   const focusedLabel = useMemo(() => {
     const targetName = typeof summary?.target?.name === 'string' ? summary.target.name : null
@@ -455,8 +463,7 @@ function AdminCacheContent() {
 
   const activeResourceId = sidebarKey(scope, targetId)
   const sidebarSearchPlaceholder = scope === 'mascot' ? 'Tìm mascot hoặc voice...' : 'Tìm tên hoặc slug...'
-  const canStartJob = Boolean(summary && canFetch && scope !== 'global' && (summary.affected_items > 0 || jobDetail?.job.params.dry_run))
-  const canForceJob = Boolean(summary && canFetch && scope !== 'global' && summary.total_items > 0 && summary.affected_items === 0)
+  const canOpenRebuild = Boolean(summary && canFetch && (scope === 'global' || summary.total_items > 0))
   const activeJobRunning = Boolean(jobDetail && ['queued', 'running'].includes(jobDetail.job.status))
 
   const sidebar = (
@@ -547,43 +554,38 @@ function AdminCacheContent() {
               ))}
             </div>
 
-            <Button size="sm" className="rounded-xl" onClick={() => createJob(false)} disabled={jobLoading || activeJobRunning || !canStartJob}>
-              <Play data-icon="inline-start" />
-              Tạo lại cache
+            <Button
+              size="sm"
+              className="rounded-xl bg-[#053384] text-white hover:bg-[#053384]/90"
+              onClick={handleOpenRebuildModal}
+              disabled={jobLoading || activeJobRunning || !canOpenRebuild}
+            >
+              Cấu hình Tạo lại Cache
             </Button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" size="icon" className="rounded-xl" />
-              }>
-                <MoreHorizontal className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => { void loadSummary(); void loadResources() }} disabled={loading || resourcesLoading || !canFetch}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Làm mới
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => createJob(true)} disabled={jobLoading || !canFetch}>
-                  <ListChecks className="mr-2 h-4 w-4" />
-                  Kiểm tra trước
-                </DropdownMenuItem>
-                {canForceJob && (
-                  <DropdownMenuItem onClick={() => createJob(false, true)} disabled={jobLoading || activeJobRunning}>
-                    <ShieldAlert className="mr-2 h-4 w-4" />
-                    Tạo lại tất cả
-                  </DropdownMenuItem>
-                )}
-                {activeJobRunning && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={cancelJob} disabled={jobLoading} className="text-red-600 focus:text-red-600">
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Hủy job
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {activeJobRunning && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-red-200 hover:border-red-300 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700"
+                onClick={cancelJob}
+                disabled={jobLoading}
+              >
+                <XCircle className="mr-1.5 h-4 w-4" />
+                Hủy job
+              </Button>
+            )}
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-xl"
+              onClick={() => { void loadSummary(); void loadResources() }}
+              disabled={loading || resourcesLoading || !canFetch}
+              title="Làm mới"
+            >
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            </Button>
           </div>
         </div>
 
@@ -679,6 +681,25 @@ function AdminCacheContent() {
                     </div>
                   )}
                 </div>
+                {jobDetail.job.status === 'succeeded' && jobDetail.job.params?.dry_run && jobDetail.job.total_items > 0 && (
+                  <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4 animate-fadeIn">
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-900">Kết quả chạy thử (Dry Run)</h4>
+                      <p className="text-xs text-blue-800 mt-0.5">Phát hiện <span className="font-bold">{jobDetail.job.total_items}</span> artifact cần cập nhật.</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="rounded-xl bg-[#053384] text-white hover:bg-[#053384]/90 whitespace-nowrap"
+                      onClick={() => {
+                        setDryRun(false)
+                        setForceRebuild(false)
+                        setShowRebuildModal(true)
+                      }}
+                    >
+                      Tiến hành Tạo lại ngay
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -687,13 +708,115 @@ function AdminCacheContent() {
         <div className="p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-sm font-bold text-[#10213f]">
-              Chi tiết artifact · {summary?.artifacts.length ?? 0} items
+              {scope === 'global' ? 'Tổng quan hệ thống' : `Chi tiết artifact · ${summary?.artifacts.length ?? 0} items`}
             </h3>
             {summary && <AdminStatusPill status={meta.tone} label={meta.label} />}
           </div>
           {!summary && !loading ? (
             <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
               Chưa có tóm tắt để hiển thị.
+            </div>
+          ) : scope === 'global' ? (
+            <div className="grid gap-6 md:grid-cols-2 items-start">
+              <div className="rounded-xl border border-[#d7e0f0]/80 bg-white overflow-hidden shadow-sm">
+                <div className="border-b border-[#d7e0f0]/70 bg-[#f8fbff] px-4 py-3 flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-[#10213f] flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-[#053384]" />
+                    Quản lý Địa điểm ({locations.length})
+                  </h4>
+                </div>
+                <div className="divide-y divide-[#d7e0f0]/40">
+                  {locations.length === 0 ? (
+                    <div className="p-4 text-xs text-[#52627f] text-center">Không có địa điểm nào.</div>
+                  ) : (
+                    (expandedLocations ? locations : locations.slice(0, 5)).map((loc) => (
+                      <div key={loc.id} className="flex items-center justify-between p-3.5 hover:bg-[#f8fbff] transition-colors">
+                        <div className="min-w-0 pr-2">
+                          <p className="font-semibold text-sm text-[#10213f] truncate">{loc.name}</p>
+                          <p className="text-xs text-[#7a96c9] mt-0.5 truncate">
+                            /{loc.slug} · {loc.status === 'active' ? 'Đang mở' : 'Tạm đóng'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs font-semibold text-[#52627f] bg-[#eef3fb] px-2 py-1 rounded-md">
+                            {loc.question_count ?? 0} câu hỏi
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg text-xs"
+                            onClick={() => pushCacheRoute('location', loc.id, 'overview')}
+                          >
+                            Xem chi tiết
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {locations.length > 5 && (
+                  <div className="p-2 border-t border-[#d7e0f0]/50 bg-[#f8fbff]/50">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setExpandedLocations(!expandedLocations)}
+                      className="w-full text-xs text-[#053384] hover:bg-[#eef3fb] rounded-lg"
+                    >
+                      {expandedLocations ? 'Thu gọn' : `Xem thêm ${locations.length - 5} địa điểm`}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-[#d7e0f0]/80 bg-white overflow-hidden shadow-sm">
+                <div className="border-b border-[#d7e0f0]/70 bg-[#f8fbff] px-4 py-3 flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-[#10213f] flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-[#053384]" />
+                    Quản lý Đại sứ ảo ({mascots.length})
+                  </h4>
+                </div>
+                <div className="divide-y divide-[#d7e0f0]/40">
+                  {mascots.length === 0 ? (
+                    <div className="p-4 text-xs text-[#52627f] text-center">Không có đại sứ ảo nào.</div>
+                  ) : (
+                    (expandedMascots ? mascots : mascots.slice(0, 5)).map((mas) => (
+                      <div key={mas.id} className="flex items-center justify-between p-3.5 hover:bg-[#f8fbff] transition-colors">
+                        <div className="min-w-0 pr-2">
+                          <p className="font-semibold text-sm text-[#10213f] truncate">{mas.name}</p>
+                          <p className="text-xs text-[#7a96c9] mt-0.5 truncate">
+                            {mas.voice_name} {mas.voice_style ? `(${mas.voice_style})` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs font-semibold text-[#52627f] bg-[#eef3fb] px-2 py-1 rounded-md">
+                            {mas.location_count} địa điểm
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg text-xs"
+                            onClick={() => pushCacheRoute('mascot', mas.id, 'overview')}
+                          >
+                            Xem chi tiết
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {mascots.length > 5 && (
+                  <div className="p-2 border-t border-[#d7e0f0]/50 bg-[#f8fbff]/50">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setExpandedMascots(!expandedMascots)}
+                      className="w-full text-xs text-[#053384] hover:bg-[#eef3fb] rounded-lg"
+                    >
+                      {expandedMascots ? 'Thu gọn' : `Xem thêm ${mascots.length - 5} đại sứ ảo`}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : !summary?.artifacts.length ? (
             <div className="rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] p-5 text-sm text-[#52627f]">
@@ -774,6 +897,119 @@ function AdminCacheContent() {
         sidebar={sidebar}
         main={main}
       />
+
+      {showRebuildModal && (
+        <AdminModal
+          title="Cấu hình Tạo lại Cache"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setShowRebuildModal(false)} className="rounded-xl">
+                Hủy
+              </Button>
+              <Button onClick={handleStartRebuild} disabled={jobLoading || activeJobRunning || (!dryRun && !forceRebuild && summary?.affected_items === 0)} className="rounded-xl bg-[#053384] text-white hover:bg-[#053384]/90">
+                Bắt đầu chạy
+              </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <div className="rounded-xl border border-[#d7e0f0] bg-[#f8fbff] p-4">
+              <h3 className="text-sm font-semibold text-[#10213f] mb-1">Đối tượng chạy cache</h3>
+              <p className="text-xs text-[#52627f]">
+                <span className="font-medium text-[#10213f]">{focusedLabel}</span> ({scope === 'global' ? 'Toàn hệ thống' : scope === 'location' ? 'Địa điểm' : 'Mascot'})
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#52627f]">Chế độ rebuild</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setForceRebuild(false)}
+                  className={cn(
+                    "flex flex-col text-left p-3.5 rounded-xl border transition-all",
+                    !forceRebuild
+                      ? "border-[#053384] bg-[#053384]/5 ring-1 ring-[#053384]"
+                      : "border-[#d7e0f0] hover:bg-[#f6f8fb]"
+                  )}
+                >
+                  <span className="text-sm font-bold text-[#10213f]">Cập nhật thay đổi</span>
+                  <span className="mt-1 text-xs text-[#52627f] leading-relaxed">Chỉ rebuild những cache cần cập nhật hoặc chưa tồn tại.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForceRebuild(true)}
+                  className={cn(
+                    "flex flex-col text-left p-3.5 rounded-xl border transition-all",
+                    forceRebuild
+                      ? "border-amber-500 bg-amber-50/50 ring-1 ring-amber-500"
+                      : "border-[#d7e0f0] hover:bg-[#f6f8fb]"
+                  )}
+                >
+                  <span className="text-sm font-bold text-[#10213f] flex items-center gap-1.5">
+                    Tạo lại toàn bộ
+                  </span>
+                  <span className="mt-1 text-xs text-[#52627f] leading-relaxed">Chạy lại RAG và tạo mới toàn bộ audio, kể cả những gì đang hợp lệ.</span>
+                </button>
+              </div>
+            </div>
+
+            <AdminSwitch
+              checked={dryRun}
+              onChange={setDryRun}
+              disabled={false}
+              label="Chạy thử nghiệm (Dry Run)"
+              description="Chỉ mô phỏng quá trình kiểm tra thay đổi mà không thực sự ghi đè file hoặc gọi API có phí."
+            />
+
+            {summary && (
+              <div className="rounded-xl border border-[#d7e0f0] bg-[#f6f8fb] p-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#52627f] mb-3">Ước tính tài nguyên tối đa</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-xl font-bold text-[#10213f]">
+                      {forceRebuild ? summary.total_items : summary.affected_items}
+                    </span>
+                    <span className="text-[0.68rem] text-[#7a96c9] mt-0.5">Artifact bị ảnh hưởng</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xl font-bold text-[#10213f]">
+                      {dryRun ? 0 : (forceRebuild ? summary.total_items : summary.estimated_cost.rag_requests)}
+                    </span>
+                    <span className="text-[0.68rem] text-[#7a96c9] mt-0.5">RAG Requests</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xl font-bold text-[#10213f]">
+                      {dryRun ? 0 : (forceRebuild ? summary.total_items : summary.estimated_cost.tts_requests)}
+                    </span>
+                    <span className="text-[0.68rem] text-[#7a96c9] mt-0.5">TTS Requests</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!dryRun && !forceRebuild && summary?.affected_items === 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs text-emerald-800 flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-emerald-900">Hệ thống đang đồng bộ</p>
+                  <p className="mt-1">Không phát hiện thay đổi nào cần cập nhật. Nếu bạn vẫn muốn chạy lại cache, vui lòng bật "Tạo lại toàn bộ" hoặc "Chạy thử nghiệm".</p>
+                </div>
+              </div>
+            )}
+
+            {forceRebuild && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-800 flex items-start gap-2 animate-fadeIn">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-900">Chú ý khi tạo lại tất cả</p>
+                  <p className="mt-1">Thao tác này sẽ chạy lại RAG và gọi API TTS của Google Cloud Text-to-Speech cho tất cả câu hỏi và lời giới thiệu của đối tượng này. Hãy cân nhắc chi phí API trước khi xác nhận.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </AdminModal>
+      )}
     </div>
   )
 }

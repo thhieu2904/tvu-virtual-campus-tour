@@ -25,7 +25,7 @@ from app.ai.embedding_engine import embed_batch
 logger = logging.getLogger(__name__)
 
 # Allowed file types and max size
-ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".md"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 # Singleton instances (stateless, reusable)

@@ -370,21 +370,54 @@ async def _mascot_summary(
 
 
 async def _global_summary(session: AsyncSession, focus: str) -> CacheSummaryResponse:
-    artifact_count = (await session.execute(select(func.count()).select_from(CacheArtifact))).scalar() or 0
-    job_count = (await session.execute(select(func.count()).select_from(CacheJob))).scalar() or 0
+    # 1. Fetch all active locations with preloaded questions and mascots
+    loc_res = await session.execute(
+        select(Location)
+        .where(Location.status == "active")
+        .options(selectinload(Location.suggested_questions), selectinload(Location.mascot))
+    )
+    locations = list(loc_res.scalars().all())
+
+    # 2. Fetch all mascots
+    mas_res = await session.execute(select(Mascot))
+    mascots = list(mas_res.scalars().all())
+
+    # 3. Build fingerprint items for the entire system
+    items = []
+    for mascot in mascots:
+        items.append(fingerprints.build_mascot_intro_item(mascot))
+
+    for location in locations:
+        loc_intro = fingerprints.build_location_intro_item(location)
+        if loc_intro:
+            items.append(loc_intro)
+        items.extend(fingerprints.build_location_qa_items(location))
+
+    # Apply focus filters
+    if focus == "voice":
+        items = [item for item in items if item.artifact_type in {"intro_audio", "location_intro_audio", "qa_audio"}]
+    elif focus in {"questions", "prompt"}:
+        items = [item for item in items if item.artifact_type in {"qa_answer", "qa_audio"}]
+
+    # 4. Calculate statuses using the optimized bulk query
+    artifacts = await _artifact_statuses(session, items)
     latest_job = await _latest_job(session, "global", None, focus)
+
+    affected_items = sum(1 for item in artifacts if item.status != "valid")
+    total_items = len(artifacts)
+
     return CacheSummaryResponse(
         scope="global",
         target_id=None,
         focus=focus,
-        status=_summary_status([], latest_job),
-        affected_items=0,
-        total_items=int(artifact_count),
-        estimated_cost=CacheEstimatedCost(),
+        status=_summary_status(artifacts, latest_job),
+        affected_items=affected_items,
+        total_items=total_items,
+        estimated_cost=_estimate_cost(artifacts, focus),
         latest_job=latest_job,
-        artifacts=[],
+        artifacts=artifacts,
         runtime_cache=_runtime_state(),
-        target={"artifact_count": int(artifact_count), "job_count": int(job_count)},
+        target={"locations_count": len(locations), "mascots_count": len(mascots)},
     )
 
 
@@ -466,8 +499,6 @@ async def create_cache_job(
     session: AsyncSession = Depends(get_db),
 ):
     target_id = _as_uuid(payload.target_id, "target_id")
-    if payload.scope == "global" and not payload.dry_run:
-        raise HTTPException(status_code=400, detail="Chưa bật rebuild toàn hệ thống; hãy chọn một địa điểm hoặc đại sứ ảo")
 
     summary = await _summary_for_request(session, payload.scope, target_id, payload.focus)
     detected_changes = _detected_changes(summary, payload.force)

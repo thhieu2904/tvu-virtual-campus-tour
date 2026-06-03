@@ -22,6 +22,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Database,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -319,6 +320,7 @@ function CategoryDistribution({ data }: { data: DashboardStats['documents_by_cat
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [cacheJobsCount, setCacheJobsCount] = useState(0)
   const [period, setPeriod] = useState<StatsPeriod>('week')
   const [cursor, setCursor] = useState(() => toIsoDate(new Date()))
   const [loading, setLoading] = useState(true)
@@ -330,7 +332,12 @@ export default function AdminDashboardPage() {
     setError(null)
     try {
       const params = new URLSearchParams({ period, cursor })
-      setStats(await adminApi.get<DashboardStats>(`/stats?${params.toString()}`))
+      const [statsData, cacheData] = await Promise.all([
+        adminApi.get<DashboardStats>(`/stats?${params.toString()}`),
+        adminApi.get<{ total: number }>('/cache/jobs?limit=1').catch(() => ({ total: 0 })),
+      ])
+      setStats(statsData)
+      setCacheJobsCount(cacheData.total)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải thống kê')
     } finally {
@@ -374,16 +381,20 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="Tổng quan vận hành"
-        description="Theo dõi dữ liệu thật của kiosk: chỉ tính phiên tham quan khi người dùng đã đặt ít nhất một câu hỏi."
-        actions={
-          <Button variant="outline" size="sm" onClick={fetchStats} disabled={loading} className="rounded-xl">
-            <RefreshCw data-icon="inline-start" className={loading ? 'animate-spin' : ''} />
+      <div className="flex flex-col gap-1.5 pb-1">
+        <div className="flex items-center gap-4">
+          <h1 className="text-[1.6rem] font-bold tracking-tight text-[#10213f] md:text-[1.85rem]">
+            Tổng quan vận hành
+          </h1>
+          <Button variant="outline" size="sm" onClick={fetchStats} disabled={loading} className="h-8 rounded-lg px-2.5 text-xs text-[#52627f] mt-1">
+            <RefreshCw className={loading ? 'mr-1.5 h-3.5 w-3.5 animate-spin' : 'mr-1.5 h-3.5 w-3.5'} />
             Làm mới
           </Button>
-        }
-      />
+        </div>
+        <p className="text-sm text-[#52627f]">
+          Theo dõi dữ liệu thật của kiosk: chỉ tính phiên tham quan khi người dùng đã đặt ít nhất một câu hỏi.
+        </p>
+      </div>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -411,36 +422,47 @@ export default function AdminDashboardPage() {
       </AdminPanel>
 
       {loading && !stats ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
             <AdminSkeleton key={i} variant="card" className="h-28" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
           <AdminStatCard
             icon={MapPin}
             title="Địa điểm đang mở"
             value={`${stats?.locations.active ?? 0}/${stats?.locations.total ?? 0}`}
             color="#053384"
+            href="/admin/locations"
           />
           <AdminStatCard
             icon={FileText}
             title="Học liệu sẵn sàng"
             value={`${stats?.documents.ready ?? 0}/${stats?.documents.total ?? 0}`}
             color="#2c8b57"
+            href="/admin/documents"
           />
           <AdminStatCard
             icon={ImageIcon}
             title="Tư liệu media"
             value={stats?.media.total ?? 0}
             color="#b8891f"
+            href="/admin/media"
           />
           <AdminStatCard
             icon={Bot}
             title="Đại sứ ảo"
             value={stats?.mascots.total ?? 0}
             color="#6f7f9c"
+            href="/admin/mascots"
+          />
+          <AdminStatCard
+            icon={Database}
+            title="Tiến trình Cache"
+            value={cacheJobsCount}
+            color="#8b5cf6"
+            href="/admin/cache"
           />
         </div>
       )}
