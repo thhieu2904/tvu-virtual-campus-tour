@@ -24,6 +24,7 @@ export const useSpeechRecognition = (
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBrowserSupportsSpeechRecognition(false);
       return;
     }
@@ -41,6 +42,7 @@ export const useSpeechRecognition = (
       setTranscript(currentTranscript);
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error", event.error);
       setIsListening(false);

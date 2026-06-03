@@ -681,7 +681,7 @@ function AdminCacheContent() {
                     </div>
                   )}
                 </div>
-                {jobDetail.job.status === 'succeeded' && jobDetail.job.params?.dry_run && jobDetail.job.total_items > 0 && (
+                {jobDetail.job.status === 'succeeded' && Boolean(jobDetail.job.params?.dry_run) && jobDetail.job.total_items > 0 && (
                   <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4 animate-fadeIn">
                     <div>
                       <h4 className="text-sm font-semibold text-blue-900">Kết quả chạy thử (Dry Run)</h4>
@@ -993,7 +993,7 @@ function AdminCacheContent() {
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
                 <div>
                   <p className="font-semibold text-emerald-900">Hệ thống đang đồng bộ</p>
-                  <p className="mt-1">Không phát hiện thay đổi nào cần cập nhật. Nếu bạn vẫn muốn chạy lại cache, vui lòng bật "Tạo lại toàn bộ" hoặc "Chạy thử nghiệm".</p>
+                  <p className="mt-1">Không phát hiện thay đổi nào cần cập nhật. Nếu bạn vẫn muốn chạy lại cache, vui lòng bật &quot;Tạo lại toàn bộ&quot; hoặc &quot;Chạy thử nghiệm&quot;.</p>
                 </div>
               </div>
             )}
