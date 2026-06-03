@@ -106,7 +106,7 @@ async def chat(
         cached_response = qa_cache_store.get(cache_key)
         if cached_response:
             logger.info("🎯 Trúng QA Cache cho câu hỏi: %s", request.message)
-            await rag_service.save_chat_exchange(
+            exchange_saved = await rag_service.save_chat_exchange(
                 session=session,
                 session_id=request.session_id,
                 location_id=request.location_id,
@@ -116,6 +116,8 @@ async def chat(
                 input_type=request.input_type,
                 tool_calls_data=cached_response.get("tool_actions") if isinstance(cached_response.get("tool_actions"), list) else None,
             )
+            if exchange_saved:
+                await session.commit()
             return JSONResponse(content=cached_response)
 
         # 2. Không trúng QA Cache -> Gọi RAG Service

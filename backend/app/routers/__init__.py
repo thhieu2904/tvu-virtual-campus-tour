@@ -1,3 +1,3 @@
-from app.routers import admin, chat, locations
+from app.routers import admin, admin_cache, chat, locations, navigation
 
-__all__ = ["admin", "chat", "locations"]
+__all__ = ["admin", "admin_cache", "chat", "locations", "navigation"]

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import admin, chat, locations, navigation
+from app.routers import admin, admin_cache, chat, locations, navigation
 
 
 @asynccontextmanager
@@ -65,6 +65,7 @@ app.add_middleware(
 app.include_router(locations.router, prefix="/api", tags=["Locations"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(admin_cache.router, prefix="/api/admin/cache", tags=["Admin Cache"])
 app.include_router(navigation.router, prefix="/api/nav", tags=["Navigation"])
 
 

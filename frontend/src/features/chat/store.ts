@@ -171,6 +171,11 @@ function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Unexpected error";
 }
 
+// ── Session init dedup guard ──
+// Prevents concurrent sendMessage() calls from each creating a separate
+// ChatSession when sessionId is still null (e.g. rapid double-tap on kiosk).
+let _initSessionPromise: Promise<string | null> | null = null;
+
 // ── Store ──
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -201,22 +206,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /**
    * Initialize a new chat session on the first real question.
+   * Uses a module-level promise guard so concurrent callers share a single
+   * in-flight POST instead of each creating their own session.
    */
   initSession: async () => {
     const existingSessionId = get().sessionId;
     if (existingSessionId) return existingSessionId;
 
-    try {
-      const res = await fetch(`${API_URL}/api/chat/session`, { method: "POST" });
-      if (!res.ok) throw new Error("Failed to init chat session");
-      const data = await res.json();
-      set({ sessionId: data.session_id });
-      return data.session_id;
-    } catch (err) {
-      console.error(err);
-      set({ error: "Could not initialize chat session." });
-      return null;
-    }
+    // If another call is already in flight, piggyback on it
+    if (_initSessionPromise) return _initSessionPromise;
+
+    _initSessionPromise = (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/chat/session`, { method: "POST" });
+        if (!res.ok) throw new Error("Failed to init chat session");
+        const data = await res.json();
+        set({ sessionId: data.session_id });
+        return data.session_id as string | null;
+      } catch (err) {
+        console.error(err);
+        set({ error: "Could not initialize chat session." });
+        return null;
+      } finally {
+        _initSessionPromise = null;
+      }
+    })();
+    return _initSessionPromise;
   },
 
   /**

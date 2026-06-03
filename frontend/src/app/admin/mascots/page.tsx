@@ -125,7 +125,11 @@ export default function MascotsPage() {
 
   useEffect(() => {
     return () => {
-      audioRef.current?.pause()
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+        audioRef.current = null
+      }
     }
   }, [])
 
@@ -280,11 +284,22 @@ export default function MascotsPage() {
         </div>
       ) : (
         <div className="grid gap-5">
-          {mascots.map((m) => (
-            <AdminPanel key={m.id} className="overflow-hidden !rounded-2xl">
+          {mascots.map((m) => {
+            const isEditing = editId === m.id
+            const promptCanExpand = (m.personality_prompt || '').length > 280
+
+            return (
+            <AdminPanel
+              key={m.id}
+              className={`overflow-hidden !rounded-2xl transition-all ${
+                isEditing
+                  ? '!border-[#9db5df] !bg-[#f8fbff] shadow-md shadow-[#053384]/[0.08] ring-2 ring-[#7a96c9]/25'
+                  : ''
+              }`}
+            >
               <div className="grid divide-y divide-[#d7e0f0]/70 lg:grid-cols-[250px_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
                 {/* ─── LEFT: 3D Preview Frame ─── */}
-                <div className="flex flex-col bg-[#f8fbff]">
+                <div className="flex flex-col self-start bg-[#f8fbff]">
                   <div className="flex items-start justify-between gap-3 p-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#053384] to-[#0a4cb8] text-white shadow-sm">
@@ -341,11 +356,15 @@ export default function MascotsPage() {
                 </div>
 
                 {/* ─── RIGHT: Configuration ─── */}
-                <div className="flex flex-col bg-white">
+                <div className={`flex flex-col transition-colors ${isEditing ? 'bg-[#f8fbff]' : 'bg-white'}`}>
                   {/* Toolbar */}
-                  <div className="flex items-center justify-between border-b border-[#d7e0f0]/70 bg-white px-5 py-3">
+                  <div className={`flex items-center justify-between border-b px-5 py-3 transition-colors ${
+                    isEditing
+                      ? 'border-[#c7d7ee] bg-[#f8fbff]'
+                      : 'border-[#d7e0f0]/70 bg-white'
+                  }`}>
                     <h3 className="text-sm font-semibold text-[#10213f]">Hồ sơ hội thoại</h3>
-                    {editId !== m.id ? (
+                    {!isEditing ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -356,22 +375,41 @@ export default function MascotsPage() {
                         Chỉnh sửa
                       </Button>
                     ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditId(null)}
-                        className="rounded-xl h-8 px-3 text-xs text-[#52627f]"
-                      >
-                        <X className="mr-1.5 h-3.5 w-3.5" /> Đóng
-                      </Button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button onClick={requestSave} disabled={saving} size="sm" className="h-8 rounded-xl px-3 text-xs shadow-sm">
+                          <Save className="mr-1.5 h-3.5 w-3.5" /> {saving ? 'Đang lưu' : 'Lưu'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => playVoicePreview(m, true)}
+                          disabled={voicePreviewingId === m.id}
+                          className="h-8 rounded-xl px-3 text-xs"
+                        >
+                          <Volume2 className="mr-1.5 h-3.5 w-3.5" />
+                          {voicePreviewingId === m.id ? 'Đang tạo' : 'Nghe'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditId(null)}
+                          className="h-8 rounded-xl px-3 text-xs text-[#52627f]"
+                        >
+                          <X className="mr-1.5 h-3.5 w-3.5" /> Đóng
+                        </Button>
+                      </div>
                     )}
                   </div>
 
                   {/* Body */}
-                  <div className="flex-1 bg-[#fbfdff] p-4">
-                    {editId === m.id ? (
+                  <div className={`flex-1 p-4 transition-colors ${
+                    isEditing
+                      ? 'bg-[#f8fbff]'
+                      : 'bg-[#fbfdff]'
+                  }`}>
+                    {isEditing ? (
                       /* EDIT MODE */
-                      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_300px]">
+                      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_270px]">
                         <div className="grid gap-4">
                           <label className="flex flex-col gap-1.5">
                             <span className="text-sm font-semibold text-[#10213f]">Tên hiển thị</span>
@@ -417,7 +455,7 @@ export default function MascotsPage() {
                               <span className="text-[0.72rem] font-medium text-[#7a96c9]">Gemini system prompt</span>
                             </div>
                             <AdminTextarea
-                              className="min-h-[150px] font-mono text-[0.82rem] leading-relaxed bg-white shadow-sm"
+                              className="min-h-[140px] font-mono text-[0.82rem] leading-relaxed bg-white shadow-sm"
                               value={editForm.personality_prompt || ''}
                               onChange={(e) => setEditForm({ ...editForm, personality_prompt: e.target.value })}
                               placeholder="Đóng vai một đại sứ thân thiện, luôn xưng 'mình'..."
@@ -442,26 +480,6 @@ export default function MascotsPage() {
                               label="Đại sứ mặc định"
                               description="Áp dụng cho địa điểm chưa chọn mascot riêng."
                             />
-                          </div>
-
-                          <div className="grid gap-2 rounded-xl border border-[#d7e0f0] bg-white p-3 shadow-sm">
-                            <Button onClick={requestSave} disabled={saving} className="h-9 rounded-xl shadow-sm">
-                              <Save className="mr-2 h-4 w-4" /> {saving ? 'Đang lưu...' : 'Lưu hồ sơ'}
-                            </Button>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => playVoicePreview(m, true)}
-                                disabled={voicePreviewingId === m.id}
-                                className="h-9 rounded-xl"
-                              >
-                                <Volume2 className="mr-2 h-4 w-4" />
-                                {voicePreviewingId === m.id ? 'Đang tạo' : 'Nghe'}
-                              </Button>
-                              <Button variant="outline" onClick={() => setEditId(null)} className="h-9 rounded-xl">
-                                Hủy
-                              </Button>
-                            </div>
                           </div>
                         </aside>
                       </div>
@@ -492,7 +510,7 @@ export default function MascotsPage() {
                         <div className="overflow-hidden rounded-xl border border-[#d7e0f0]/80 bg-white shadow-sm shadow-[#053384]/[0.02]">
                           <div className="flex items-center justify-between border-b border-[#d7e0f0]/70 bg-[#f6f8fb] px-4 py-3">
                             <h4 className="text-sm font-bold text-[#10213f]">Personality Prompt</h4>
-                            {m.personality_prompt && m.personality_prompt.length > 150 && (
+                            {promptCanExpand && (
                               <button
                                 type="button"
                                 onClick={() => setExpandedPrompt(expandedPrompt === m.id ? null : m.id)}
@@ -508,7 +526,7 @@ export default function MascotsPage() {
                           </div>
                           <div className="bg-white p-4">
                             <p className={`whitespace-pre-wrap text-[0.82rem] leading-relaxed text-[#10213f] ${
-                              expandedPrompt === m.id ? '' : 'line-clamp-4'
+                              promptCanExpand && expandedPrompt !== m.id ? 'line-clamp-4' : ''
                             }`}>
                               {m.personality_prompt || 'Chưa thiết lập prompt tính cách.'}
                             </p>
@@ -563,7 +581,8 @@ export default function MascotsPage() {
                 </div>
               </div>
             </AdminPanel>
-          ))}
+            )
+          })}
         </div>
       )}
 

@@ -6,7 +6,7 @@ Based on plan/v1/task_1.3_database_schema.md
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -187,3 +187,72 @@ class KioskConfig(Base):
     key = Column(String(100), primary_key=True)
     value = Column(JSONB, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class CacheJob(Base):
+    __tablename__ = "cache_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_type = Column(Text, nullable=False)
+    scope = Column(Text, nullable=False)
+    target_id = Column(UUID(as_uuid=True), nullable=True)
+    focus = Column(Text, nullable=True)
+    status = Column(Text, nullable=False, default="queued")
+    requested_by = Column(Text, nullable=True)
+    params = Column(JSONB, nullable=False, default=dict)
+    detected_changes = Column(JSONB, nullable=False, default=dict)
+    total_items = Column(Integer, nullable=False, default=0)
+    processed_items = Column(Integer, nullable=False, default=0)
+    failed_items = Column(Integer, nullable=False, default=0)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    logs = relationship("CacheJobLog", back_populates="job", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_cache_jobs_status_created_at", "status", "created_at"),
+        Index("idx_cache_jobs_scope_target_created_at", "scope", "target_id", "created_at"),
+    )
+
+
+class CacheJobLog(Base):
+    __tablename__ = "cache_job_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("cache_jobs.id", ondelete="CASCADE"), nullable=False)
+    level = Column(Text, nullable=False)
+    message = Column(Text, nullable=False)
+    item_key = Column(Text, nullable=True)
+    payload = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    job = relationship("CacheJob", back_populates="logs")
+
+    __table_args__ = (
+        Index("idx_cache_job_logs_job_created_at", "job_id", "created_at"),
+    )
+
+
+class CacheArtifact(Base):
+    __tablename__ = "cache_artifacts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    artifact_type = Column(Text, nullable=False)
+    scope = Column(Text, nullable=False)
+    target_id = Column(UUID(as_uuid=True), nullable=False)
+    item_key = Column(Text, nullable=False)
+    fingerprint = Column(Text, nullable=False)
+    storage_url = Column(Text, nullable=True)
+    cache_key = Column(Text, nullable=True)
+    metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("artifact_type", "item_key", name="uix_cache_artifacts_type_item"),
+        Index("idx_cache_artifacts_scope_target_type", "scope", "target_id", "artifact_type"),
+        Index("idx_cache_artifacts_updated_at", "updated_at"),
+    )

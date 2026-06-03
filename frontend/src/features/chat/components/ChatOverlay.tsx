@@ -35,11 +35,16 @@ export default function ChatOverlay() {
   } = useChatStore();
   const [input, setInput] = useState("");
   const [dismissedSubtitleId, setDismissedSubtitleId] = useState<string | null>(null);
+  const locationId = location?.id;
+  const locationSlug = location?.slug;
+  const locationName = location?.name;
+  const locationIntroMessage = location?.introMessage;
+  const locationIntroAudioUrl = location?.intro_audio_url;
 
   const handleSend = (text: string) => {
     if (!text.trim() || isLoading) return;
     // All messages go through AI Agent — it decides whether to navigate, show media, etc.
-    sendMessage(text, location?.id);
+    sendMessage(text, locationId);
     setInput("");
   };
 
@@ -58,6 +63,7 @@ export default function ChatOverlay() {
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const prevSlugRef = useRef<string | null>(null);
+  const prevIntroSignatureRef = useRef<string | null>(null);
 
   // Chống Echo: Tự động tắt mic khi Mascot bắt đầu nói
   useEffect(() => {
@@ -70,11 +76,31 @@ export default function ChatOverlay() {
   const isTransitioning = useTourStore((s) => s.isTransitioning);
 
   useEffect(() => {
-    if (!location || isLoading || !isAppReady || isTransitioning || activeOverlay === "map") return;
+    if (!locationSlug || !locationIntroMessage || isLoading || !isAppReady || isTransitioning || activeOverlay === "map") return;
 
     const isFirstLoad = prevSlugRef.current === null;
-    const slugChanged = prevSlugRef.current !== location.slug;
-    prevSlugRef.current = location.slug;
+    const slugChanged = prevSlugRef.current !== locationSlug;
+    const introSignature = `${locationSlug}|${locationIntroMessage}|${locationIntroAudioUrl ?? ""}`;
+    const introChangedForSameSlug =
+      !slugChanged &&
+      prevIntroSignatureRef.current !== null &&
+      prevIntroSignatureRef.current !== introSignature;
+
+    prevSlugRef.current = locationSlug;
+    prevIntroSignatureRef.current = introSignature;
+
+    if (introChangedForSameSlug) {
+      const currentMessages = useChatStore.getState().messages;
+      _setMessages(
+        currentMessages.map((message) => {
+          const isLocationIntro =
+            message.role === "assistant" &&
+            (message.id.startsWith(`intro-${locationSlug}-`) || message.id.startsWith(`nav-${locationSlug}-`));
+          return isLocationIntro ? { ...message, content: locationIntroMessage } : message;
+        }),
+      );
+      return;
+    }
 
     if (!slugChanged) return;
 
@@ -82,52 +108,64 @@ export default function ChatOverlay() {
       // Lần đầu tải trang → set intro message
       _setMessages([
         {
-          id: `intro-${location.slug}-${Date.now()}`,
+          id: `intro-${locationSlug}-${Date.now()}`,
           role: "assistant",
-          content: location.introMessage,
+          content: locationIntroMessage,
         },
       ]);
-      useTourStore.getState().addVisitedLocation(location.slug);
+      useTourStore.getState().addVisitedLocation(locationSlug);
 
       // Phát âm thanh nếu đang bật tiếng và app đã start (tránh phát lén lúc Reset)
       if (
         isTTSEnabled &&
-        location.intro_audio_url &&
+        locationIntroAudioUrl &&
         useTourStore.getState().hasStarted
       ) {
-        playPrecachedAudio(location.intro_audio_url);
+        playPrecachedAudio(locationIntroAudioUrl);
       }
     } else {
-      const isRevisit = useTourStore.getState().visitedLocations.has(location.slug);
+      const isRevisit = useTourStore.getState().visitedLocations.has(locationSlug);
       
       // Nếu đã đến rồi -> Chào ngắn gọn, KHÔNG phát audio
       if (isRevisit) {
         addMessage({
-          id: `nav-${location.slug}-${Date.now()}`,
+          id: `nav-${locationSlug}-${Date.now()}`,
           role: "assistant",
-          content: `Chào mừng bạn quay lại ${location.name}.`,
+          content: `Chào mừng bạn quay lại ${locationName ?? "địa điểm này"}.`,
         });
       } else {
         // User tự bấm map hoặc AI điều hướng → append intro đầy đủ
         addMessage({
-          id: `nav-${location.slug}-${Date.now()}`,
+          id: `nav-${locationSlug}-${Date.now()}`,
           role: "assistant",
-          content: `${location.introMessage}`,
+          content: `${locationIntroMessage}`,
         });
         
-        useTourStore.getState().addVisitedLocation(location.slug);
+        useTourStore.getState().addVisitedLocation(locationSlug);
         
         // Phát âm thanh
         if (
           isTTSEnabled &&
-          location.intro_audio_url &&
+          locationIntroAudioUrl &&
           useTourStore.getState().hasStarted
         ) {
-          playPrecachedAudio(location.intro_audio_url);
+          playPrecachedAudio(locationIntroAudioUrl);
         }
       }
     }
-  }, [location?.slug, isLoading, isAppReady, isTTSEnabled, isTransitioning, activeOverlay]);
+  }, [
+    locationSlug,
+    locationName,
+    locationIntroMessage,
+    locationIntroAudioUrl,
+    isLoading,
+    isAppReady,
+    isTTSEnabled,
+    isTransitioning,
+    activeOverlay,
+    addMessage,
+    _setMessages,
+  ]);
 
   // Tự động cuộn xuống cuối (Transcript)
   useEffect(() => {
@@ -212,24 +250,26 @@ export default function ChatOverlay() {
                     <div className="overflow-y-auto px-6 pb-10 flex-1 whitespace-pre-wrap text-pretty text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <ReactMarkdown
                         components={{
-                          p: ({ node, ...props }) => (
-                            <p className="mb-2 text-pretty last:mb-0" {...props} />
-                          ),
-                          strong: ({ node, ...props }) => (
-                            <strong
-                              className="font-bold text-blue-600"
-                              {...props}
-                            />
-                          ),
-                          ul: ({ node, ...props }) => (
-                            <ul className="list-disc pl-5 mb-2" {...props} />
-                          ),
-                          ol: ({ node, ...props }) => (
-                            <ol className="list-decimal pl-5 mb-2" {...props} />
-                          ),
-                          li: ({ node, ...props }) => (
-                            <li className="mb-1" {...props} />
-                          ),
+                          p: ({ node, ...props }) => {
+                            void node;
+                            return <p className="mb-2 text-pretty last:mb-0" {...props} />;
+                          },
+                          strong: ({ node, ...props }) => {
+                            void node;
+                            return <strong className="font-bold text-blue-600" {...props} />;
+                          },
+                          ul: ({ node, ...props }) => {
+                            void node;
+                            return <ul className="list-disc pl-5 mb-2" {...props} />;
+                          },
+                          ol: ({ node, ...props }) => {
+                            void node;
+                            return <ol className="list-decimal pl-5 mb-2" {...props} />;
+                          },
+                          li: ({ node, ...props }) => {
+                            void node;
+                            return <li className="mb-1" {...props} />;
+                          },
                         }}
                       >
                         {msg.content}
@@ -496,24 +536,26 @@ export default function ChatOverlay() {
                         <div className="whitespace-pre-wrap text-pretty [&>p]:mb-2 [&>p:last-child]:mb-0">
                           <ReactMarkdown
                             components={{
-                              p: ({ node, ...props }) => (
-                                <p className="mb-2 text-pretty last:mb-0" {...props} />
-                              ),
-                              strong: ({ node, ...props }) => (
-                                <strong
-                                  className="font-bold text-blue-300"
-                                  {...props}
-                                />
-                              ),
-                              ul: ({ node, ...props }) => (
-                                <ul className="list-disc pl-5 mb-2" {...props} />
-                              ),
-                              ol: ({ node, ...props }) => (
-                                <ol className="list-decimal pl-5 mb-2" {...props} />
-                              ),
-                              li: ({ node, ...props }) => (
-                                <li className="mb-1" {...props} />
-                              ),
+                              p: ({ node, ...props }) => {
+                                void node;
+                                return <p className="mb-2 text-pretty last:mb-0" {...props} />;
+                              },
+                              strong: ({ node, ...props }) => {
+                                void node;
+                                return <strong className="font-bold text-blue-300" {...props} />;
+                              },
+                              ul: ({ node, ...props }) => {
+                                void node;
+                                return <ul className="list-disc pl-5 mb-2" {...props} />;
+                              },
+                              ol: ({ node, ...props }) => {
+                                void node;
+                                return <ol className="list-decimal pl-5 mb-2" {...props} />;
+                              },
+                              li: ({ node, ...props }) => {
+                                void node;
+                                return <li className="mb-1" {...props} />;
+                              },
                             }}
                           >
                             {msg.content}

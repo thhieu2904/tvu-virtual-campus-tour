@@ -540,10 +540,16 @@ async def save_chat_exchange(
     response_time_ms: int,
     input_type: str = "text",
     tool_calls_data: list[dict] | None = None,
-) -> None:
-    """Persist a chat exchange for analytics when the answer bypasses RAG generation."""
+) -> bool:
+    """Persist a chat exchange for analytics when the answer bypasses RAG generation.
+
+    Note: This does NOT commit the session. Callers are responsible for calling
+    ``await session.commit()`` after a ``True`` return so they retain control
+    over the transaction boundary. On failure, this rolls back and returns
+    ``False`` so callers do not commit a failed transaction.
+    """
     if not session_id:
-        return
+        return False
 
     try:
         await _save_chat_messages(
@@ -556,9 +562,11 @@ async def save_chat_exchange(
             input_type=input_type,
             tool_calls_data=tool_calls_data,
         )
-        await session.commit()
+        return True
     except Exception as e:
+        await session.rollback()
         logger.warning(f"Failed to save cached chat messages: {e}")
+        return False
 
 
 async def _save_chat_messages(

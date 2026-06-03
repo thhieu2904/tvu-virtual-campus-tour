@@ -7,6 +7,7 @@ import json
 import logging
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -183,6 +184,9 @@ class TTSKeyCache:
     def __init__(self):
         self._keys: set[str] = set()
         self._loaded = False
+        self._loaded_at: datetime | None = None
+        self._last_error: str | None = None
+        self._load_attempts = 0
         self._lock = Lock()
 
     @property
@@ -198,7 +202,27 @@ class TTSKeyCache:
         with self._lock:
             self._keys.add(key)
 
-    async def load_from_r2(self, prefix: str = "tts-cache/") -> int:
+    async def load_from_r2(self, prefix: str = "tts-cache/", max_attempts: int = 1, retry_delay_seconds: float = 0.5) -> int:
+        last_error: Exception | None = None
+
+        for attempt in range(max(1, max_attempts)):
+            with self._lock:
+                self._load_attempts += 1
+
+            try:
+                return await self._load_from_r2_once(prefix)
+            except Exception as exc:
+                last_error = exc
+                with self._lock:
+                    self._loaded = False
+                    self._loaded_at = None
+                    self._last_error = str(exc)
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(retry_delay_seconds)
+
+        raise last_error or RuntimeError("TTS key cache load failed")
+
+    async def _load_from_r2_once(self, prefix: str) -> int:
         client = storage_service._get_s3_client()
         bucket = storage_service._get_bucket()
         keys: set[str] = set()
@@ -224,7 +248,19 @@ class TTSKeyCache:
         with self._lock:
             self._keys = keys
             self._loaded = True
+            self._loaded_at = datetime.now(timezone.utc)
+            self._last_error = None
             return len(self._keys)
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "loaded": self._loaded,
+                "count": len(self._keys),
+                "load_attempts": self._load_attempts,
+                "loaded_at": self._loaded_at,
+                "last_error": self._last_error,
+            }
 
     def __len__(self) -> int:
         with self._lock:
@@ -243,7 +279,7 @@ async def init_caches() -> None:
     logger.info("QA cache loaded: %s entries", qa_count)
 
     try:
-        tts_count = await tts_key_cache.load_from_r2()
+        tts_count = await tts_key_cache.load_from_r2(max_attempts=2)
         logger.info("TTS key cache loaded: %s entries", tts_count)
     except Exception as exc:
         logger.warning("Could not load TTS key cache from R2; using R2 HEAD fallback: %s", exc)

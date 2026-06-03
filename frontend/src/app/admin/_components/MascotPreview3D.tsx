@@ -15,6 +15,7 @@ export type MascotPreviewAnimation =
 /* ─── Lazy-loaded Three.js modules (singleton) ─── */
 
 let threeLoaded = false
+let threeLoadPromise: Promise<void> | null = null
 let CanvasComponent: React.ComponentType<any> | null = null
 let useGLTFHook: ((url: string) => any) | null = null
 let useAnimationsHook: ((animations: any, ref: any) => any) | null = null
@@ -190,7 +191,11 @@ const MascotPreview3D = memo(function MascotPreview3D({
 
   useEffect(() => {
     if (threeLoaded) return
-    Promise.all([
+    if (threeLoadPromise) {
+      threeLoadPromise.then(() => setReady(true)).catch(() => setError(true))
+      return
+    }
+    threeLoadPromise = Promise.all([
       import('@react-three/fiber'),
       import('@react-three/drei'),
       import('three'),
@@ -205,6 +210,7 @@ const MascotPreview3D = memo(function MascotPreview3D({
         setReady(true)
       })
       .catch(() => setError(true))
+      .finally(() => { threeLoadPromise = null })
   }, [])
 
   if (error) {

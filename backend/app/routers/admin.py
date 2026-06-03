@@ -1,5 +1,6 @@
 """Protected Admin API endpoints for content management."""
 
+import logging
 import base64
 import itertools
 import json
@@ -35,6 +36,8 @@ from app.schemas.admin import (
 )
 from app.schemas.document import DocumentStatusResponse, IngestResponse
 from app.services import ingest_service, pathfinding_service, storage_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(verify_supabase_token)])
 
@@ -692,6 +695,7 @@ async def preview_mascot_voice(payload: MascotVoicePreviewRequest):
                 if exists:
                     tts_key_cache.add(r2_key)
             if exists:
+                logger.info("Voice preview R2 cache HIT: voice=%s name=%s key=%s", voice, name, r2_key)
                 return {
                     "audio_url": storage_service.get_public_url(r2_key),
                     "provider": "r2-cache",
@@ -703,6 +707,7 @@ async def preview_mascot_voice(payload: MascotVoicePreviewRequest):
         # R2 HEAD can fail in local/dev environments. Preview should still work via synthesize fallback.
         pass
 
+    logger.info("Voice preview R2 cache MISS: voice=%s name=%s → synthesizing", voice, name)
     try:
         result = await synthesize(
             preview_text,

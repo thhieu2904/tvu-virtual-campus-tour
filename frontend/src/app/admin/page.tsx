@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminApi } from '@/lib/admin-api'
 import {
@@ -21,7 +22,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  PieChart,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -78,9 +78,39 @@ function formatRange(stats: DashboardStats | null) {
   return `${start} - ${end}`
 }
 
-function SessionsBarChart({ data }: { data: DashboardStats['sessions_by_day'] }) {
+function getReadableTextColor(color: string) {
+  const hex = color.replace('#', '')
+  if (hex.length !== 6) return '#ffffff'
+  const red = Number.parseInt(hex.slice(0, 2), 16)
+  const green = Number.parseInt(hex.slice(2, 4), 16)
+  const blue = Number.parseInt(hex.slice(4, 6), 16)
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+  return luminance > 0.58 ? '#10213f' : '#ffffff'
+}
+
+function SessionsTrendChart({ data }: { data: DashboardStats['sessions_by_day'] }) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const total = data.reduce((sum, item) => sum + item.count, 0)
   const max = Math.max(...data.map((item) => item.count), 1)
+  const width = 760
+  const height = 300
+  const pad = { left: 42, right: 18, top: 24, bottom: 42 }
+  const plotWidth = width - pad.left - pad.right
+  const plotHeight = height - pad.top - pad.bottom
+  const xFor = (index: number) => pad.left + (data.length <= 1 ? 0 : (index / (data.length - 1)) * plotWidth)
+  const yFor = (count: number) => pad.top + plotHeight - (count / max) * plotHeight
+  const points = data.map((item, index) => ({ ...item, x: xFor(index), y: yFor(item.count) }))
+  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${pad.top + plotHeight} L ${points[0].x} ${pad.top + plotHeight} Z`
+    : ''
+  const tickIndexes = data.length <= 10
+    ? data.map((_, index) => index)
+    : [0, 6, 13, 20, 27, data.length - 1].filter((index, pos, arr) => index < data.length && arr.indexOf(index) === pos)
+  const activeIndex = selectedIndex ?? hoverIndex
+  const activePoint = activeIndex === null ? null : points[activeIndex]
+  const highlightedPoints = points.filter((point) => point.count === max || point.count >= Math.max(2, Math.ceil(max * 0.45)))
 
   if (data.length === 0 || total === 0) {
     return (
@@ -100,77 +130,121 @@ function SessionsBarChart({ data }: { data: DashboardStats['sessions_by_day'] })
         <span className="text-xs font-semibold uppercase tracking-wide text-[#7a96c9]">Tổng trong kỳ</span>
         <span className="text-lg font-bold tabular-nums text-[#053384]">{total} phiên</span>
       </div>
-      <div className="grid min-h-[260px] grid-cols-[36px_minmax(0,1fr)] gap-3">
-        <div className="flex flex-col justify-between pb-8 text-right text-[0.7rem] font-semibold text-[#7a96c9]">
-          <span>{max}</span>
-          <span>{Math.ceil(max / 2)}</span>
-          <span>0</span>
-        </div>
-        <div className="relative">
-          <div className="absolute inset-x-0 top-0 h-px bg-[#e5ecf6]" />
-          <div className="absolute inset-x-0 top-1/2 h-px bg-[#e5ecf6]" />
-          <div className="absolute inset-x-0 bottom-8 h-px bg-[#d7e0f0]" />
-          <div className="relative flex h-full items-end gap-1.5 pb-8 md:gap-2.5">
-            {data.map((day) => {
-              const height = Math.max((day.count / max) * 100, 10)
-              return (
-                <div key={day.date} className="group flex min-w-0 flex-1 flex-col items-center gap-2">
-                  <div className="pointer-events-none rounded-lg bg-[#10213f] px-2 py-1 text-[0.68rem] font-semibold text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100">
-                    {day.count} phiên
-                  </div>
-                  <div className="flex h-[190px] w-full items-end justify-center">
-                    <div
-                      className={`w-full max-w-[42px] rounded-t-xl transition-all duration-300 ${
-                        day.count > 0
-                          ? 'bg-gradient-to-t from-[#053384] to-[#5b8bed] shadow-sm shadow-[#053384]/20'
-                          : 'bg-[#dce6f5]'
-                      }`}
-                      style={{ height: day.count > 0 ? `${height}%` : '8px' }}
-                    />
-                  </div>
-                  <span className="w-full truncate text-center text-[0.66rem] font-medium text-[#52627f]">
-                    {formatShortDate(day.date)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      <div className="overflow-hidden rounded-xl border border-[#d7e0f0]/70 bg-white">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-[300px] w-full"
+          onMouseLeave={() => setHoverIndex(null)}
+        >
+          <defs>
+            <linearGradient id="sessionArea" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#5b8bed" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#5b8bed" stopOpacity="0.03" />
+            </linearGradient>
+            <linearGradient id="sessionLine" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stopColor="#053384" />
+              <stop offset="100%" stopColor="#5b8bed" />
+            </linearGradient>
+          </defs>
+          {[max, Math.ceil(max / 2), 0].map((value) => {
+            const y = yFor(value)
+            return (
+              <g key={value}>
+                <line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="#e5ecf6" strokeWidth="1" />
+                <text x={pad.left - 12} y={y + 4} textAnchor="end" pointerEvents="none" className="fill-[#7a96c9] text-[11px] font-semibold">
+                  {value}
+                </text>
+              </g>
+            )
+          })}
+          <path d={areaPath} fill="url(#sessionArea)" pointerEvents="none" />
+          <path d={linePath} fill="none" stroke="url(#sessionLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
+          {points.map((point, index) => (
+            <rect
+              key={`hit-${point.date}`}
+              x={point.x - Math.max(16, plotWidth / Math.max(data.length - 1, 1) / 2)}
+              y={pad.top}
+              width={Math.max(32, plotWidth / Math.max(data.length - 1, 1))}
+              height={plotHeight + pad.bottom - 6}
+              fill="transparent"
+              pointerEvents="all"
+              className="cursor-pointer"
+              onMouseEnter={() => setHoverIndex(index)}
+              onClick={() => setSelectedIndex(selectedIndex === index ? null : index)}
+            >
+              <title>{`${formatShortDate(point.date)}: ${point.count} phiên`}</title>
+            </rect>
+          ))}
+          {points.map((point) => (
+            <circle
+              key={point.date}
+              cx={point.x}
+              cy={point.y}
+              r={point.count > 0 ? 4.5 : 3}
+              fill={point.count > 0 ? '#053384' : '#dce6f5'}
+              stroke="#ffffff"
+              strokeWidth="2"
+              pointerEvents="none"
+            >
+              <title>{`${formatShortDate(point.date)}: ${point.count} phiên`}</title>
+            </circle>
+          ))}
+          {highlightedPoints.map((point) => (
+            <text
+              key={`label-${point.date}`}
+              x={point.x}
+              y={Math.max(point.y - 12, 14)}
+              textAnchor="middle"
+              pointerEvents="none"
+              className="fill-[#10213f] text-[11px] font-bold"
+            >
+              {point.count}
+            </text>
+          ))}
+          {activePoint && (
+            <g pointerEvents="none">
+              <line x1={activePoint.x} x2={activePoint.x} y1={pad.top} y2={pad.top + plotHeight} stroke="#7a96c9" strokeDasharray="4 4" strokeWidth="1.5" />
+              <circle cx={activePoint.x} cy={activePoint.y} r="7" fill="#ffffff" stroke="#053384" strokeWidth="3" />
+              <g transform={`translate(${Math.min(Math.max(activePoint.x - 58, 54), width - 126)} ${Math.max(activePoint.y - 58, 14)})`}>
+                <rect width="116" height="44" rx="10" fill="#10213f" />
+                <text x="12" y="18" pointerEvents="none" className="fill-white text-[11px] font-semibold">
+                  {formatShortDate(activePoint.date)}
+                </text>
+                <text x="12" y="34" pointerEvents="none" className="fill-white text-[13px] font-bold">
+                  {activePoint.count} phiên có hỏi
+                </text>
+              </g>
+            </g>
+          )}
+          {tickIndexes.map((index) => {
+            const point = points[index]
+            return (
+              <text key={`tick-${point.date}`} x={point.x} y={height - 14} textAnchor="middle" pointerEvents="none" className="fill-[#52627f] text-[11px] font-semibold">
+                {formatShortDate(point.date)}
+              </text>
+            )
+          })}
+        </svg>
       </div>
     </div>
   )
 }
 
-function CategoryDonut({ data }: { data: DashboardStats['documents_by_category'] }) {
+function CategoryDistribution({ data }: { data: DashboardStats['documents_by_category'] }) {
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const total = data.reduce((sum, item) => sum + item.count, 0)
-  const radius = 44
-  const circumference = 2 * Math.PI * radius
-  const segments = data.reduce<{
-    offset: number
-    items: {
-      categoryName: string
-      color: string
-      strokeDasharray: string
-      strokeDashoffset: number
-    }[]
-  }>(
-    (acc, item) => {
-      const length = total > 0 ? (item.count / total) * circumference : 0
-      return {
-        offset: acc.offset + length,
-        items: [
-          ...acc.items,
-          {
-            categoryName: item.category_name,
-            color: item.color,
-            strokeDasharray: `${length} ${circumference - length}`,
-            strokeDashoffset: -acc.offset,
-          },
-        ],
-      }
-    },
-    { offset: 0, items: [] },
-  ).items
+  const sortedData = [...data].filter((item) => item.count > 0).sort((a, b) => b.count - a.count)
+  const primaryItems = sortedData.slice(0, 7)
+  const overflowCount = sortedData.slice(7).reduce((sum, item) => sum + item.count, 0)
+  const segments = (overflowCount > 0
+    ? [...primaryItems, { category_name: 'Khác', color: '#94a3b8', count: overflowCount }]
+    : primaryItems
+  ).map((item) => ({
+    categoryName: item.category_name,
+    color: item.color,
+    count: item.count,
+    percent: total > 0 ? Math.round((item.count / total) * 100) : 0,
+  }))
 
   if (total === 0) {
     return (
@@ -183,45 +257,59 @@ function CategoryDonut({ data }: { data: DashboardStats['documents_by_category']
   }
 
   return (
-    <div className="grid gap-5 p-5 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
-      <div className="relative mx-auto size-44">
-        <svg viewBox="0 0 120 120" className="size-full -rotate-90">
-          <circle cx="60" cy="60" r={radius} fill="none" stroke="#eef3fb" strokeWidth="16" />
+    <div className="space-y-3 p-5">
+      <div className="rounded-xl border border-[#d7e0f0]/70 bg-white p-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#7a96c9]">Tổng học liệu</span>
+          <span className="text-xl font-bold tabular-nums text-[#053384]">{total}</span>
+        </div>
+        <div className="flex h-7 overflow-hidden rounded-full bg-[#e8eef8]">
           {segments.map((item) => {
+            const selected = activeCategory === item.categoryName
             return (
-              <circle
+              <button
                 key={item.categoryName}
-                cx="60"
-                cy="60"
-                r={radius}
-                fill="none"
-                stroke={item.color}
-                strokeWidth="16"
-                strokeDasharray={item.strokeDasharray}
-                strokeDashoffset={item.strokeDashoffset}
-              />
+                type="button"
+                aria-label={`${item.categoryName}: ${item.count} học liệu (${item.percent}%)`}
+                className={`flex min-w-[32px] items-center justify-center border-r border-white/80 px-1 text-[0.68rem] font-bold tabular-nums transition-all last:border-r-0 hover:brightness-105 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#053384] ${
+                  selected ? 'scale-y-125 shadow-sm' : activeCategory ? 'opacity-40' : 'opacity-90'
+                }`}
+                style={{ flexGrow: item.count, backgroundColor: item.color, color: getReadableTextColor(item.color) }}
+                onClick={() => setActiveCategory(selected ? null : item.categoryName)}
+              >
+                {item.percent}%
+                <title>{`${item.categoryName}: ${item.count} học liệu (${item.percent}%)`}</title>
+              </button>
             )
           })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-2xl font-bold text-[#10213f]">{total}</span>
-          <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[#7a96c9]">học liệu</span>
         </div>
       </div>
 
-      <div className="grid gap-3">
-        {data.map((item) => {
-          const percent = Math.round((item.count / total) * 100)
+      <div className="overflow-hidden rounded-xl border border-[#d7e0f0]/70 bg-white">
+        {segments.map((item) => {
+          const selected = activeCategory === item.categoryName
           return (
-            <div key={item.category_name} className="flex items-center justify-between gap-3 rounded-xl border border-[#d7e0f0]/70 bg-[#f8fbff] px-3 py-2.5">
+            <button
+              key={`legend-${item.categoryName}`}
+              type="button"
+              onClick={() => setActiveCategory(selected ? null : item.categoryName)}
+              className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-[#d7e0f0]/60 px-3 py-2 text-left transition-all last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#053384] ${
+                selected
+                  ? 'bg-[#f8fbff] shadow-[inset_3px_0_0_var(--category-color)]'
+                  : activeCategory
+                    ? 'opacity-55'
+                    : 'hover:bg-[#f8fbff]'
+              }`}
+              style={{ '--category-color': item.color } as CSSProperties}
+            >
               <div className="flex min-w-0 items-center gap-2">
-                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="truncate text-sm font-semibold text-[#10213f]">{item.category_name}</span>
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                <span className="truncate text-sm font-semibold text-[#10213f]">{item.categoryName}</span>
               </div>
               <span className="shrink-0 text-sm font-bold tabular-nums text-[#52627f]">
-                {item.count} <span className="font-medium text-[#7a96c9]">({percent}%)</span>
+                {item.count}
               </span>
-            </div>
+            </button>
           )
         })}
       </div>
@@ -257,13 +345,17 @@ export default function AdminDashboardPage() {
   const chartData = stats?.sessions_by_day ?? []
   const chartTotal = chartData.reduce((sum, item) => sum + item.count, 0)
   const currentCursor = useMemo(() => new Date(cursor), [cursor])
-  const periodLabel = period === 'week' ? 'Tuần' : 'Tháng'
+  const displayedPeriod = stats?.stats_period.period ?? period
+  const periodLabel = displayedPeriod === 'week' ? 'Tuần' : 'Tháng'
 
   useEffect(() => {
     if (!stats || autoCursorAdjusted || chartTotal > 0 || !stats.latest_engaged_session_date) return
     if (stats.engaged_sessions > 0 && stats.latest_engaged_session_date !== cursor) {
-      setAutoCursorAdjusted(true)
-      setCursor(stats.latest_engaged_session_date)
+      const nextCursor = stats.latest_engaged_session_date
+      queueMicrotask(() => {
+        setAutoCursorAdjusted(true)
+        setCursor(nextCursor)
+      })
     }
   }, [autoCursorAdjusted, chartTotal, cursor, stats])
 
@@ -275,6 +367,10 @@ export default function AdminDashboardPage() {
   }
 
   const setToday = () => setCursor(toIsoDate(new Date()))
+  const changePeriod = (nextPeriod: StatsPeriod) => {
+    setAutoCursorAdjusted(false)
+    setPeriod(nextPeriod)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -360,7 +456,7 @@ export default function AdminDashboardPage() {
                   <button
                     key={item}
                     type="button"
-                    onClick={() => setPeriod(item)}
+                    onClick={() => changePeriod(item)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                       period === item ? 'bg-[#053384] text-white' : 'text-[#52627f] hover:bg-[#eef3fb]'
                     }`}
@@ -374,7 +470,7 @@ export default function AdminDashboardPage() {
               </Button>
               <Button variant="outline" size="sm" onClick={setToday} className="h-8 rounded-xl">
                 <CalendarDays className="mr-1.5 h-4 w-4" />
-                Hôm nay
+                {period === 'week' ? 'Tuần hiện tại' : 'Tháng hiện tại'}
               </Button>
               <Button variant="outline" size="icon" onClick={() => shiftRange(1)} className="size-8 rounded-xl">
                 <ChevronRight className="h-4 w-4" />
@@ -382,15 +478,14 @@ export default function AdminDashboardPage() {
             </div>
           }
         >
-          <SessionsBarChart data={chartData} />
+          <SessionsTrendChart data={chartData} />
         </AdminPanel>
 
         <AdminPanel
           title="Cơ cấu học liệu"
           description="Tỷ trọng tài liệu theo nhóm nội dung phục vụ RAG."
-          action={<PieChart className="h-5 w-5 text-[#7a96c9]" />}
         >
-          <CategoryDonut data={stats?.documents_by_category ?? []} />
+          <CategoryDistribution data={stats?.documents_by_category ?? []} />
         </AdminPanel>
       </div>
 
