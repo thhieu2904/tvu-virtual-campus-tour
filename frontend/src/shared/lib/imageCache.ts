@@ -54,7 +54,9 @@ export function preloadPanorama(
   // Already cached — resolve immediately
   const existing = cache.get(url);
   if (existing?.status === "ready") return Promise.resolve();
-  // Already loading — return existing promise (but attach new progress if provided)
+  // Already loading — return existing promise ONLY when the caller doesn't need
+  // its own progress/abort.  When PanoramaViewer passes onProgress it must drive
+  // the download itself so the progress UI works and its AbortSignal is honoured.
   if (existing?.status === "loading" && !onProgress) return existing.promise;
 
   const promise = (async () => {
@@ -110,10 +112,18 @@ export function preloadPanorama(
         cache.delete(url);
         throw err;
       }
-      cache.set(url, { status: "error", promise: Promise.reject(err) });
+      // Don't cache HTTP errors either — allow caller to retry or fall through
+      // to Pannellum's own loader.  Caching a rejected promise caused
+      // "Uncaught (in promise)" errors because nothing ever .catch()-ed them.
+      cache.delete(url);
       throw err;
     }
   })();
+
+  // Suppress unhandled rejection on the cached promise — callers that care
+  // will attach their own .catch().  Without this, React strict-mode
+  // double-invocation can surface spurious "Uncaught (in promise)" errors.
+  promise.catch(() => {});
 
   cache.set(url, { status: "loading", promise });
   return promise;

@@ -83,20 +83,21 @@ export default function TourPage() {
   }, [isLoading, location, isPanoramaReady, isAvatarReady, isAppReady, setAppReady]);
 
   // Safety timeout: force ready if a third-party asset event never fires.
-  // Only activates AFTER user clicks Start — no reason to force-bypass while still on the welcome screen.
+  // This must run before Start too; otherwise a missed panorama/avatar event can
+  // leave the Start button disabled forever.
   useEffect(() => {
-    if (!isLoading && location && !isAppReady && hasStarted) {
+    if (!isLoading && location && !isAppReady) {
       const safety = setTimeout(() => {
         if (!useTourStore.getState().isAppReady) {
-          console.warn("[Page] Safety timeout — forcing app ready");
           const state = useTourStore.getState();
           state.setPanoramaReady(true);
           state.setAvatarReady(true);
           state.setAppReady(true);
         }
-      }, 12000);
+      }, 15000);
       return () => clearTimeout(safety);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hasStarted kept to preserve array size across renders
   }, [isLoading, location, isAppReady, hasStarted]);
 
   // Preload 360° images of adjacent locations into browser cache.
@@ -126,21 +127,31 @@ export default function TourPage() {
     }, 2000);
 
     // Phase 2: All remaining active locations (6s delay — background prefetch)
+    // Keep this sequential so large 360 images do not starve visible assets.
+    let preloadCancelled = false;
     const allTimer = setTimeout(() => {
-      const { locations } = useTourStore.getState();
-      locations.forEach((loc) => {
-        if (loc.status !== "active") return;
-        if (preloadedSlugsRef.current.has(loc.slug)) return;
-        if (loc.backgroundUrl) {
+      void (async () => {
+        const { locations } = useTourStore.getState();
+        for (const loc of locations) {
+          if (preloadCancelled) return;
+          if (loc.status !== "active") continue;
+          if (preloadedSlugsRef.current.has(loc.slug)) continue;
+          if (!loc.backgroundUrl) continue;
+
           preloadedSlugsRef.current.add(loc.slug);
-          preloadPanorama(resolveR2Url(loc.backgroundUrl)).catch(() => {
+          await preloadPanorama(resolveR2Url(loc.backgroundUrl)).catch(() => {
             preloadedSlugsRef.current.delete(loc.slug);
           });
+
+          if (!preloadCancelled) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
         }
-      });
+      })();
     }, 6000);
 
     return () => {
+      preloadCancelled = true;
       clearTimeout(adjacentTimer);
       clearTimeout(allTimer);
     };
@@ -154,8 +165,6 @@ export default function TourPage() {
 
   const handleAvatarModelLoading = useCallback(() => {
     setAvatarReady(false);
-    // NOTE: Do NOT reset isAppReady here — the loading gate should only block on INITIAL load.
-    // During navigation, the map overlay already covers the transition.
   }, [setAvatarReady]);
 
   const handleAvatarModelLoaded = useCallback(() => {

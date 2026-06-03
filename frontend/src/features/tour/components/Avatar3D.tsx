@@ -162,13 +162,14 @@ const AvatarModel = memo(function AvatarModel({
 
   useEffect(() => {
     if (hasNotifiedLoaded.current) return;
+    hasNotifiedLoaded.current = true;
 
-    const frame = requestAnimationFrame(() => {
-      hasNotifiedLoaded.current = true;
+    // Use queueMicrotask instead of requestAnimationFrame — RAF inside R3F's
+    // separate React root can be cancelled before firing during strict-mode
+    // double-mount or concurrent rendering.
+    queueMicrotask(() => {
       onModelLoaded?.();
     });
-
-    return () => cancelAnimationFrame(frame);
   }, [onModelLoaded, scene, animations]);
 
   useEffect(() => {

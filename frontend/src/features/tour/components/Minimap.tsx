@@ -3,13 +3,13 @@
 import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
-import Image from "next/image";
 import { Info, Map as MapIcon, Navigation, Route, X } from "lucide-react";
 
 import CampusMap, {
   getCoordsBySlug,
   getPathPoints,
 } from "./CampusMap";
+import MapImage from "./MapImage";
 
 const AStarExplainer = lazy(() => import("./AStarExplainer"));
 
@@ -279,13 +279,11 @@ export default function Minimap() {
                     left: `${left}%`,
                   }}
                 >
-                  <Image
-                    src="/map_v3.png"
+                  <MapImage
                     alt="Mini TVU Map"
-                    fill
-                    sizes="200px"
-                    priority
-                    className="object-cover"
+                    className="absolute inset-0 h-full w-full object-cover"
+                    draggable={false}
+                    showFallback={false}
                   />
                   {visibleMapNodes.map((loc) => {
                     const coords = getCoordsBySlug(loc.slug);

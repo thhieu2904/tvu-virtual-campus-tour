@@ -45,7 +45,8 @@ show_media_decl = types.FunctionDeclaration(
     description=(
         "Mở InfoPanel để hiển thị hình ảnh hoặc video giới thiệu địa điểm hiện tại. "
         "Gọi khi user hỏi về hình ảnh, video, hoặc muốn xem trực quan về nơi đang tham quan. "
-        "Có thể tìm kiếm media cụ thể bằng cách trích xuất từ khóa từ câu hỏi của user."
+        "Có thể tìm kiếm media cụ thể bằng cách trích xuất từ khóa từ câu hỏi của user. "
+        "QUAN TRỌNG: Nếu user yêu cầu xem ảnh/video của một khu vực KHÁC với hiện tại, BẠN PHẢI GỌI ĐỒNG THỜI 2 tool cùng lúc: navigate_to (để đi tới đó) VÀ show_media (để mở ảnh)."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,

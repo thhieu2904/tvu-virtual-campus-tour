@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from google.genai import types
+from google.api_core.exceptions import ResourceExhausted
 
 from app.ai.core_client import get_client
 from app.cache import embedding_cache
@@ -13,11 +14,42 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Retry config for 429 RESOURCE_EXHAUSTED
+_MAX_RETRIES = 3
+_BASE_DELAY = 1.0  # seconds — will double each retry (1s → 2s → 4s)
+
+
+async def _call_with_retry(func, *args, **kwargs):
+    """
+    Call an async-wrapped function with exponential backoff on 429 errors.
+    Retries up to _MAX_RETRIES times before re-raising.
+    """
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            return await asyncio.to_thread(func, *args, **kwargs)
+        except (ResourceExhausted, Exception) as e:
+            # Check if it's a 429 / RESOURCE_EXHAUSTED error
+            is_rate_limit = (
+                isinstance(e, ResourceExhausted)
+                or "429" in str(e)
+                or "RESOURCE_EXHAUSTED" in str(e)
+            )
+            if is_rate_limit and attempt < _MAX_RETRIES:
+                delay = _BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    f"⏳ Rate limited (429), retrying in {delay:.1f}s "
+                    f"(attempt {attempt + 1}/{_MAX_RETRIES})..."
+                )
+                await asyncio.sleep(delay)
+                continue
+            raise
+
 
 async def embed_query(text: str) -> list[float]:
     """
     Embeds a user query into a 768-dim vector.
     Uses task_type=QUESTION_ANSWERING for queries.
+    Retries automatically on 429 RESOURCE_EXHAUSTED.
     """
     cached_embedding = embedding_cache.get(text)
     if cached_embedding is not None:
@@ -27,12 +59,7 @@ async def embed_query(text: str) -> list[float]:
     client = get_client()
     settings = get_settings()
 
-    # Using asyncio.to_thread since the genai SDK might be blocking,
-    # or use the async client if available (google.genai exposes standard synchronous methods by default
-    # but we can wrap them in asyncio if needed, or wait for native async support).
-    # Since genai Client currently does not have native async embed_content in some versions,
-    # we'll use asyncio.to_thread for safety to avoid blocking the event loop.
-    result = await asyncio.to_thread(
+    result = await _call_with_retry(
         client.models.embed_content,
         model=settings.GEMINI_EMBEDDING_MODEL,
         contents=text,
@@ -50,6 +77,7 @@ async def embed_document(text: str, title: str | None = None) -> list[float]:
     """
     Embeds a document chunk into a 768-dim vector.
     Uses task_type=RETRIEVAL_DOCUMENT for chunks.
+    Retries automatically on 429 RESOURCE_EXHAUSTED.
     """
     client = get_client()
     settings = get_settings()
@@ -61,7 +89,7 @@ async def embed_document(text: str, title: str | None = None) -> list[float]:
     if title:
         config_args["title"] = title
 
-    result = await asyncio.to_thread(
+    result = await _call_with_retry(
         client.models.embed_content,
         model=settings.GEMINI_EMBEDDING_MODEL,
         contents=text,
@@ -74,6 +102,7 @@ async def embed_batch(texts: list[str], batch_size: int = 100) -> list[list[floa
     """
     Batch embed multiple texts with rate limiting.
     Splits texts into batches and sleeps between them to avoid hitting limits.
+    Retries automatically on 429 RESOURCE_EXHAUSTED.
     """
     all_embeddings = []
     client = get_client()
@@ -82,7 +111,7 @@ async def embed_batch(texts: list[str], batch_size: int = 100) -> list[list[floa
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
 
-        result = await asyncio.to_thread(
+        result = await _call_with_retry(
             client.models.embed_content,
             model=settings.GEMINI_EMBEDDING_MODEL,
             contents=batch,

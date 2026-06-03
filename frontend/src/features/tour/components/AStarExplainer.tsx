@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
 import { X, Play, RotateCcw, ChevronRight, Sparkles } from "lucide-react";
+import MapImage from "./MapImage";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -236,11 +237,11 @@ export default function AStarExplainer({
         <div className="flex-1 relative min-h-0">
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="relative w-full max-w-[600px]" style={{ aspectRatio: "1 / 1" }}>
-              <img
-                src="/map_v3.png"
+              <MapImage
                 alt="TVU Campus Map"
                 draggable={false}
                 className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+                fallbackClassName="rounded-2xl"
               />
               <div className="absolute inset-0 bg-black/40 rounded-2xl" />
 

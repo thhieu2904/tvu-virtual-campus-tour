@@ -39,6 +39,18 @@ export interface LocationNode {
   links: { toSlug: string; label: string }[];
 }
 
+type LocationDetailResponse = {
+  id?: string;
+  name?: string;
+  slug?: string;
+  description?: string | null;
+  intro_message?: string | null;
+  intro_audio_url?: string | null;
+  revisit_audio_url?: string | null;
+  background_url?: string | null;
+  error?: string;
+};
+
 export interface MediaItem {
   id: string;
   type: "image" | "video" | "gif";
@@ -132,6 +144,7 @@ interface TourState {
 
   // === Actions ===
   fetchLocations: () => Promise<void>;
+  refreshLocationDetails: (slug: string) => Promise<void>;
   fetchLocationMedia: (slug: string) => Promise<void>;
   fetchNavGraph: () => Promise<void>;
   fetchPath: (fromSlug: string, toSlug: string) => Promise<NavPathResult | null>;
@@ -209,7 +222,7 @@ export const useTourStore = create<TourState>((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const response = await fetch(`${API_URL}/api/locations`);
+      const response = await fetch(`${API_URL}/api/locations`, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
       const data = await response.json();
@@ -252,6 +265,36 @@ export const useTourStore = create<TourState>((set, get) => ({
           get().fetchLocations();
         }, 10000);
       }
+    }
+  },
+
+  refreshLocationDetails: async (slug: string) => {
+    try {
+      const response = await fetch(`${API_URL}/api/locations/${slug}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const detail = (await response.json()) as LocationDetailResponse;
+      if (detail.error) return;
+
+      set((state) => ({
+        locations: state.locations.map((location) => {
+          if (location.slug !== slug) return location;
+
+          return {
+            ...location,
+            name: detail.name ?? location.name,
+            description: detail.description ?? location.description,
+            introMessage: detail.intro_message ?? location.introMessage,
+            intro_audio_url:
+              "intro_audio_url" in detail ? detail.intro_audio_url ?? null : location.intro_audio_url,
+            revisit_audio_url:
+              "revisit_audio_url" in detail ? detail.revisit_audio_url ?? null : location.revisit_audio_url,
+            backgroundUrl: detail.background_url ?? location.backgroundUrl,
+          };
+        }),
+      }));
+    } catch (error) {
+      console.warn(`Failed to refresh location details for ${slug}:`, error);
     }
   },
 
@@ -356,6 +399,8 @@ export const useTourStore = create<TourState>((set, get) => ({
       set({
         currentLocationSlug: slug,
       });
+      // Fire detail refresh in background — non-blocking so slug swap is instant
+      get().refreshLocationDetails(slug);
       // Auto-fetch media for new location
       get().fetchLocationMedia(slug);
     }, 600); // Match CSS transition duration

@@ -191,6 +191,26 @@ class TestTTSCache(unittest.TestCase):
         k2 = _cache_key("hello", "Puck", "friendly", "Bạn là ViVy, đại sứ sinh viên nữ.")
         self.assertNotEqual(k1, k2)
 
+    def test_rewrite_tts_text_expands_problem_acronyms(self):
+        from app.ai.tts_engine import rewrite_tts_text
+
+        self.assertEqual(
+            rewrite_tts_text("Chào mừng bạn đến TVU và Khoa CNTT."),
+            "Chào mừng bạn đến Đại học Trà Vinh và Khoa Công nghệ thông tin.",
+        )
+        self.assertEqual(
+            rewrite_tts_text("Đại học Trà Vinh (TVU) có Khoa Công nghệ thông tin (CNTT)."),
+            "Đại học Trà Vinh có Khoa Công nghệ thông tin.",
+        )
+
+    def test_cache_key_uses_rewritten_tts_text(self):
+        from app.ai.tts_engine import _cache_key
+
+        self.assertEqual(
+            _cache_key("Khoa CNTT của TVU", "Kore"),
+            _cache_key("Khoa Công nghệ thông tin của Đại học Trà Vinh", "Kore"),
+        )
+
     def test_cache_miss(self):
         from app.ai.tts_engine import _get_cached, _cache_key
         key = _cache_key("nonexistent", "Kore")
@@ -399,6 +419,34 @@ class TestTTSEngine(unittest.TestCase):
         self.assertEqual(result.provider, "gemini")
         self.assertEqual(result.content_type, CONTENT_TYPE_WAV)
         self.assertFalse(result.cached)
+
+    @patch("app.ai.tts_engine.get_client")
+    @patch("app.ai.tts_engine.get_settings")
+    def test_synthesize_sends_rewritten_text_to_gemini(self, mock_settings, mock_client):
+        from app.ai.tts_engine import synthesize
+
+        mock_settings.return_value = MagicMock(
+            GEMINI_DEFAULT_VOICE="Kore",
+            GEMINI_TTS_MODEL="gemini-2.5-flash-preview-tts",
+            TTS_LOCAL_CACHE_ENABLED=False,
+        )
+        inline_data = MagicMock()
+        inline_data.data = b"\x00" * 100
+        part = MagicMock()
+        part.inline_data = inline_data
+        candidate = MagicMock()
+        candidate.content.parts = [part]
+        mock_result = MagicMock()
+        mock_result.candidates = [candidate]
+        mock_client.return_value.models.generate_content.return_value = mock_result
+
+        asyncio.run(synthesize("Khoa CNTT của TVU", voice_style="vui vẻ"))
+
+        call_kwargs = mock_client.return_value.models.generate_content.call_args.kwargs
+        self.assertEqual(
+            call_kwargs["contents"],
+            "Style: vui vẻ. Khoa Công nghệ thông tin của Đại học Trà Vinh",
+        )
 
     @patch("app.ai.tts_engine._edge_tts_fallback")
     @patch("app.ai.tts_engine.get_client")

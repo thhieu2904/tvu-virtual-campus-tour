@@ -115,12 +115,28 @@ async def _enrich_tool_actions(
     needs the focused media id. Resolve it server-side from search_query so the
     model does not need a second tool call.
     """
-    if not location_id:
-        return tool_actions
-
     try:
-        loc_uuid = UUID(location_id)
+        loc_uuid = UUID(location_id) if location_id else None
     except (TypeError, ValueError):
+        loc_uuid = None
+
+    # If the AI is navigating to a new location in this same turn,
+    # we should fetch media for the DESTINATION location, not the current one.
+    dest_slug = None
+    for action in tool_actions:
+        if action.get("name") == "navigate_to":
+            dest_slug = action.get("args", {}).get("location_slug")
+            break
+
+    if dest_slug:
+        # Find UUID for the destination slug
+        stmt = select(Location.id).where(Location.slug == dest_slug)
+        result = await session.execute(stmt)
+        dest_id = result.scalar_one_or_none()
+        if dest_id:
+            loc_uuid = dest_id
+
+    if not loc_uuid:
         return tool_actions
 
     enriched_actions = []

@@ -22,8 +22,20 @@ logger = logging.getLogger(__name__)
 # Audio content types
 CONTENT_TYPE_WAV = "audio/wav"    # Gemini output: converted to WAV 24kHz 16-bit mono
 CONTENT_TYPE_MP3 = "audio/mpeg"   # Edge TTS output: MP3
-TTS_PROMPT_VERSION = "tts-persona-v2"
+TTS_PROMPT_VERSION = "tts-pronunciation-v3"
 MALE_VOICES = {"Puck"}
+TTS_REWRITE_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"\bĐại\s+học\s+Trà\s+Vinh\s*\(\s*(?:TVU|T\s+V\s+U)\s*\)"),
+        "Đại học Trà Vinh",
+    ),
+    (
+        re.compile(r"\bCông\s+nghệ\s+thông\s+tin\s*\(\s*(?:CNTT|C\s+N\s+T\s+T)\s*\)"),
+        "Công nghệ thông tin",
+    ),
+    (re.compile(r"(?<!\w)(?:TVU|T\s+V\s+U)(?!\w)"), "Đại học Trà Vinh"),
+    (re.compile(r"(?<!\w)(?:CNTT|C\s+N\s+T\s+T)(?!\w)"), "Công nghệ thông tin"),
+)
 
 
 @dataclass
@@ -49,6 +61,14 @@ def _content_type_for_extension(extension: str) -> str:
     return CONTENT_TYPE_MP3 if extension == "mp3" else CONTENT_TYPE_WAV
 
 
+def rewrite_tts_text(text: str) -> str:
+    """Rewrite display acronyms into Vietnamese phrases that TTS reads reliably."""
+    rewritten = str(text or "")
+    for pattern, replacement in TTS_REWRITE_RULES:
+        rewritten = pattern.sub(replacement, rewritten)
+    return rewritten
+
+
 def _cache_key(
     text: str,
     voice: str,
@@ -56,8 +76,9 @@ def _cache_key(
     personality_prompt: str = "",
 ) -> str:
     """Generate a stable cache key."""
+    spoken_text = rewrite_tts_text(text)
     return hashlib.sha256(
-        f"{TTS_PROMPT_VERSION}|{text}|{voice}|{voice_style}|{personality_prompt}".encode()
+        f"{TTS_PROMPT_VERSION}|{spoken_text}|{voice}|{voice_style}|{personality_prompt}".encode()
     ).hexdigest()
 
 
@@ -68,8 +89,9 @@ def _legacy_cache_key(
     personality_prompt: str = "",
 ) -> str:
     """Return the previous chat/R2 cache key for backward-compatible lookups."""
+    spoken_text = rewrite_tts_text(text)
     return hashlib.md5(
-        f"{TTS_PROMPT_VERSION}_{text}_{voice}_{voice_style}_{personality_prompt}".encode()
+        f"{TTS_PROMPT_VERSION}_{spoken_text}_{voice}_{voice_style}_{personality_prompt}".encode()
     ).hexdigest()
 
 
@@ -204,6 +226,7 @@ async def synthesize(
     style = voice_style or ""
     persona = personality_prompt or ""
     key = _cache_key(text, voice, style, persona)
+    spoken_text = rewrite_tts_text(text)
     cached = await asyncio.to_thread(_get_cached, key) if use_local_cache else None
 
     if cached:
@@ -216,10 +239,15 @@ async def synthesize(
         )
 
     try:
+        style_parts: list[str] = []
         if style:
-            prompt = f"Style: {style}. {text}"
+            style_parts.append(f"Style: {style}.")
+        if persona:
+            style_parts.append(f"Persona: {persona}.")
+        if style_parts:
+            prompt = f"{' '.join(style_parts)} {spoken_text}"
         else:
-            prompt = text
+            prompt = spoken_text
 
         result = await asyncio.to_thread(
             get_client().models.generate_content,
@@ -254,12 +282,12 @@ async def synthesize(
         logger.warning(
             "Gemini TTS failed for voice=%s text_len=%d: %s. Falling back to Edge TTS voice=%s",
             voice,
-            len(text),
+            len(spoken_text),
             e,
             edge_voice,
         )
         try:
-            audio_data = await _edge_tts_fallback(text, edge_voice)
+            audio_data = await _edge_tts_fallback(spoken_text, edge_voice)
             if use_local_cache:
                 await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_MP3)
             return TTSResult(

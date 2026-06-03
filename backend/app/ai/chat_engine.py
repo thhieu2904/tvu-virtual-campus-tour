@@ -4,13 +4,21 @@ Chat Engine — Orchestrator for Chat + Thinking functionality.
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import AsyncGenerator
 from google.genai import types
+from google.api_core.exceptions import ResourceExhausted
 
 from app.ai.core_client import get_client
 from app.config import get_settings
 from app.ai.prompts.system_prompts import build_system_prompt
+
+logger = logging.getLogger(__name__)
+
+# Retry config for 429 RESOURCE_EXHAUSTED
+_MAX_RETRIES = 3
+_BASE_DELAY = 1.0  # seconds — will double each retry (1s → 2s → 4s)
 
 
 @dataclass
@@ -101,55 +109,8 @@ def _parse_response(result) -> tuple[str, str | None, dict, list[dict]]:
     thinking_text = "".join(thinking_parts).strip() or None
     answer_text = "".join(answer_parts).strip()
 
-    # Robust fallback: Parse text-based tool calls if they were generated as raw text
-    if answer_text and ("default_api." in answer_text or "tool_code" in answer_text):
-        import re
-        import json
-        
-        # Match print(default_api.tool_name(args...)) or default_api.tool_name(args...)
-        pattern = r"(?:print\()?(?:default_api\.)?(\w+)\(([^)]*)\)\)?"
-        matches = re.finditer(pattern, answer_text)
-        
-        seen_keys = set()
-        for match in matches:
-            tool_name = match.group(1)
-            args_str = match.group(2)
-            
-            # Avoid matching standard explanations in thought blocks
-            if tool_name in ["navigate_to", "show_media", "toggle_map", "search_documents"]:
-                # Parse keyword arguments
-                args = {}
-                arg_pattern = r"(\w+)\s*=\s*(?:['\"]([^'\"]*)['\"]|([^\s,]+))"
-                arg_matches = re.finditer(arg_pattern, args_str)
-                for am in arg_matches:
-                    key = am.group(1)
-                    val = am.group(2) if am.group(2) is not None else am.group(3)
-                    if val.lower() == 'true':
-                        val = True
-                    elif val.lower() == 'false':
-                        val = False
-                    args[key] = val
-                
-                # Deduplicate tool calls
-                key = (tool_name, json.dumps(args, sort_keys=True))
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    function_calls.append({
-                        "name": tool_name,
-                        "args": args
-                    })
-        
-        # Clean answer_text to remove tool_code, print(default_api...), thought, and explanations
-        lines = answer_text.split("\n")
-        cleaned_lines = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped in ["tool_code", "thought"] or stripped.startswith("print(default_api.") or stripped.startswith("default_api."):
-                continue
-            if "The user wants to" in line or "tool call" in line or "appropriate" in line:
-                continue
-            cleaned_lines.append(line)
-        answer_text = "\n".join(cleaned_lines).strip()
+    # We rely entirely on native part.function_call from the Gemini API.
+    # Removed the legacy text-based fallback because it incorrectly stripped valid text responses.
 
     usage_dict = {}
     usage = getattr(result, "usage_metadata", None)
@@ -193,12 +154,32 @@ async def generate_response(
     messages = _build_messages(query, history)
     config = _build_config(system_prompt, enable_thinking, thinking_budget, tools=tools)
 
-    result = await asyncio.to_thread(
-        get_client().models.generate_content,
-        model=settings.GEMINI_CHAT_MODEL,
-        contents=messages,
-        config=config,
-    )
+    last_error = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            result = await asyncio.to_thread(
+                get_client().models.generate_content,
+                model=settings.GEMINI_CHAT_MODEL,
+                contents=messages,
+                config=config,
+            )
+            break
+        except (ResourceExhausted, Exception) as e:
+            is_rate_limit = (
+                isinstance(e, ResourceExhausted)
+                or "429" in str(e)
+                or "RESOURCE_EXHAUSTED" in str(e)
+            )
+            if is_rate_limit and attempt < _MAX_RETRIES:
+                delay = _BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    f"⏳ Chat rate limited (429), retrying in {delay:.1f}s "
+                    f"(attempt {attempt + 1}/{_MAX_RETRIES})..."
+                )
+                await asyncio.sleep(delay)
+                last_error = e
+                continue
+            raise
 
     answer_text, thinking_text, usage_dict, function_calls = _parse_response(result)
     return ChatResult(
@@ -247,13 +228,42 @@ async def generate_response_stream(
     loop = asyncio.get_running_loop()
 
     def _iterate_stream():
-        """Runs in a worker thread — iterates the blocking SDK stream."""
+        """Runs in a worker thread — iterates the blocking SDK stream.
+        Retries on 429 RESOURCE_EXHAUSTED with exponential backoff.
+        """
+        import time as _time
+
+        stream = None
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                stream = get_client().models.generate_content_stream(
+                    model=settings.GEMINI_CHAT_MODEL,
+                    contents=messages,
+                    config=config,
+                )
+                break
+            except (ResourceExhausted, Exception) as e:
+                is_rate_limit = (
+                    isinstance(e, ResourceExhausted)
+                    or "429" in str(e)
+                    or "RESOURCE_EXHAUSTED" in str(e)
+                )
+                if is_rate_limit and attempt < _MAX_RETRIES:
+                    delay = _BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        f"⏳ Stream rate limited (429), retrying in {delay:.1f}s "
+                        f"(attempt {attempt + 1}/{_MAX_RETRIES})..."
+                    )
+                    _time.sleep(delay)  # blocking sleep in worker thread
+                    continue
+                # Non-retryable error
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    StreamChunk(type="error", content=f"Xin lỗi, có lỗi kết nối với AI ({str(e)})."),
+                )
+                return  # exit, finally will signal completion
+
         try:
-            stream = get_client().models.generate_content_stream(
-                model=settings.GEMINI_CHAT_MODEL,
-                contents=messages,
-                config=config,
-            )
             for chunk in stream:
                 candidates = getattr(chunk, "candidates", None)
                 if not candidates:
@@ -285,7 +295,7 @@ async def generate_response_stream(
                             StreamChunk(type="text", content=part.text),
                         )
         except Exception as e:
-            # Send error to queue if it fails
+            # Send error to queue if it fails mid-stream
             loop.call_soon_threadsafe(
                 queue.put_nowait,
                 StreamChunk(type="error", content=f"Xin lỗi, có lỗi kết nối với AI ({str(e)})."),

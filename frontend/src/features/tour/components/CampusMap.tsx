@@ -19,6 +19,7 @@ import { useMemo } from "react";
 import navGraph from "@/data/nav_graph.json";
 import pathsData from "@/data/paths.json";
 import { useTourStore, type NavPathResult } from "@/features/tour/store";
+import MapImage from "./MapImage";
 
 // ── Types ──
 type Point = { x: number; y: number; node?: string };
@@ -225,8 +226,7 @@ export default function CampusMap({
       style={{ aspectRatio: "1 / 1" }}
     >
       {/* Layer 1: Map image */}
-      <img
-        src="/map_v3.png"
+      <MapImage
         alt="TVU Campus Map"
         draggable={false}
         style={{
@@ -238,6 +238,7 @@ export default function CampusMap({
           objectFit: "cover",
           userSelect: "none",
         }}
+        fallbackClassName="z-[1]"
       />
 
       {/* Layer 2: SVG paths & markers */}

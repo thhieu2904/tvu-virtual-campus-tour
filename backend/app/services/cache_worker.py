@@ -573,7 +573,7 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
             voice=voice,
             style=style,
             persona=persona,
-            force=item.force,
+            force=True,
         )
         revisit_text = location_audio_service.build_revisit_audio_text(location.name)
         revisit_audio = await location_audio_service.synthesize_location_audio(
@@ -583,7 +583,7 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
             voice=voice,
             style=style,
             persona=persona,
-            force=item.force,
+            force=True,
         )
         location.intro_audio_url = intro_audio.audio_url
         location.revisit_audio_url = revisit_audio.audio_url
