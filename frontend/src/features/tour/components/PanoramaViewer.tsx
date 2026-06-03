@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Crosshair, Minus, Plus } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
 import { attachWebGLContextRecovery } from "@/shared/lib/webglRecovery";
+import { preloadPanorama, isPanoramaCached } from "@/shared/lib/imageCache";
 
 const PANNELLUM_CSS_URL = "/lib/pannellum/pannellum.css";
 const PANNELLUM_SCRIPT_URL = "/lib/pannellum/pannellum.js";
@@ -135,79 +136,42 @@ export default function PanoramaViewer({
     viewer.setHfov?.(initialHfov, 800);
   };
 
-  // ── Phase 1: Pre-download image into browser cache with progress tracking ──
+  // ── Phase 1: Pre-download image into browser cache (via centralized imageCache) ──
   useEffect(() => {
     if (!imageUrl) return;
 
-    let cancelled = false;
+    // If already cached (preloaded by adjacent-location system), skip download entirely
+    if (isPanoramaCached(imageUrl)) {
+      setIsImageCached(true);
+      setIsLoaded(false);
+      setHasError(false);
+      setDownloadProgress(null);
+      return;
+    }
+
+    const abortController = new AbortController();
     setIsImageCached(false);
     setIsLoaded(false);
     setHasError(false);
     setDownloadProgress(null);
 
-    const predownload = async () => {
-      try {
-        // Use fetch with progress tracking for large 360° images
-        const response = await fetch(imageUrl);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    preloadPanorama(
+      imageUrl,
+      (receivedMB, totalMB) => setDownloadProgress(`${receivedMB} / ${totalMB} MB`),
+      abortController.signal,
+    )
+      .then(() => {
+        setDownloadProgress(null);
+        setIsImageCached(true);
+      })
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[PanoramaViewer] Image pre-download failed:", err);
+        // Still allow Pannellum to try loading directly
+        setIsImageCached(true);
+      });
 
-        const contentLength = response.headers.get("content-length");
-        const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
-
-        if (totalBytes > 0 && response.body) {
-          // Stream-read with progress
-          const reader = response.body.getReader();
-          const chunks: Uint8Array[] = [];
-          let receivedBytes = 0;
-
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done || cancelled) break;
-            if (value) {
-              chunks.push(value);
-              receivedBytes += value.length;
-              const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
-              const receivedMB = (receivedBytes / 1024 / 1024).toFixed(2);
-              setDownloadProgress(`${receivedMB} / ${totalMB} MB`);
-            }
-          }
-
-          if (cancelled) return;
-
-          // Create blob and decode into browser's image cache
-          const blob = new Blob(chunks as BlobPart[], { type: response.headers.get("content-type") || "image/jpeg" });
-          const img = new Image();
-          await new Promise<void>((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = () => reject(new Error("Image decode failed"));
-            img.src = URL.createObjectURL(blob);
-          });
-          URL.revokeObjectURL(img.src);
-        } else {
-          // Fallback: simple Image preload (no progress, but still ensures cache)
-          await new Promise<void>((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve();
-            img.onerror = () => reject(new Error("Image load failed"));
-            img.src = imageUrl;
-          });
-        }
-
-        if (!cancelled) {
-          setDownloadProgress(null);
-          setIsImageCached(true);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error("[PanoramaViewer] Image pre-download failed:", err);
-          // Still allow Pannellum to try loading the image directly
-          setIsImageCached(true);
-        }
-      }
-    };
-
-    predownload();
-    return () => { cancelled = true; };
+    return () => abortController.abort();
   }, [imageUrl]);
 
   // ── Phase 2: Init Pannellum only AFTER image is cached ──

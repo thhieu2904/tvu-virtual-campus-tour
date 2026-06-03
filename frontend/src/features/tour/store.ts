@@ -356,7 +356,7 @@ export const useTourStore = create<TourState>((set, get) => ({
         console.warn("[TourStore] Navigation safety timeout — releasing transition");
         set({ isPanoramaReady: true, isTransitioning: false, isAppReady: true });
       }
-    }, 8000);
+    }, 15000);
   },
 
   setLoading: (loading) => set({ isLoading: loading }),

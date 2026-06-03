@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
-import { preloadImage } from "@/shared/lib/utils";
+import { preloadPanorama } from "@/shared/lib/imageCache";
 import { useChatStore, _stopCurrentAudio } from "@/features/chat/store";
 import { useKioskIdleWatcher } from "@/hooks/useKioskIdleWatcher";
 import PanoramaViewer from "@/features/tour/components/PanoramaViewer";
@@ -100,27 +100,50 @@ export default function TourPage() {
   }, [isLoading, location, isAppReady, hasStarted]);
 
   // Preload 360° images of adjacent locations into browser cache.
-  // Runs after a 3s delay so it doesn't compete with the current panorama load.
+  // Uses the centralized imageCache (same as PanoramaViewer) so navigation is instant.
+  // Phase 1: Preload direct links after 2s (highest priority)
+  // Phase 2: Preload ALL other active locations after 6s (background, lower priority)
   const preloadedSlugsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!location || !isAppReady) return;
 
-    const timer = setTimeout(() => {
+    const currentSlug = location.slug;
+    preloadedSlugsRef.current.add(currentSlug); // Don't preload current
+
+    // Phase 1: Adjacent locations (2s delay — these are most likely to be visited next)
+    const adjacentTimer = setTimeout(() => {
       const { locations } = useTourStore.getState();
       location.links.forEach((link) => {
         if (preloadedSlugsRef.current.has(link.toSlug)) return;
         const adj = locations.find((l) => l.slug === link.toSlug);
         if (adj?.backgroundUrl) {
           preloadedSlugsRef.current.add(link.toSlug);
-          preloadImage(resolveR2Url(adj.backgroundUrl)).catch(() => {
-            // Silent fail — preloading is best-effort
+          preloadPanorama(resolveR2Url(adj.backgroundUrl)).catch(() => {
             preloadedSlugsRef.current.delete(link.toSlug);
           });
         }
       });
-    }, 3000);
+    }, 2000);
 
-    return () => clearTimeout(timer);
+    // Phase 2: All remaining active locations (6s delay — background prefetch)
+    const allTimer = setTimeout(() => {
+      const { locations } = useTourStore.getState();
+      locations.forEach((loc) => {
+        if (loc.status !== "active") return;
+        if (preloadedSlugsRef.current.has(loc.slug)) return;
+        if (loc.backgroundUrl) {
+          preloadedSlugsRef.current.add(loc.slug);
+          preloadPanorama(resolveR2Url(loc.backgroundUrl)).catch(() => {
+            preloadedSlugsRef.current.delete(loc.slug);
+          });
+        }
+      });
+    }, 6000);
+
+    return () => {
+      clearTimeout(adjacentTimer);
+      clearTimeout(allTimer);
+    };
   }, [location?.slug, isAppReady]);
 
 
