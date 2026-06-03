@@ -49,6 +49,7 @@ UPGRADE_SQL = [
     "ALTER TABLE locations ADD COLUMN IF NOT EXISTS mascot_id UUID;",
     "ALTER TABLE locations ADD COLUMN IF NOT EXISTS sort_order INTEGER;",
     "ALTER TABLE locations ADD COLUMN IF NOT EXISTS intro_audio_url TEXT;",
+    "ALTER TABLE locations ADD COLUMN IF NOT EXISTS revisit_audio_url TEXT;",
     "ALTER TABLE locations ALTER COLUMN sort_order SET DEFAULT 0;",
     "UPDATE locations SET sort_order = 0 WHERE sort_order IS NULL;",
     "ALTER TABLE locations ALTER COLUMN sort_order SET NOT NULL;",

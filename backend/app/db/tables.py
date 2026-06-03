@@ -42,6 +42,7 @@ class Location(Base):
     description = Column(Text, nullable=False, default="")
     intro_message = Column(Text, nullable=False, default="")
     intro_audio_url = Column(Text, nullable=True)
+    revisit_audio_url = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="active")  # active | inactive
     is_start_node = Column(Boolean, nullable=False, default=False)
     mascot_id = Column(UUID(as_uuid=True), ForeignKey("mascots.id", ondelete="SET NULL"), nullable=True)

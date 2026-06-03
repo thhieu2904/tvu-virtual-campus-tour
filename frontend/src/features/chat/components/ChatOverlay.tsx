@@ -40,6 +40,7 @@ export default function ChatOverlay() {
   const locationName = location?.name;
   const locationIntroMessage = location?.introMessage;
   const locationIntroAudioUrl = location?.intro_audio_url;
+  const locationRevisitAudioUrl = location?.revisit_audio_url;
 
   const handleSend = (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -80,7 +81,7 @@ export default function ChatOverlay() {
 
     const isFirstLoad = prevSlugRef.current === null;
     const slugChanged = prevSlugRef.current !== locationSlug;
-    const introSignature = `${locationSlug}|${locationIntroMessage}|${locationIntroAudioUrl ?? ""}`;
+    const introSignature = `${locationSlug}|${locationIntroMessage}|${locationIntroAudioUrl ?? ""}|${locationRevisitAudioUrl ?? ""}`;
     const introChangedForSameSlug =
       !slugChanged &&
       prevIntroSignatureRef.current !== null &&
@@ -126,13 +127,21 @@ export default function ChatOverlay() {
     } else {
       const isRevisit = useTourStore.getState().visitedLocations.has(locationSlug);
       
-      // Nếu đã đến rồi -> Chào ngắn gọn, KHÔNG phát audio
+      // Nếu đã đến rồi -> chào ngắn gọn và phát audio revisit nếu đã cache sẵn.
       if (isRevisit) {
         addMessage({
           id: `nav-${locationSlug}-${Date.now()}`,
           role: "assistant",
           content: `Chào mừng bạn quay lại ${locationName ?? "địa điểm này"}.`,
         });
+
+        if (
+          isTTSEnabled &&
+          locationRevisitAudioUrl &&
+          useTourStore.getState().hasStarted
+        ) {
+          playPrecachedAudio(locationRevisitAudioUrl);
+        }
       } else {
         // User tự bấm map hoặc AI điều hướng → append intro đầy đủ
         addMessage({
@@ -158,6 +167,7 @@ export default function ChatOverlay() {
     locationName,
     locationIntroMessage,
     locationIntroAudioUrl,
+    locationRevisitAudioUrl,
     isLoading,
     isAppReady,
     isTTSEnabled,

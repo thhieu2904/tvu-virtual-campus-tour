@@ -79,6 +79,7 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
             "description": loc.description,
             "introMessage": loc.intro_message,
             "intro_audio_url": loc.intro_audio_url,
+            "revisit_audio_url": loc.revisit_audio_url,
             "mascotName": loc.mascot.name if loc.mascot else None,
             "mascotModelUrl": loc.mascot.model_3d_url if loc.mascot else None,
             "backgroundUrl": loc.background_url,

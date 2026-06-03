@@ -1,20 +1,16 @@
 import asyncio
 import sys
 import os
-import time
-from pathlib import Path
 
 # Thêm đường dẫn backend vào sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.db.database import async_session
-from app.db.tables import Location, Mascot
-from app.ai.tts_engine import CONTENT_TYPE_MP3, synthesize
-from app.services import storage_service
+from app.db.tables import Location
+from app.services import location_audio_service
 
 async def upload_intros():
     print(f"🚀 Bắt đầu sinh Audio và Upload lên R2...")
@@ -47,29 +43,26 @@ async def upload_intros():
             
             print(f"⏳ Generating audio for: {loc.name} ({loc.slug}) with voice {voice_name}")
             try:
-                # Gọi API TTS
-                tts_result = await synthesize(
+                intro_audio = await location_audio_service.synthesize_location_audio(
                     text=loc.intro_message,
-                    voice_name=voice_name,
-                    voice_style=voice_style,
-                    personality_prompt=personality_prompt,
+                    location_slug=loc.slug,
+                    kind="intro",
+                    voice=voice_name,
+                    style=voice_style or "",
+                    persona=personality_prompt or "",
                 )
-                
-                # Upload lên R2
-                extension = "mp3" if tts_result.content_type == CONTENT_TYPE_MP3 else "wav"
-                r2_key = storage_service.build_intro_key(loc.slug, extension)
-                await storage_service.upload_file(
-                    file_bytes=tts_result.audio_data,
-                    key=r2_key,
-                    content_type=tts_result.content_type,
-                    cache_control="no-cache, no-store, must-revalidate",
+                revisit_audio = await location_audio_service.synthesize_location_audio(
+                    text=location_audio_service.build_revisit_audio_text(loc.name),
+                    location_slug=loc.slug,
+                    kind="revisit",
+                    voice=voice_name,
+                    style=voice_style or "",
+                    persona=personality_prompt or "",
                 )
-                
-                public_url = f"{storage_service.get_public_url(r2_key)}?v={int(time.time())}"
-                
-                # Update DB
-                loc.intro_audio_url = public_url
-                print(f"✅ Uploaded to {public_url}")
+                loc.intro_audio_url = intro_audio.audio_url
+                loc.revisit_audio_url = revisit_audio.audio_url
+                print(f"✅ Uploaded intro to {intro_audio.audio_url}")
+                print(f"✅ Uploaded revisit to {revisit_audio.audio_url}")
                 
                 # Sleep nhỏ để tránh bị rate limit
                 await asyncio.sleep(0.5)

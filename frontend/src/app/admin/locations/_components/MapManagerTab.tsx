@@ -54,6 +54,7 @@ interface LocationItem {
   status: LocationStatus
   is_start_node?: boolean
   intro_audio_url?: string | null
+  revisit_audio_url?: string | null
   background_url: string
   mascot_id?: string | null
   sort_order?: number

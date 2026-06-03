@@ -23,7 +23,8 @@ export interface LocationNode {
   isStartNode: boolean;
   description: string;
   introMessage: string;
-  intro_audio_url?: string;
+  intro_audio_url?: string | null;
+  revisit_audio_url?: string | null;
   mascotName?: string | null;
   mascotModelUrl?: string | null;
   backgroundUrl: string;

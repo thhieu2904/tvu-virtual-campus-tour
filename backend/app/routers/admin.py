@@ -35,7 +35,7 @@ from app.schemas.admin import (
     MediaUpdateRequest,
 )
 from app.schemas.document import DocumentStatusResponse, IngestResponse
-from app.services import ingest_service, pathfinding_service, storage_service
+from app.services import ingest_service, location_audio_service, pathfinding_service, storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -301,28 +301,37 @@ async def regenerate_location_audio(location_id: str, session: AsyncSession = De
     voice_name = loc.mascot.voice_name if loc.mascot else None
     voice_style = loc.mascot.voice_style if loc.mascot else None
     personality_prompt = loc.mascot.personality_prompt if loc.mascot else None
-    result = await synthesize(
-        loc.intro_message,
-        voice_name=voice_name,
-        voice_style=voice_style,
-        personality_prompt=personality_prompt,
-    )
+    voice = voice_name or "Leda"
+    style = voice_style or ""
+    persona = personality_prompt or ""
 
-    extension = "mp3" if result.content_type == CONTENT_TYPE_MP3 else "wav"
-    r2_key = storage_service.build_intro_key(loc.slug, extension)
-    await storage_service.upload_file(
-        result.audio_data,
-        r2_key,
-        result.content_type,
-        cache_control="no-cache, no-store, must-revalidate",
+    intro_audio = await location_audio_service.synthesize_location_audio(
+        text=loc.intro_message,
+        location_slug=loc.slug,
+        kind="intro",
+        voice=voice,
+        style=style,
+        persona=persona,
     )
-    loc.intro_audio_url = f"{storage_service.get_public_url(r2_key)}?v={int(time.time())}"
+    revisit_audio = await location_audio_service.synthesize_location_audio(
+        text=location_audio_service.build_revisit_audio_text(loc.name),
+        location_slug=loc.slug,
+        kind="revisit",
+        voice=voice,
+        style=style,
+        persona=persona,
+    )
+    loc.intro_audio_url = intro_audio.audio_url
+    loc.revisit_audio_url = revisit_audio.audio_url
     await session.commit()
     return {
         "success": True,
         "intro_audio_url": loc.intro_audio_url,
-        "provider": result.provider,
-        "cached": result.cached,
+        "revisit_audio_url": loc.revisit_audio_url,
+        "provider": intro_audio.provider,
+        "cached": intro_audio.cache_hit,
+        "revisit_provider": revisit_audio.provider,
+        "revisit_cached": revisit_audio.cache_hit,
     }
 
 

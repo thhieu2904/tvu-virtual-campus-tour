@@ -14,9 +14,10 @@ from uuid import UUID
 
 from app.ai.tts_engine import TTS_PROMPT_VERSION
 from app.config import get_settings
+from app.services.location_audio_service import REVISIT_AUDIO_TEMPLATE_VERSION
 
 MASCOT_INTRO_TEMPLATE_VERSION = "mascot-intro-v1"
-LOCATION_INTRO_FINGERPRINT_VERSION = "location-intro-v1"
+LOCATION_INTRO_FINGERPRINT_VERSION = "location-intro-v2"
 LOCATION_QA_FINGERPRINT_VERSION = "location-qa-v1"
 QA_ITEM_FINGERPRINT_VERSION = "qa-item-v1"
 ANSWER_PROMPT_VERSION = "rag-answer-v1"
@@ -125,9 +126,11 @@ def location_intro_payload(location: Any) -> dict[str, Any]:
         "version": LOCATION_INTRO_FINGERPRINT_VERSION,
         "location": {
             "id": str(location.id),
+            "name": _clean_string(getattr(location, "name", "")),
             "slug": _clean_string(getattr(location, "slug", "")),
             "intro_message": _clean_string(getattr(location, "intro_message", "")),
         },
+        "revisit_audio_template_version": REVISIT_AUDIO_TEMPLATE_VERSION,
         "mascot": mascot_source(getattr(location, "mascot", None)),
         "tts_prompt_version": TTS_PROMPT_VERSION,
         "gemini_tts_model": models["gemini_tts_model"],

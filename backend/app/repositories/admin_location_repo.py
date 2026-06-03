@@ -30,6 +30,7 @@ def serialize_location(
         "description": loc.description,
         "intro_message": loc.intro_message,
         "intro_audio_url": loc.intro_audio_url,
+        "revisit_audio_url": loc.revisit_audio_url,
         "status": loc.status,
         "is_start_node": loc.is_start_node,
         "background_url": loc.background_url,

@@ -4,6 +4,7 @@ Storage Service — Cloudflare R2 file management (S3-compatible).
 Folder structure on R2:
   locations/{location-slug}/background.jpg
   locations/{location-slug}/intro.wav
+  locations/{location-slug}/revisit.wav
   locations/{location-slug}/media/{filename}
   documents/{category-slug}/{timestamp}_{filename}
   mascots/{mascot-slug}/model.glb
@@ -150,6 +151,11 @@ def build_background_key(filename: str, location_slug: str) -> str:
 def build_intro_key(location_slug: str, extension: str = "wav") -> str:
     """Build R2 key for location intro audio."""
     return f"locations/{location_slug}/intro.{extension}"
+
+
+def build_revisit_key(location_slug: str, extension: str = "wav") -> str:
+    """Build R2 key for location revisit audio."""
+    return f"locations/{location_slug}/revisit.{extension}"
 
 
 def normalize_object_key(key_or_url: str) -> str:

@@ -33,7 +33,7 @@ interface MascotOption {
 interface LocationItem {
   id: string; name: string; slug: string; description: string
   intro_message: string; status: 'active' | 'inactive'; is_start_node: boolean
-  intro_audio_url?: string | null; background_url: string; mascot_id: string | null
+  intro_audio_url?: string | null; revisit_audio_url?: string | null; background_url: string; mascot_id: string | null
   sort_order: number; media_count: number; updated_at: string | null
 }
 
@@ -147,8 +147,12 @@ export default function LocationsPage() {
         description: editData.description,
         intro_message: editData.intro_message,
       })
-      const result = await adminApi.post<{ intro_audio_url: string }>(`/locations/${editingId}/regenerate-audio`)
-      setEditData({ ...editData, intro_audio_url: result.intro_audio_url })
+      const result = await adminApi.post<{ intro_audio_url: string; revisit_audio_url: string }>(`/locations/${editingId}/regenerate-audio`)
+      setEditData({
+        ...editData,
+        intro_audio_url: result.intro_audio_url,
+        revisit_audio_url: result.revisit_audio_url,
+      })
     } catch (err) { setError(err instanceof Error ? err.message : 'Không thể tạo lại audio') }
     finally { setRegeneratingAudio(false) }
   }

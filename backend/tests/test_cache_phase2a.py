@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app.services import cache_fingerprint_service as fingerprints
 from app.services import cache_worker
+from app.services import location_audio_service
 
 
 MASCOT_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -80,6 +81,20 @@ class CachePhase2AFingerprintTests(unittest.TestCase):
         self.assertNotEqual(
             base,
             fingerprints.location_intro_fingerprint(location(mascot=mascot(voice_name="Puck"))),
+        )
+
+    def test_location_intro_fingerprint_changes_by_name_for_revisit_audio(self):
+        base = fingerprints.location_intro_fingerprint(location())
+
+        self.assertNotEqual(
+            base,
+            fingerprints.location_intro_fingerprint(location(name="Cong chinh")),
+        )
+
+    def test_revisit_audio_text_uses_pm_approved_template(self):
+        self.assertEqual(
+            location_audio_service.build_revisit_audio_text("Thư viện"),
+            "Chào mừng bạn quay lại Thư viện.",
         )
 
     def test_location_intro_item_skips_uncacheable_locations(self):
