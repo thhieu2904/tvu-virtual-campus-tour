@@ -16,7 +16,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Crosshair, Minus, Plus } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
 import { attachWebGLContextRecovery } from "@/shared/lib/webglRecovery";
-import { preloadPanorama, isPanoramaCached } from "@/shared/lib/imageCache";
 
 const PANNELLUM_CSS_URL = "/lib/pannellum/pannellum.css";
 const PANNELLUM_SCRIPT_URL = "/lib/pannellum/pannellum.js";
@@ -103,10 +102,7 @@ export default function PanoramaViewer({
   const onLoadRef = useRef(onLoad);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
-  // Track if the image has been pre-downloaded into browser cache
-  const [isImageCached, setIsImageCached] = useState(false);
-  
+
   const locations = useTourStore((s) => s.locations);
 
   useEffect(() => {
@@ -137,47 +133,12 @@ export default function PanoramaViewer({
     viewer.setHfov?.(initialHfov, 800);
   };
 
-  // ── Phase 1: Pre-download image into browser cache (via centralized imageCache) ──
+  // ── Init Pannellum viewer ──
   useEffect(() => {
-    if (!imageUrl) return;
+    if (!containerRef.current || !imageUrl) return;
 
-    // If already cached (preloaded by adjacent-location system), skip download entirely
-    if (isPanoramaCached(imageUrl)) {
-      setIsImageCached(true);
-      setIsLoaded(false);
-      setHasError(false);
-      setDownloadProgress(null);
-      return;
-    }
-
-    const abortController = new AbortController();
-    setIsImageCached(false);
     setIsLoaded(false);
     setHasError(false);
-    setDownloadProgress(null);
-
-    preloadPanorama(
-      imageUrl,
-      (receivedMB, totalMB) => setDownloadProgress(`${receivedMB} / ${totalMB} MB`),
-      abortController.signal,
-    )
-      .then(() => {
-        setDownloadProgress(null);
-        setIsImageCached(true);
-      })
-      .catch((err) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        console.error("[PanoramaViewer] Image pre-download failed:", err);
-        // Still allow Pannellum to try loading directly
-        setIsImageCached(true);
-      });
-
-    return () => abortController.abort();
-  }, [imageUrl]);
-
-  // ── Phase 2: Init Pannellum only AFTER image is cached ──
-  useEffect(() => {
-    if (!containerRef.current || !imageUrl || !isImageCached) return;
 
     const loadPannellum = async () => {
       // Import CSS
@@ -207,8 +168,6 @@ export default function PanoramaViewer({
         viewerRef.current = null;
       }
 
-      // Create new viewer — image is already in browser cache,
-      // so Pannellum will load from cache almost instantly.
       const pannellum = window.pannellum;
       if (!pannellum || !containerRef.current) return;
 
@@ -265,7 +224,7 @@ export default function PanoramaViewer({
         viewerRef.current = null;
       }
     };
-  }, [imageUrl, isImageCached, initialHfov, initialPitch, initialYaw]);
+  }, [imageUrl, initialHfov, initialPitch, initialYaw]);
 
   return (
     <div className="absolute inset-0 z-0">
@@ -286,9 +245,6 @@ export default function PanoramaViewer({
             <div className="text-center">
               <div className="w-10 h-10 border-3 border-white/10 border-t-[#053384] rounded-full animate-spin mx-auto mb-3" />
               <p className="text-white/50 text-sm">Đang tải ảnh 360°...</p>
-              {downloadProgress && (
-                <p className="text-white/30 text-xs mt-1">{downloadProgress}</p>
-              )}
             </div>
           </motion.div>
         )}
