@@ -16,6 +16,7 @@ pgvector==0.3.2
 
 # ===== AI (Google Gemini) =====
 google-genai>=1.0.0
+google-api-core>=2.14.0
 
 # ===== TTS Fallback =====
 edge-tts>=6.1.0

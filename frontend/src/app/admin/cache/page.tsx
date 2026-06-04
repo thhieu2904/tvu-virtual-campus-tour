@@ -246,7 +246,7 @@ function AdminCacheContent() {
 
   // Modal & configuration state
   const [showRebuildModal, setShowRebuildModal] = useState(false)
-  const [dryRun, setDryRun] = useState(false)
+  const [dryRun, setDryRun] = useState(true)
   const [forceRebuild, setForceRebuild] = useState(false)
   const [expandedLocations, setExpandedLocations] = useState(false)
   const [expandedMascots, setExpandedMascots] = useState(false)
@@ -326,7 +326,7 @@ function AdminCacheContent() {
       } catch (err) {
         setJobError(err instanceof Error ? err.message : 'Không đọc được tiến độ job')
       }
-    }, 1800)
+    }, 4000)
 
     return () => window.clearInterval(timer)
   }, [jobDetail, loadResources, loadSummary])
@@ -369,10 +369,10 @@ function AdminCacheContent() {
   }, [jobDetail, loadSummary])
 
   const handleOpenRebuildModal = useCallback(() => {
-    setDryRun(scope === 'global')
+    setDryRun(true)
     setForceRebuild(false)
     setShowRebuildModal(true)
-  }, [scope])
+  }, [])
 
   const handleStartRebuild = useCallback(() => {
     setShowRebuildModal(false)
@@ -974,13 +974,13 @@ function AdminCacheContent() {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-xl font-bold text-[#10213f]">
-                      {dryRun ? 0 : (forceRebuild ? summary.total_items : summary.estimated_cost.rag_requests)}
+                      {dryRun ? 0 : summary.estimated_cost.rag_requests}
                     </span>
                     <span className="text-[0.68rem] text-[#7a96c9] mt-0.5">RAG Requests</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-xl font-bold text-[#10213f]">
-                      {dryRun ? 0 : (forceRebuild ? summary.total_items : summary.estimated_cost.tts_requests)}
+                      {dryRun ? 0 : summary.estimated_cost.tts_requests}
                     </span>
                     <span className="text-[0.68rem] text-[#7a96c9] mt-0.5">TTS Requests</span>
                   </div>

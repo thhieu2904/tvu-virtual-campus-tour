@@ -33,6 +33,11 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 QA_CACHE_PATH = BACKEND_ROOT / "data" / "qa_cache.json"
 _qa_cache_file_lock = asyncio.Lock()
 
+# In-memory set of cancelled job IDs for cooperative cancellation.
+# Avoids repeated DB queries during job execution.
+_cancelled_job_ids: set[str] = set()
+_cancelled_lock = asyncio.Lock()
+
 
 class CacheItemSkipped(Exception):
     """Raised when an item should be skipped without failing the whole job."""
@@ -129,9 +134,22 @@ async def _increment_progress(job_id: UUID, failed: bool) -> None:
 
 
 async def _is_cancelled(job_id: UUID) -> bool:
+    job_id_str = str(job_id)
+    # Fast path: check in-memory flag first
+    if job_id_str in _cancelled_job_ids:
+        return True
+    # Slow path: check DB
     async with async_session() as session:
         job = await session.get(CacheJob, job_id)
-        return not job or job.status == "cancelled"
+        cancelled = not job or job.status == "cancelled"
+        if cancelled:
+            _cancelled_job_ids.add(job_id_str)
+        return cancelled
+
+
+def mark_job_cancelled(job_id: str) -> None:
+    """Mark a job as cancelled in-memory for fast cooperative cancellation."""
+    _cancelled_job_ids.add(job_id)
 
 
 async def _finish_job(job_id: UUID) -> None:
@@ -349,10 +367,10 @@ async def _build_work_items(job: CacheJob) -> list[CacheWorkItem]:
 
 async def _build_global_work_items(session: AsyncSession, focus: str, force: bool) -> list[CacheWorkItem]:
     work_items: list[CacheWorkItem] = []
-    
+
     mas_res = await session.execute(select(Mascot))
     mascots = list(mas_res.scalars().all())
-    
+
     for mascot in mascots:
         intro_item = fingerprints.build_mascot_intro_item(mascot)
         artifact_map = await _current_artifact_map(session, [intro_item])
@@ -368,10 +386,15 @@ async def _build_global_work_items(session: AsyncSession, focus: str, force: boo
                     force=force,
                 )
             )
-            
-    loc_res = await session.execute(select(Location).where(Location.status == "active"))
+
+    # Preload relationships to avoid N+1 queries when building location work items
+    loc_res = await session.execute(
+        select(Location)
+        .where(Location.status == "active")
+        .options(selectinload(Location.suggested_questions), selectinload(Location.mascot))
+    )
     locations = list(loc_res.scalars().all())
-    
+
     for location in locations:
         location_focus = focus
         if focus == "voice":
@@ -381,7 +404,7 @@ async def _build_global_work_items(session: AsyncSession, focus: str, force: boo
         else:
             location_focus = "questions"
         work_items.extend(await _build_location_work_items(session, location.id, location_focus, force))
-        
+
     return work_items
 
 
@@ -620,6 +643,53 @@ async def _process_location_intro(item: CacheWorkItem) -> None:
         await session.commit()
 
 
+def _build_single_qa_fingerprint(
+    location: Location,
+    question_text: str,
+    sort_order: int,
+    item_key: str,
+) -> dict[str, fingerprints.CacheFingerprintItem]:
+    """Build fingerprint items for a single QA pair without iterating all questions."""
+    # Find the matching question object
+    for idx, q in enumerate(fingerprints.sorted_questions(location)):
+        text = str(getattr(q, "question", q)).strip()
+        loc_name = str(getattr(location, "name", "")).strip()
+        candidate_key = fingerprints.qa_item_key(location.id, text, loc_name)
+        if candidate_key == item_key:
+            fp = fingerprints.qa_item_fingerprint(location, q, idx)
+            cache_key = fingerprints.qa_cache_lookup_key(text, loc_name)
+            metadata = {
+                "question": text,
+                "sort_order": int(getattr(q, "sort_order", idx) or 0),
+                "qa_cache_key": cache_key,
+                "location_slug": str(getattr(location, "slug", "")).strip(),
+            }
+            return {
+                "qa_answer": fingerprints.CacheFingerprintItem(
+                    artifact_type="qa_answer",
+                    item_key=candidate_key,
+                    fingerprint=fp,
+                    label=text,
+                    qa_cache_key=cache_key,
+                    metadata=metadata,
+                ),
+                "qa_audio": fingerprints.CacheFingerprintItem(
+                    artifact_type="qa_audio",
+                    item_key=candidate_key,
+                    fingerprint=fp,
+                    label=text,
+                    qa_cache_key=cache_key,
+                    metadata=metadata,
+                ),
+            }
+    # Fallback: rebuild all and filter (should not normally happen)
+    return {
+        fp_item.artifact_type: fp_item
+        for fp_item in fingerprints.build_location_qa_items(location)
+        if fp_item.item_key == item_key
+    }
+
+
 async def _process_location_qa_pair(item: CacheWorkItem) -> None:
     async with async_session() as session:
         location = await _load_location(session, item.location_id)
@@ -653,11 +723,7 @@ async def _process_location_qa_pair(item: CacheWorkItem) -> None:
         }
         await _write_qa_cache_entry(qa_cache_key, qa_entry)
 
-        fp_items = {
-            fp_item.artifact_type: fp_item
-            for fp_item in fingerprints.build_location_qa_items(location)
-            if fp_item.item_key == item.item_key
-        }
+        fp_items = _build_single_qa_fingerprint(location, item.question or "", item.sort_order, item.item_key)
         answer_item = fp_items["qa_answer"]
         audio_item = fp_items["qa_audio"]
         metadata = {
@@ -715,10 +781,8 @@ async def _process_location_qa_audio(item: CacheWorkItem) -> None:
         }
         await _write_qa_cache_entry(qa_cache_key, updated_entry)
 
-        audio_item = next(
-            fp_item for fp_item in fingerprints.build_location_qa_items(location)
-            if fp_item.artifact_type == "qa_audio" and fp_item.item_key == item.item_key
-        )
+        fp_items = _build_single_qa_fingerprint(location, item.question or "", item.sort_order, item.item_key)
+        audio_item = fp_items["qa_audio"]
         await _upsert_artifact(
             session,
             artifact_type="qa_audio",
@@ -822,3 +886,6 @@ async def run_cache_job(job_id: str) -> None:
             await _increment_progress(parsed_job_id, failed=True)
 
     await _finish_job(parsed_job_id)
+
+    # Clean up in-memory cancellation flag
+    _cancelled_job_ids.discard(job_id)

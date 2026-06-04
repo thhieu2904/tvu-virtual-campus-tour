@@ -7,7 +7,7 @@ from typing import Iterable
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -133,13 +133,17 @@ async def _load_artifacts(
     if not item_list:
         return {}
 
-    artifact_types = {item.artifact_type for item in item_list}
-    item_keys = {item.item_key for item in item_list}
-    result = await session.execute(
-        select(CacheArtifact).where(
-            CacheArtifact.artifact_type.in_(artifact_types),
-            CacheArtifact.item_key.in_(item_keys),
+    # Use exact (artifact_type, item_key) pair matching to avoid cross-join
+    # that would fetch extra rows when types and keys don't correspond 1:1.
+    pair_conditions = [
+        and_(
+            CacheArtifact.artifact_type == item.artifact_type,
+            CacheArtifact.item_key == item.item_key,
         )
+        for item in item_list
+    ]
+    result = await session.execute(
+        select(CacheArtifact).where(or_(*pair_conditions))
     )
     return {
         (artifact.artifact_type, artifact.item_key): artifact
@@ -411,6 +415,8 @@ async def _global_summary(session: AsyncSession, focus: str) -> CacheSummaryResp
         target_id=None,
         focus=focus,
         status=_summary_status(artifacts, latest_job),
+        current_fingerprint=_summary_fingerprint(items),
+        cached_fingerprint=_cached_fingerprint(artifacts),
         affected_items=affected_items,
         total_items=total_items,
         estimated_cost=_estimate_cost(artifacts, focus),
@@ -497,8 +503,10 @@ async def create_cache_job(
     payload: CacheJobCreateRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
+    user: dict = Depends(verify_supabase_token),
 ):
     target_id = _as_uuid(payload.target_id, "target_id")
+    requested_by = user.get("email") or user.get("id") or None
 
     summary = await _summary_for_request(session, payload.scope, target_id, payload.focus)
     detected_changes = _detected_changes(summary, payload.force)
@@ -515,7 +523,7 @@ async def create_cache_job(
         target_id=target_id,
         focus=payload.focus,
         status="succeeded" if payload.dry_run or total_items == 0 else "queued",
-        requested_by=None,
+        requested_by=requested_by,
         params={"dry_run": payload.dry_run, "force": payload.force},
         detected_changes=detected_changes,
         total_items=total_items,
@@ -592,6 +600,8 @@ async def cancel_cache_job(
         raise HTTPException(status_code=400, detail=f"Không thể hủy job ở trạng thái {job.status}")
     job.status = "cancelled"
     job.updated_at = datetime.now(timezone.utc)
+    # Signal the worker in-memory for faster cooperative cancellation
+    cache_worker.mark_job_cancelled(str(parsed_job_id))
     await cache_worker.add_job_log(session, job.id, "warning", "Admin đã yêu cầu hủy job.")
     await session.commit()
     await session.refresh(job)
