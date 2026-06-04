@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
-import { useChatStore, _stopCurrentAudio } from "@/features/chat/store";
+import { useChatStore } from "@/features/chat/store";
 import { useKioskIdleWatcher } from "@/hooks/useKioskIdleWatcher";
 import PanoramaViewer from "@/features/tour/components/PanoramaViewer";
 import Minimap from "@/features/tour/components/Minimap";
@@ -163,27 +163,10 @@ export default function TourPage() {
   // ── Global Idle Reset ──
   const handleKioskReset = useCallback(() => {
     setIsResetting(true); // Fade-to-black
-
     setTimeout(() => {
-      // 1. Dừng audio & Đặt lại màn hình Start TRƯỚC KHI reset/navigate
-      // Điều này ngăn ChatOverlay tự động phát audio intro khi navigate về start node
-      _stopCurrentAudio();
-      setHasStarted(false);
-
-      // 2. Reset chat
-      useChatStore.getState().resetSession();
-      // 3. Navigate to start node
-      const { locations, navigateTo, setActiveOverlay } =
-        useTourStore.getState();
-      const startNode = locations.find((l) => l.isStartNode) || locations[0];
-      if (startNode) navigateTo(startNode.slug);
-      // 4. Close overlays
-      setActiveOverlay("none");
-
-      // Fade out black overlay
-      setTimeout(() => setIsResetting(false), 500);
-    }, 500); // Wait for fade-to-black
-  }, [setHasStarted]);
+      window.location.reload(); // Hard reload — clears all memory (WebGL, Three.js, etc.)
+    }, 500);
+  }, []);
 
   const { isWarning, warningSecondsLeft, dismissWarning } = useKioskIdleWatcher(
     {
