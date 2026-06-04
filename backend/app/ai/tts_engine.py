@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 # Audio content types
 CONTENT_TYPE_WAV = "audio/wav"    # Gemini output: converted to WAV 24kHz 16-bit mono
 CONTENT_TYPE_MP3 = "audio/mpeg"   # Edge TTS output: MP3
-TTS_PROMPT_VERSION = "tts-pronunciation-v3"
+# Keep the global prompt version stable so existing good audio/fingerprints stay valid.
+# Pronunciation fixes below change only cache keys for text that is actually rewritten.
+TTS_PROMPT_VERSION = "tts-persona-v2"
 MALE_VOICES = {"Puck"}
 TTS_REWRITE_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (

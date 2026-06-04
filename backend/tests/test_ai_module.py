@@ -203,6 +203,11 @@ class TestTTSCache(unittest.TestCase):
             "Đại học Trà Vinh có Khoa Công nghệ thông tin.",
         )
 
+    def test_pronunciation_rewrite_keeps_global_tts_version_stable(self):
+        from app.ai.tts_engine import TTS_PROMPT_VERSION
+
+        self.assertEqual(TTS_PROMPT_VERSION, "tts-persona-v2")
+
     def test_cache_key_uses_rewritten_tts_text(self):
         from app.ai.tts_engine import _cache_key
 
