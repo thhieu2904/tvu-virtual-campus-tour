@@ -86,9 +86,9 @@ export default function AdminLayout({
 
   return (
     <TooltipProvider>
-      <div className="admin-shell flex min-h-screen w-full flex-col bg-[#f6f8fb]">
+      <div className="admin-shell flex h-screen w-full flex-col overflow-hidden bg-[#f6f8fb]">
         {/* ─── Top Bar ─── */}
-        <header className="sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-[#d7e0f0]/80 bg-white/95 px-4 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-30 flex h-[60px] shrink-0 items-center gap-4 border-b border-[#d7e0f0]/80 bg-white/95 px-4 backdrop-blur-md sm:px-6">
           {/* Mobile menu */}
           <Sheet>
             <SheetTrigger render={
@@ -181,10 +181,10 @@ export default function AdminLayout({
         </header>
 
         {/* ─── Body ─── */}
-        <div className="flex flex-1 w-full flex-col sm:flex-row">
+        <div className="flex min-h-0 flex-1 w-full flex-col overflow-hidden sm:flex-row">
           {/* Sidebar */}
-          <aside className="hidden w-[260px] shrink-0 flex-col border-r border-[#d7e0f0]/80 bg-white sm:flex">
-            <nav className="flex-1 space-y-1 px-3 py-4">
+          <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-[#d7e0f0]/80 bg-white sm:flex">
+            <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
               {navigation.map((item) => {
                 const active = isNavActive(pathname, item.href)
                 return (
@@ -218,7 +218,7 @@ export default function AdminLayout({
           </aside>
 
           {/* Main content */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
             {children}
           </main>
         </div>
