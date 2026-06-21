@@ -1,18 +1,23 @@
+import { EventStreamContentType, fetchEventSource } from "@microsoft/fetch-event-source";
 import { create } from "zustand";
+
 import { useTourStore, onNavigationStart } from "@/features/tour/store";
-import { ChatMessage } from "./types";
+
 import {
   CHAT_CONNECTION_ERROR_MESSAGE,
   getRandomWaitingMessage,
   isWaitingMessage,
 } from "./messages";
+import { ChatMessage } from "./types";
 
-// ── Constants ──
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
-const MAX_HISTORY_FOR_AI = 20; // Max messages sent to Gemini for context
+const MAX_HISTORY_FOR_AI = 12;
 const THINKING_STATE_DELAY_MS = 1100;
+const NAVIGATION_AFTER_AUDIO_DELAY_MS = 500;
 
-// ── Types ──
+type ToolCall = { name: string; args: Record<string, unknown> };
+type SsePayload = Record<string, unknown> & { request_id?: string };
+
 interface ChatState {
   messages: ChatMessage[];
   sessionId: string | null;
@@ -20,7 +25,6 @@ interface ChatState {
   error: string | null;
   isTTSEnabled: boolean;
 
-  // === Actions ===
   toggleTTS: () => void;
   initSession: () => Promise<string | null>;
   resetSession: () => void;
@@ -30,9 +34,23 @@ interface ChatState {
   _setMessages: (messages: ChatMessage[]) => void;
 }
 
-// ── Global Audio Manager ──
 let _currentAudio: HTMLAudioElement | null = null;
 let _currentAudioUrl: string | null = null;
+let _activeChatAbortController: AbortController | null = null;
+let _activeRequestId: string | null = null;
+let _pendingToolCalls: ToolCall[] = [];
+let _initSessionPromise: Promise<string | null> | null = null;
+
+function _clearPendingToolCalls() {
+  _pendingToolCalls = [];
+}
+
+function _abortActiveRequest() {
+  if (_activeChatAbortController) {
+    _activeChatAbortController.abort();
+    _activeChatAbortController = null;
+  }
+}
 
 export function _stopCurrentAudio() {
   if (_currentAudio) {
@@ -41,7 +59,6 @@ export function _stopCurrentAudio() {
     _currentAudio = null;
   }
   if (_currentAudioUrl) {
-    // Only revoke if it's a blob URL
     if (_currentAudioUrl.startsWith("blob:")) {
       URL.revokeObjectURL(_currentAudioUrl);
     }
@@ -70,68 +87,67 @@ export function playPrecachedAudio(url: string) {
     if (_currentAudio === audio) {
       useTourStore.getState().setAvatarState("speaking");
     }
-  }).catch(e => {
-    console.error("Failed to play precached audio:", e);
+  }).catch((error) => {
+    console.error("Failed to play precached audio:", error);
     if (_currentAudio === audio) {
       useTourStore.getState().setAvatarState("idle");
     }
   });
 }
 
-// Stop audio when user navigates to a different location (avoids voice bleed).
-onNavigationStart(_stopCurrentAudio);
+onNavigationStart(() => {
+  _abortActiveRequest();
+  _clearPendingToolCalls();
+  _stopCurrentAudio();
+});
 
-// ── Tool Call Queue ──
-type ToolCall = { name: string; args: Record<string, unknown> };
+function _isToolCall(value: unknown): value is ToolCall {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<ToolCall>;
+  return typeof candidate.name === "string" && !!candidate.args && typeof candidate.args === "object";
+}
 
-let _pendingToolCalls: ToolCall[] = [];
-
-/**
- * Queue a tool call to be executed after AI finishes speaking.
- * This ensures sequential flow: AI speaks → map opens → navigate.
- */
-function _queueToolCall(toolCall: ToolCall) {
-  _pendingToolCalls.push(toolCall);
+function _setToolCalls(requestId: string, calls: unknown[]) {
+  if (_activeRequestId !== requestId) return;
+  _pendingToolCalls = calls.filter(_isToolCall);
 }
 
 function _hasNavigation(calls: ToolCall[]) {
   return calls.some((toolCall) => toolCall.name === "navigate_to");
 }
 
-/**
- * Flush all queued tool calls AFTER AI finishes streaming.
- * Executes in order: navigate_to first, then show_media (deferred).
- */
-function _flushToolCalls() {
+function _flushToolCalls(requestId: string) {
+  if (_activeRequestId !== requestId) return;
+
   const tourStore = useTourStore.getState();
   const calls = [..._pendingToolCalls];
-  _pendingToolCalls = [];
-
-  let hasNavigation = false;
+  _clearPendingToolCalls();
+  const hasNavigation = _hasNavigation(calls);
 
   for (const toolCall of calls) {
     switch (toolCall.name) {
       case "navigate_to": {
-        const slug = toolCall.args.location_slug as string;
-        if (slug && slug !== tourStore.currentLocationSlug) {
-          hasNavigation = true;
-          // Delay map transition by 3 seconds so the mascot can perform the Thankful bow and speak their guiding sentence before flying away
+        const slug = toolCall.args.location_slug;
+        if (typeof slug === "string" && slug && slug !== tourStore.currentLocationSlug) {
           setTimeout(() => {
-            tourStore.setPendingNavigation(slug);
-          }, 3000);
+            if (_activeRequestId === requestId) {
+              tourStore.setPendingNavigation(slug);
+            }
+          }, NAVIGATION_AFTER_AUDIO_DELAY_MS);
         }
         break;
       }
 
       case "show_media": {
-        const preferredTab = (toolCall.args.media_type as string) === "image" ? "info" as const : "video" as const;
-        const focusMediaId = (toolCall.args.focus_media_id as string) || null;
+        const mediaType = toolCall.args.media_type;
+        const preferredTab = mediaType === "image" ? "info" as const : "video" as const;
+        const focusMediaId = typeof toolCall.args.focus_media_id === "string"
+          ? toolCall.args.focus_media_id
+          : null;
 
         if (hasNavigation) {
-          // Defer media focus until after navigation completes
           tourStore.setPendingMediaFocus({ mediaId: focusMediaId, tab: preferredTab });
         } else {
-          // Show immediately at current location
           tourStore.setFocusedMedia(focusMediaId, preferredTab);
           tourStore.setActiveOverlay("info");
         }
@@ -139,28 +155,76 @@ function _flushToolCalls() {
       }
 
       case "toggle_map": {
-        const state = toolCall.args.state as string;
-        if (!hasNavigation) {
-          // Only toggle map if we're not already about to navigate
+        const state = toolCall.args.state;
+        if (!hasNavigation && (state === "open" || state === "close")) {
           tourStore.setActiveOverlay(state === "open" ? "map" : "none");
         }
         break;
       }
-
     }
   }
 }
 
-function _flushImmediateVisualToolCalls() {
-  const calls = [..._pendingToolCalls];
-  if (calls.length === 0 || _hasNavigation(calls)) return;
+function _flushImmediateVisualToolCalls(requestId: string) {
+  if (_activeRequestId !== requestId || _pendingToolCalls.length === 0) return;
+  if (_hasNavigation(_pendingToolCalls)) return;
 
-  const hasVisualTool = calls.some((toolCall) =>
-    toolCall.name === "show_media" || toolCall.name === "toggle_map"
+  const hasVisualTool = _pendingToolCalls.some(
+    (toolCall) => toolCall.name === "show_media" || toolCall.name === "toggle_map",
   );
   if (hasVisualTool) {
-    _flushToolCalls();
+    _flushToolCalls(requestId);
   }
+}
+
+function _playResponseAudio(
+  requestId: string,
+  url: string,
+  answerLength: number,
+  onFinished: () => void,
+) {
+  if (_activeRequestId !== requestId) return;
+  _stopCurrentAudio();
+
+  const audio = new Audio(url);
+  _currentAudioUrl = url;
+  _currentAudio = audio;
+  const timeoutMs = Math.min(Math.max(answerLength * 120, 10000), 45000);
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    console.warn("Audio playback timeout — flushing queued tool calls");
+    if (_currentAudio === audio) {
+      _stopCurrentAudio();
+      onFinished();
+    }
+  }, timeoutMs);
+
+  const finish = () => {
+    if (_currentAudio !== audio) return;
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer);
+      fallbackTimer = null;
+    }
+    _stopCurrentAudio();
+    onFinished();
+  };
+
+  audio.onplaying = () => {
+    if (_currentAudio === audio) {
+      useTourStore.getState().setAvatarState("speaking");
+    }
+  };
+  audio.onended = finish;
+  audio.onerror = () => {
+    console.error("Audio playback load error:", url);
+    finish();
+  };
+  audio.onstalled = () => {
+    console.warn("Audio playback stalled:", url);
+  };
+  audio.play().catch((error) => {
+    console.error("Audio playback error:", error);
+    finish();
+  });
 }
 
 function appendConnectionError(content: string) {
@@ -170,16 +234,18 @@ function appendConnectionError(content: string) {
   return `${content}\n\n${CHAT_CONNECTION_ERROR_MESSAGE}`;
 }
 
-function getErrorMessage(err: unknown) {
-  return err instanceof Error ? err.message : "Unexpected error";
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unexpected error";
 }
 
-// ── Session init dedup guard ──
-// Prevents concurrent sendMessage() calls from each creating a separate
-// ChatSession when sessionId is still null (e.g. rapid double-tap on kiosk).
-let _initSessionPromise: Promise<string | null> | null = null;
+function parsePayload(data: string): SsePayload {
+  const parsed = JSON.parse(data) as unknown;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid SSE payload");
+  }
+  return parsed as SsePayload;
+}
 
-// ── Store ──
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   sessionId: null,
@@ -188,46 +254,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isTTSEnabled: true,
 
   toggleTTS: () => set((state) => {
-    const newState = !state.isTTSEnabled;
-    if (!newState) {
+    const isTTSEnabled = !state.isTTSEnabled;
+    if (!isTTSEnabled) {
       _stopCurrentAudio();
     }
-    return { isTTSEnabled: newState };
+    return { isTTSEnabled };
   }),
 
   _setMessages: (messages) => set({ messages }),
 
-  /**
-   * Add a single message to the conversation (append, never replace).
-   * Used for intro messages on location change.
-   */
   addMessage: (message) => {
-    set((state) => ({
-      messages: [...state.messages, message],
-    }));
+    set((state) => ({ messages: [...state.messages, message] }));
   },
 
-  /**
-   * Initialize a new chat session on the first real question.
-   * Uses a module-level promise guard so concurrent callers share a single
-   * in-flight POST instead of each creating their own session.
-   */
   initSession: async () => {
     const existingSessionId = get().sessionId;
     if (existingSessionId) return existingSessionId;
-
-    // If another call is already in flight, piggyback on it
     if (_initSessionPromise) return _initSessionPromise;
 
     _initSessionPromise = (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/chat/session`, { method: "POST" });
-        if (!res.ok) throw new Error("Failed to init chat session");
-        const data = await res.json();
+        const response = await fetch(`${API_URL}/api/chat/session`, { method: "POST" });
+        if (!response.ok) throw new Error("Failed to init chat session");
+        const data = await response.json();
         set({ sessionId: data.session_id });
         return data.session_id as string | null;
-      } catch (err) {
-        console.error(err);
+      } catch (error) {
+        console.error(error);
         set({ error: "Could not initialize chat session." });
         return null;
       } finally {
@@ -237,13 +290,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return _initSessionPromise;
   },
 
-  /**
-   * Reset session after idle timeout. Clears all messages.
-   * This is the ONLY place where messages are cleared.
-   */
   resetSession: () => {
-    set({ messages: [], sessionId: null, error: null });
-    // Show welcome message from current location
+    _abortActiveRequest();
+    _clearPendingToolCalls();
+    _activeRequestId = null;
+    _stopCurrentAudio();
+    set({ messages: [], sessionId: null, error: null, isLoading: false });
+
     const location = useTourStore.getState().currentLocation();
     if (location) {
       set({
@@ -258,21 +311,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  _appendChunk: (messageId: string, chunk: string) => {
+  _appendChunk: (messageId, chunk) => {
     set((state) => ({
-      messages: state.messages.map((msg) => {
-        if (msg.id === messageId) {
-          const currentContent = isWaitingMessage(msg.content) ? "" : msg.content;
-          return { ...msg, content: currentContent + chunk };
-        }
-        return msg;
+      messages: state.messages.map((message) => {
+        if (message.id !== messageId) return message;
+        const currentContent = isWaitingMessage(message.content) ? "" : message.content;
+        return { ...message, content: currentContent + chunk };
       }),
     }));
   },
 
-  sendMessage: async (message: string, locationId?: string) => {
+  sendMessage: async (message, locationId) => {
     const { sessionId, messages, isTTSEnabled } = get();
     let thinkingTimer: ReturnType<typeof setTimeout> | null = null;
+    let receivedDone = false;
+    let audioStarted = false;
+    let requestId = `client-${Date.now()}`;
+
     const scheduleThinkingState = () => {
       if (thinkingTimer) return;
       thinkingTimer = setTimeout(() => {
@@ -287,298 +342,184 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     };
 
-    // Dừng âm thanh cũ ngay khi có request mới
+    _abortActiveRequest();
+    _clearPendingToolCalls();
     _stopCurrentAudio();
+    const abortController = new AbortController();
+    _activeChatAbortController = abortController;
+    _activeRequestId = requestId;
 
-    // Optimistic UI update
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: message };
-    const botMsgId = (Date.now() + 1).toString();
-    const botMsg: ChatMessage = {
-      id: botMsgId,
+    const userMessage: ChatMessage = { id: Date.now().toString(), role: "user", content: message };
+    const botMessageId = (Date.now() + 1).toString();
+    const botMessage: ChatMessage = {
+      id: botMessageId,
       role: "assistant",
       content: getRandomWaitingMessage(),
       isStreaming: true,
     };
-
-    set({ messages: [...messages, userMsg, botMsg], isLoading: true, error: null });
-
-    // Fast cache hits should feel immediate; only show thinking for slower requests.
+    set({ messages: [...messages, userMessage, botMessage], isLoading: true, error: null });
     scheduleThinkingState();
 
-    // Gather history (last N messages for AI context)
-    const history = messages.slice(-MAX_HISTORY_FOR_AI).map((m) => ({
-      role: m.role,
-      content: m.content,
+    const history = messages.slice(-MAX_HISTORY_FOR_AI).map((item) => ({
+      role: item.role,
+      content: item.content,
     }));
-
     const ensureSession = async () => {
       const activeSessionId = get().sessionId || sessionId || await get().initSession();
-      if (!activeSessionId) {
-        throw new Error("Could not initialize chat session.");
-      }
+      if (!activeSessionId) throw new Error("Could not initialize chat session.");
       return activeSessionId;
     };
 
-    // ── Audio-First Mode (TTS enabled) ──
-    if (isTTSEnabled) {
-      try {
-        const activeSessionId = await ensureSession();
-        const res = await fetch(`${API_URL}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message,
-            ...(locationId ? { location_id: locationId } : {}),
-            session_id: activeSessionId,
-            tts: true,
-            history,
-          }),
-        });
-
-        if (!res.ok) throw new Error("API responded with an error");
-
-        const data = await res.json();
-        cancelThinkingState();
-        const toolActions: ToolCall[] = Array.isArray(data.tool_actions) ? data.tool_actions : [];
-        const ttsProvider: string | null = data.tts_provider ?? null;
-
-        if (ttsProvider === "edge-tts") {
-          console.warn("⚠️ TTS fallback: using Edge TTS (Microsoft) instead of Gemini");
-        }
-
-        // Update bot message with full text at once
-        set((state) => ({
-          isLoading: false,
-          messages: state.messages.map((msg) =>
-            msg.id === botMsgId
-              ? { ...msg, content: data.answer || "", isStreaming: false, ttsProvider }
-              : msg
-          ),
-        }));
-
-        // Queue tool calls from response
-        if (toolActions.length > 0) {
-          for (const tc of toolActions) {
-            _queueToolCall(tc);
-          }
-          _flushImmediateVisualToolCalls();
-        }
-
-        const shouldYieldAudioToImmediateVideo =
-          !_hasNavigation(toolActions) &&
-          toolActions.some((tc) => tc.name === "show_media" && tc.args.media_type === "video");
-
-        // Chạy logic Tool Call sau khi phát xong audio
-        let audioFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-        const handleAudioEnded = (audio?: HTMLAudioElement) => {
-          if (audio && _currentAudio !== audio) return;
-          if (audioFallbackTimer) {
-            clearTimeout(audioFallbackTimer);
-            audioFallbackTimer = null;
-          }
-          _stopCurrentAudio();
-          if (toolActions.length > 0) {
-            _flushToolCalls();
-          }
-        };
-        const startAudioFallbackTimer = (audio: HTMLAudioElement) => {
-          const textLength = typeof data.answer === "string" ? data.answer.length : 0;
-          const timeoutMs = Math.min(Math.max(textLength * 120, 10000), 30000);
-          audioFallbackTimer = setTimeout(() => {
-            console.warn("Audio playback timeout — flushing queued tool calls");
-            handleAudioEnded(audio);
-          }, timeoutMs);
-        };
-
-        if (shouldYieldAudioToImmediateVideo) {
-          useTourStore.getState().setAvatarState("idle");
-          return;
-        }
-
-        // Play audio if available
-        if (data.audio_url) {
-          _currentAudioUrl = data.audio_url;
-          const audio = new Audio(data.audio_url);
-          _currentAudio = audio;
-          audio.onplaying = () => {
-            if (_currentAudio === audio) {
-              useTourStore.getState().setAvatarState("speaking");
-            }
-            if (audioFallbackTimer) {
-              clearTimeout(audioFallbackTimer);
-              audioFallbackTimer = null;
-            }
-          };
-          audio.onended = () => handleAudioEnded(audio);
-          audio.onerror = () => {
-            console.error("Audio playback load error:", data.audio_url);
-            handleAudioEnded(audio);
-          };
-          audio.onstalled = () => {
-            console.warn("Audio playback stalled:", data.audio_url);
-          };
-          startAudioFallbackTimer(audio);
-          audio.play().then(() => {
-            if (_currentAudio === audio) {
-              useTourStore.getState().setAvatarState("speaking");
-            }
-          }).catch(e => {
-            console.error("Audio playback error:", e);
-            handleAudioEnded(audio);
-          });
-        }
-        else if (data.audio_base64) {
-          const audioBytes = Uint8Array.from(atob(data.audio_base64), c => c.charCodeAt(0));
-          const blob = new Blob([audioBytes], { type: data.audio_content_type || "audio/wav" });
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          _currentAudioUrl = url;
-          _currentAudio = audio;
-
-          audio.onplaying = () => {
-            if (_currentAudio === audio) {
-              useTourStore.getState().setAvatarState("speaking");
-            }
-            if (audioFallbackTimer) {
-              clearTimeout(audioFallbackTimer);
-              audioFallbackTimer = null;
-            }
-          };
-          audio.onended = () => handleAudioEnded(audio);
-          audio.onerror = () => {
-            console.error("Audio blob playback load error");
-            handleAudioEnded(audio);
-          };
-          audio.onstalled = () => {
-            console.warn("Audio blob playback stalled");
-          };
-          startAudioFallbackTimer(audio);
-          audio.play().then(() => {
-            if (_currentAudio === audio) {
-              useTourStore.getState().setAvatarState("speaking");
-            }
-          }).catch(e => {
-            console.error("Audio blob playback error:", e);
-            handleAudioEnded(audio);
-          });
-        } else {
-          // No audio (TTS failed) → go idle and flush tools immediately
-          useTourStore.getState().setAvatarState("idle");
-          setTimeout(() => {
-            if (toolActions.length > 0) {
-              _flushToolCalls();
-            }
-          }, 500);
-        }
-
-      } catch (err: unknown) {
-        cancelThinkingState();
-        console.error("Chat error:", err);
-        set((state) => ({
-          isLoading: false,
-          error: getErrorMessage(err),
-          messages: state.messages.map((msg) =>
-            msg.id === botMsgId
-              ? {
-                  ...msg,
-                  content: appendConnectionError(msg.content),
-                  isStreaming: false,
-                }
-              : msg
-          ),
-        }));
-        useTourStore.getState().setAvatarState("idle");
-      }
-      return;
-    }
-
-    // ── SSE Streaming Mode (TTS disabled / Muted) ──
     try {
       const activeSessionId = await ensureSession();
-      const res = await fetch(`${API_URL}/api/chat`, {
+      await fetchEventSource(`${API_URL}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: EventStreamContentType,
+        },
         body: JSON.stringify({
           message,
           ...(locationId ? { location_id: locationId } : {}),
           session_id: activeSessionId,
           stream: true,
+          tts: isTTSEnabled,
           history,
         }),
+        signal: abortController.signal,
+        openWhenHidden: true,
+        async onopen(response) {
+          if (!response.ok) {
+            throw new Error(`Chat API responded with ${response.status}`);
+          }
+          const contentType = response.headers.get("content-type");
+          if (!contentType?.startsWith(EventStreamContentType)) {
+            throw new Error(`Expected SSE response, received ${contentType || "unknown content type"}`);
+          }
+        },
+        onmessage(event) {
+          if (!event.data) return;
+          const payload = parsePayload(event.data);
+          const eventRequestId = typeof payload.request_id === "string" ? payload.request_id : requestId;
+
+          if (event.event === "start") {
+            requestId = eventRequestId;
+            _activeRequestId = requestId;
+            return;
+          }
+          if (_activeRequestId !== eventRequestId) return;
+
+          switch (event.event) {
+            case "answer": {
+              cancelThinkingState();
+              const text = typeof payload.text === "string" ? payload.text : "";
+              set((state) => ({
+                messages: state.messages.map((item) =>
+                  item.id === botMessageId
+                    ? { ...item, content: text, isStreaming: true }
+                    : item,
+                ),
+              }));
+              break;
+            }
+
+            case "tool_actions": {
+              const actions = Array.isArray(payload.actions) ? payload.actions : [];
+              _setToolCalls(requestId, actions);
+              _flushImmediateVisualToolCalls(requestId);
+              break;
+            }
+
+            case "audio_ready": {
+              const url = typeof payload.url === "string" ? payload.url : "";
+              const provider = typeof payload.provider === "string" ? payload.provider : null;
+              if (provider === "edge-tts") {
+                console.warn("TTS fallback: using Edge TTS instead of Gemini");
+              }
+              set((state) => ({
+                messages: state.messages.map((item) =>
+                  item.id === botMessageId ? { ...item, ttsProvider: provider } : item,
+                ),
+              }));
+              if (url && get().isTTSEnabled) {
+                audioStarted = true;
+                const answerLength = get().messages.find((item) => item.id === botMessageId)?.content.length || 0;
+                _playResponseAudio(requestId, url, answerLength, () => _flushToolCalls(requestId));
+              }
+              break;
+            }
+
+            case "error": {
+              const recoverable = payload.recoverable === true;
+              const errorMessage = typeof payload.message === "string"
+                ? payload.message
+                : CHAT_CONNECTION_ERROR_MESSAGE;
+              if (recoverable) {
+                console.warn("Recoverable chat stream error:", payload.code, errorMessage);
+              } else {
+                throw new Error(errorMessage);
+              }
+              break;
+            }
+
+            case "done": {
+              receivedDone = true;
+              cancelThinkingState();
+              set((state) => ({
+                isLoading: false,
+                messages: state.messages.map((item) =>
+                  item.id === botMessageId ? { ...item, isStreaming: false } : item,
+                ),
+              }));
+              if (!audioStarted) {
+                useTourStore.getState().setAvatarState("idle");
+                setTimeout(() => _flushToolCalls(requestId), 500);
+              }
+              break;
+            }
+          }
+        },
+        onclose() {
+          if (!receivedDone && !abortController.signal.aborted) {
+            throw new Error("Chat stream closed before completion");
+          }
+        },
+        onerror(error) {
+          throw error;
+        },
       });
-
-      if (!res.ok) {
-        throw new Error("API responded with an error");
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No reader available");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n\r?\n/);
-        buffer = lines.pop() || "";
-
-        for (const block of lines) {
-          if (block.includes("event: sources") || block.includes("event: thought")) {
-            continue;
-          }
-
-          if (block.includes("event: tool_call")) {
-            const dataMatch = block.match(/data: (.*)/);
-            if (dataMatch) {
-              try {
-                const payload = JSON.parse(dataMatch[1]);
-                const toolCall = JSON.parse(payload.content);
-                _queueToolCall(toolCall);
-              } catch (e) {
-                console.error("Error parsing tool_call:", e);
-              }
-            }
-            continue;
-          }
-
-          const dataMatch = block.match(/data: (.*)/);
-          if (dataMatch) {
-            try {
-              const data = JSON.parse(dataMatch[1]);
-              if (data.content) {
-                get()._appendChunk(botMsgId, data.content);
-              }
-            } catch (e) {
-              console.error("Error parsing SSE data:", e, block);
-            }
-          }
-        }
-      }
-
-    } catch (err: unknown) {
+    } catch (error: unknown) {
       cancelThinkingState();
-      console.error("Chat error:", err);
-      set((state) => ({
-        error: getErrorMessage(err),
-        messages: state.messages.map((msg) =>
-          msg.id === botMsgId
-            ? { ...msg, content: appendConnectionError(msg.content) }
-            : msg
-        ),
-      }));
-    } finally {
-      cancelThinkingState();
+      if (abortController.signal.aborted) return;
+
+      console.error("Chat error:", error);
       set((state) => ({
         isLoading: false,
-        messages: state.messages.map((msg) =>
-          msg.id === botMsgId ? { ...msg, isStreaming: false } : msg
+        error: getErrorMessage(error),
+        messages: state.messages.map((item) =>
+          item.id === botMessageId
+            ? { ...item, content: appendConnectionError(item.content), isStreaming: false }
+            : item,
         ),
       }));
       useTourStore.getState().setAvatarState("idle");
-      setTimeout(() => _flushToolCalls(), 500);
+      _clearPendingToolCalls();
+    } finally {
+      cancelThinkingState();
+      if (_activeChatAbortController === abortController) {
+        _activeChatAbortController = null;
+      }
+      if (!receivedDone && !abortController.signal.aborted) {
+        set((state) => ({
+          isLoading: false,
+          messages: state.messages.map((item) =>
+            item.id === botMessageId ? { ...item, isStreaming: false } : item,
+          ),
+        }));
+      }
+      if (!_currentAudio && !abortController.signal.aborted) {
+        useTourStore.getState().setAvatarState("idle");
+      }
     }
   },
 }));

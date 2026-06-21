@@ -7,20 +7,21 @@ Phase 2 (current): Function Calling — Gemini can invoke tools (navigate, show_
                     Uses "Collect-then-Decide" pattern for streaming.
 """
 
-import json
 import logging
 import time
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.ai.chat_engine import StreamChunk, generate_response, generate_response_stream
+from app.ai.chat_engine import generate_response
 from app.ai.embedding_engine import embed_query
 from app.ai.tools import AGENT_TOOLS
 from app.cache import slug_cache, vector_search_cache
 from app.db.tables import ChatMessage, ChatSession, Location
 from app.repositories import media_repo, vector_repo
+from app.schemas.chat import TOOL_ACTION_ADAPTER
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +199,38 @@ async def _enrich_tool_actions(
     return enriched_actions
 
 
+async def validate_tool_actions(
+    session: AsyncSession,
+    tool_actions: list[dict],
+) -> list[dict]:
+    """Validate model-generated UI actions against schemas and current DB state."""
+    if not tool_actions:
+        return []
+
+    active_slugs: set[str] = set()
+    if any(action.get("name") == "navigate_to" for action in tool_actions):
+        result = await session.execute(select(Location.slug).where(Location.status == "active"))
+        active_slugs = set(result.scalars().all())
+
+    validated: list[dict] = []
+    for action in tool_actions:
+        try:
+            parsed = TOOL_ACTION_ADAPTER.validate_python(action)
+        except ValidationError as exc:
+            logger.warning("Dropping invalid tool action %s: %s", action, exc)
+            continue
+
+        normalized = parsed.model_dump(exclude_none=True)
+        if normalized["name"] == "navigate_to":
+            slug = normalized["args"]["location_slug"]
+            if slug not in active_slugs:
+                logger.warning("Dropping navigate_to with inactive or unknown slug: %s", slug)
+                continue
+        validated.append(normalized)
+
+    return validated
+
+
 async def process_query(
     session: AsyncSession,
     message: str,
@@ -207,36 +240,29 @@ async def process_query(
     location_name: str = "Sảnh Chính",
     personality_prompt: str | None = None,
     voice_style: str | None = None,
+    input_type: str = "text",
+    persist: bool = True,
 ) -> dict:
-    """
-    Main RAG pipeline (non-streaming) with Function Calling support:
-    1. Embed user question → 768-dim vector
-    2. Vector search → top 5 relevant chunks
-    3. Call Gemini with RAG context + history + tools
-    4. If search tool → RAG round 2 → Gemini round 2 (no tools)
-    5. If UI tool → collect actions for frontend
-    6. Save user + assistant messages to DB
-    7. Return answer + sources + tool_actions
-    """
-    start_time = time.time()
+    """Run the RAG pipeline and return a validated, fully collected result."""
+    started = time.perf_counter()
+    timings: dict[str, float] = {}
+    loc_uuid = UUID(location_id) if location_id else None
 
     try:
-        # Step 1: Embed the user's question
+        phase_started = time.perf_counter()
         query_vector = await embed_query(message)
+        timings["embedding_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
 
-        # Step 2: Vector search for relevant global chunks
-        loc_uuid = UUID(location_id) if location_id else None
+        phase_started = time.perf_counter()
         chunks = await _vector_search_with_cache(session, query_vector, None)
+        timings["vector_search_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
 
-        # Step 2b: Get available slugs for system prompt
+        phase_started = time.perf_counter()
         available_slugs = await _get_available_slugs(session)
-
-        # Release DB connection before calling LLM
+        timings["slug_lookup_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
         await session.commit()
 
-        # Step 3: Build RAG context and call Gemini WITH tools
         rag_context = [chunk["content"] for chunk in chunks]
-
         gen_kwargs = {
             "query": message,
             "history": history,
@@ -248,84 +274,99 @@ async def process_query(
         if voice_style:
             gen_kwargs["voice_style"] = voice_style
 
-        result = await generate_response(
+        phase_started = time.perf_counter()
+        result_r1 = await generate_response(
             rag_context=rag_context,
             tools=[AGENT_TOOLS],
-            **gen_kwargs
+            **gen_kwargs,
         )
+        timings["gemini_round1_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
 
-        # Step 4: Handle function calls
-        tool_actions = []
-        if result.function_calls:
-            for fc in result.function_calls:
-                if fc["name"] in _SEARCH_TOOLS:
-                    # Execute RAG round 2 with the AI's refined query globally
-                    extra_query = fc["args"].get("query", message)
-                    extra_vector = await embed_query(extra_query)
-                    extra_chunks = await vector_repo.vector_search(
-                        session, extra_vector, location_id=None, top_k=5
-                    )
-                    extra_context = [c["content"] for c in extra_chunks]
+        search_fc = next(
+            (fc for fc in result_r1.function_calls if fc.get("name") in _SEARCH_TOOLS),
+            None,
+        )
+        tool_actions = [
+            fc for fc in result_r1.function_calls if fc.get("name") in _UI_TOOLS
+        ]
+        final_result = result_r1
 
-                    # Release DB connection before calling LLM round 2
-                    await session.commit()
+        if search_fc:
+            extra_query = (search_fc.get("args") or {}).get("query", message)
 
-                    logger.info(
-                        f"🔄 Search tool '{fc['name']}' → RAG round 2 "
-                        f"(query='{extra_query}', results={len(extra_chunks)})"
-                    )
+            phase_started = time.perf_counter()
+            extra_vector = await embed_query(extra_query)
+            timings["search_embedding_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
 
-                    # Call Gemini round 2 WITHOUT tools — force text-only response
-                    result = await generate_response(
-                        rag_context=rag_context + extra_context,
-                        **gen_kwargs
-                        # No tools → Gemini only returns text
-                    )
-                    # Update chunks for sources
-                    chunks = chunks + extra_chunks
-                    break  # Max 1 search round to prevent infinite loop
+            phase_started = time.perf_counter()
+            extra_chunks = await _vector_search_with_cache(session, extra_vector, None)
+            timings["search_vector_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
+            extra_context = [chunk["content"] for chunk in extra_chunks]
+            await session.commit()
 
-                elif fc["name"] in _UI_TOOLS:
-                    tool_actions.append(fc)
+            logger.info(
+                "Search tool '%s' -> RAG round 2 (query='%s', results=%d)",
+                search_fc["name"],
+                extra_query,
+                len(extra_chunks),
+            )
 
-        # Step 4b: Enrich UI tool actions (e.g., fetch media items)
+            phase_started = time.perf_counter()
+            final_result = await generate_response(
+                rag_context=rag_context + extra_context,
+                **gen_kwargs,
+            )
+            timings["gemini_round2_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
+
+            seen_chunk_ids = {chunk["id"] for chunk in chunks}
+            chunks.extend(
+                chunk for chunk in extra_chunks if chunk["id"] not in seen_chunk_ids
+            )
+
+        phase_started = time.perf_counter()
         if tool_actions:
             tool_actions = await _enrich_tool_actions(session, tool_actions, location_id)
+            tool_actions = await validate_tool_actions(session, tool_actions)
+        timings["tool_processing_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
 
-    except Exception as e:
-        logger.error(f"RAG pipeline error: {e}")
-        response_time_ms = int((time.time() - start_time) * 1000)
+    except Exception as exc:
+        logger.error("RAG pipeline error: %s", exc)
+        response_time_ms = int((time.perf_counter() - started) * 1000)
+        timings["total_rag_ms"] = float(response_time_ms)
         return {
-            "answer": "Xin lỗi bạn, mình đang gặp sự cố kỹ thuật. Bạn thử hỏi lại sau ít phút nhé! 🙏",
+            "answer": "Xin lỗi bạn, mình đang gặp sự cố kỹ thuật. Bạn thử hỏi lại sau ít phút nhé!",
             "thinking": None,
             "sources": [],
             "tool_actions": [],
             "response_time_ms": response_time_ms,
+            "timings": timings,
             "error": True,
         }
 
-    response_time_ms = int((time.time() - start_time) * 1000)
+    response_time_ms = int((time.perf_counter() - started) * 1000)
 
-    # Step 5: Save chat messages to DB (for research/analytics)
-    if session_id:
+    persistence_started = time.perf_counter()
+    if persist and session_id:
         try:
             await _save_chat_messages(
                 session,
                 session_id=UUID(session_id),
                 location_id=loc_uuid,
                 user_message=message,
-                assistant_message=result.text,
+                assistant_message=final_result.text,
                 response_time_ms=response_time_ms,
-                tool_calls_data=result.function_calls if result.function_calls else None,
+                input_type=input_type,
+                tool_calls_data=result_r1.function_calls or None,
             )
             await session.commit()
-        except Exception as e:
-            logger.warning(f"Failed to save chat messages: {e}")
+        except Exception as exc:
+            logger.warning("Failed to save chat messages: %s", exc)
+    timings["persistence_ms"] = round((time.perf_counter() - persistence_started) * 1000, 2)
+    timings["total_rag_ms"] = round((time.perf_counter() - started) * 1000, 2)
 
-    # Step 6: Return structured response
     return {
-        "answer": result.text,
-        "thinking": result.thinking,
+        "answer": final_result.text,
+        "thinking": final_result.thinking,
         "sources": [
             {
                 "chunk_id": chunk["id"],
@@ -336,200 +377,8 @@ async def process_query(
         ],
         "tool_actions": tool_actions,
         "response_time_ms": response_time_ms,
+        "timings": timings,
     }
-
-
-async def process_query_stream(
-    session: AsyncSession,
-    message: str,
-    location_id: str,
-    session_id: str | None = None,
-    history: list[dict] | None = None,
-    location_name: str = "Sảnh Chính",
-    personality_prompt: str | None = None,
-    voice_style: str | None = None,
-):
-    """
-    Streaming RAG pipeline with Function Calling (Collect-then-Decide):
-
-    1. Embed + vector search (same as non-streaming)
-    2. Call Gemini round 1 NON-STREAM (need full response to check for search tools)
-    3. If search tool → RAG round 2 → stream Gemini round 2
-    4. If no search tool → emit tool_call events + yield text from round 1
-    5. Save messages after stream completes
-
-    Yields StreamChunk objects for SSE consumption.
-    """
-    start_time = time.time()
-
-    try:
-        # Step 1: Embed
-        query_vector = await embed_query(message)
-
-        # Step 2: Vector search for relevant global chunks
-        loc_uuid = UUID(location_id) if location_id else None
-        chunks = await _vector_search_with_cache(session, query_vector, None)
-
-        # Step 2b: Get available slugs
-        available_slugs = await _get_available_slugs(session)
-
-        # Release DB connection before calling LLM
-        await session.commit()
-
-    except Exception as e:
-        logger.error(f"RAG stream pipeline error: {e}")
-        yield StreamChunk(
-            type="error",
-            content="Xin lỗi bạn, mình đang gặp sự cố kỹ thuật. Bạn thử hỏi lại sau ít phút nhé! 🙏",
-        )
-        return
-
-    rag_context = [chunk["content"] for chunk in chunks]
-    full_answer_parts: list[str] = []
-
-    # ──────────────────────────────────────────────────────────
-    # Step 3: Call Gemini Round 1 — NON-STREAM (Collect phase)
-    # We need the full response to decide if search tools were called.
-    # ──────────────────────────────────────────────────────────
-    try:
-        gen_kwargs = {
-            "query": message,
-            "history": history,
-            "location_name": location_name,
-            "available_slugs": available_slugs,
-        }
-        if personality_prompt:
-            gen_kwargs["personality_prompt"] = personality_prompt
-        if voice_style:
-            gen_kwargs["voice_style"] = voice_style
-
-        result_r1 = await generate_response(
-            rag_context=rag_context,
-            tools=[AGENT_TOOLS],
-            **gen_kwargs
-        )
-    except Exception as e:
-        logger.error(f"Gemini round 1 error: {e}")
-        yield StreamChunk(
-            type="error",
-            content=f"Xin lỗi, có lỗi kết nối với AI ({str(e)}).",
-        )
-        return
-
-    # ──────────────────────────────────────────────────────────
-    # Step 4: Decide phase — check function calls
-    # ──────────────────────────────────────────────────────────
-    has_search_tool = False
-    search_fc: dict | None = None
-    ui_tool_actions = []
-
-    if result_r1.function_calls:
-        for fc in result_r1.function_calls:
-            if fc["name"] in _SEARCH_TOOLS:
-                has_search_tool = True
-                search_fc = fc
-            elif fc["name"] in _UI_TOOLS:
-                ui_tool_actions.append(fc)
-
-    # Enrich UI tool actions (e.g., fetch media items for show_media)
-    if ui_tool_actions:
-        ui_tool_actions = await _enrich_tool_actions(session, ui_tool_actions, location_id)
-
-    # Yield UI tool_call events first
-    for fc in ui_tool_actions:
-        yield StreamChunk(
-            type="tool_call",
-            content=json.dumps(fc, ensure_ascii=False),
-        )
-
-    if has_search_tool:
-        # ──────────────────────────────────────────────────────
-        # Path A: Search tool called → RAG round 2 → Stream round 2
-        # ──────────────────────────────────────────────────────
-        try:
-            extra_query = search_fc["args"].get("query", message)
-            extra_vector = await embed_query(extra_query)
-
-            # LUÔN LUÔN tìm kiếm Global (location_id=None)
-            extra_chunks = await vector_repo.vector_search(
-                session, extra_vector, location_id=None, top_k=5
-            )
-            extra_context = [c["content"] for c in extra_chunks]
-
-            # Release DB connection before calling LLM round 2
-            await session.commit()
-
-            logger.info(
-                f"🔄 Stream: Search tool '{search_fc['name']}' → RAG round 2 "
-                f"(query='{extra_query}', results={len(extra_chunks)})"
-            )
-
-            # Stream Gemini round 2 — NO tools (text only)
-            async for chunk in generate_response_stream(
-                rag_context=rag_context + extra_context,
-                **gen_kwargs
-            ):
-                if chunk.type == "text":
-                    full_answer_parts.append(chunk.content)
-                yield chunk
-
-        except Exception as e:
-            logger.error(f"RAG round 2 error: {e}")
-            # Fallback: use round 1 text if available
-            if result_r1.text:
-                yield StreamChunk(type="text", content=result_r1.text)
-                full_answer_parts.append(result_r1.text)
-            else:
-                yield StreamChunk(
-                    type="error",
-                    content="Xin lỗi, mình gặp lỗi khi tra cứu thêm thông tin. 🙏",
-                )
-    else:
-        # ──────────────────────────────────────────────────────
-        # Path B: No search tool → Yield text from round 1
-        # Chunk into sentences for smoother streaming UX
-        # ──────────────────────────────────────────────────────
-        if result_r1.text:
-            import re as _re
-            # Split on sentence boundaries (. ! ? + emoji) while keeping delimiters
-            sentences = _re.split(r'(?<=[.!?。]\s)', result_r1.text)
-            for sentence in sentences:
-                if sentence:  # skip empty
-                    yield StreamChunk(type="text", content=sentence)
-            full_answer_parts.append(result_r1.text)
-
-    # After stream completes, yield sources as a final event
-    yield StreamChunk(
-        type="sources",
-        content=str([
-            {
-                "chunk_id": c["id"],
-                "content": c["content"][:200],
-                "similarity": c["similarity"],
-            }
-            for c in chunks
-        ]),
-    )
-
-    # Step 5: Save chat messages
-    response_time_ms = int((time.time() - start_time) * 1000)
-    full_answer = "".join(full_answer_parts)
-
-    if session_id:
-        try:
-            await _save_chat_messages(
-                session,
-                session_id=UUID(session_id),
-                location_id=loc_uuid,
-                user_message=message,
-                assistant_message=full_answer,
-                response_time_ms=response_time_ms,
-                tool_calls_data=result_r1.function_calls if result_r1.function_calls else None,
-            )
-            await session.commit()
-        except Exception as e:
-            logger.warning(f"Failed to save chat messages: {e}")
-
 
 async def create_chat_session(
     session: AsyncSession,
