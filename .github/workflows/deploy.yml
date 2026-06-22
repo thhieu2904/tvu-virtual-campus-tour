@@ -89,7 +89,7 @@ jobs:
 
             tool_names = {
                 tool.get("name")
-                for tool in payload.get("tools", [])
+                for tool in payload.get("tool_actions", [])
                 if isinstance(tool, dict)
             }
             if "toggle_map" not in tool_names:
