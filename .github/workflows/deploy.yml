@@ -21,25 +21,92 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
+            set -euo pipefail
+
             echo "🚀 Starting deployment to VPS..."
-            
+
             # Navigate to the project directory (Default: /opt/tvu-virtual-campus-tour)
             # If the directory doesn't exist, clone it first
             PROJECT_DIR=${{ secrets.VPS_TARGET_DIR || '/opt/tvu-virtual-campus-tour' }}
-            
+
             if [ ! -d "$PROJECT_DIR" ]; then
               echo "Directory $PROJECT_DIR not found, cloning repository..."
               git clone https://github.com/thhieu2904/tvu-virtual-campus-tour.git "$PROJECT_DIR"
             fi
-            
+
             cd "$PROJECT_DIR"
-            
+
             echo "📥 Fetching latest code from main..."
             git checkout main
-            git pull origin main
-            
+            git pull --ff-only origin main
+
             echo "📦 Building and starting Backend container in background..."
             cd backend
             docker compose up -d --build
-            
+
+            echo "🩺 Waiting for Backend health check..."
+            container_status=""
+            for attempt in $(seq 1 30); do
+              container_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' tvu_tour_backend 2>/dev/null || true)
+
+              if [ "$container_status" = "healthy" ]; then
+                break
+              fi
+
+              if [ "$container_status" = "unhealthy" ] || [ "$container_status" = "exited" ]; then
+                docker logs --tail 200 tvu_tour_backend
+                exit 1
+              fi
+
+              echo "Backend status: ${container_status:-not-created} (attempt $attempt/30)"
+              sleep 5
+            done
+
+            if [ "$container_status" != "healthy" ]; then
+              docker logs --tail 200 tvu_tour_backend
+              echo "Backend did not become healthy in time."
+              exit 1
+            fi
+
+            curl --fail --silent --show-error http://127.0.0.1:8000/api/health > /dev/null
+
+            echo "🧪 Verifying Agent tool call..."
+            chat_verified=false
+            for attempt in 1 2; do
+              chat_response=$(curl --fail --silent --show-error \
+                --max-time 120 \
+                -H "Content-Type: application/json" \
+                -d '{"message":"Mở bản đồ khuôn viên cho tôi xem","stream":false,"tts":false}' \
+                http://127.0.0.1:8000/api/chat)
+
+              if CHAT_RESPONSE="$chat_response" python3 - <<'PY'
+            import json
+            import os
+
+            payload = json.loads(os.environ["CHAT_RESPONSE"])
+            if payload.get("error"):
+                raise SystemExit("Chat API returned error=true")
+
+            tool_names = {
+                tool.get("name")
+                for tool in payload.get("tools", [])
+                if isinstance(tool, dict)
+            }
+            if "toggle_map" not in tool_names:
+                raise SystemExit(f"Expected toggle_map tool, got: {sorted(tool_names)}")
+            PY
+              then
+                chat_verified=true
+                break
+              fi
+
+              echo "Agent tool-call smoke test failed (attempt $attempt/2)."
+              sleep 3
+            done
+
+            if [ "$chat_verified" != "true" ]; then
+              docker logs --tail 200 tvu_tour_backend
+              exit 1
+            fi
+
             echo "✅ Deployment completed successfully!"
