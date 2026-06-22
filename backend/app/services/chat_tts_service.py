@@ -84,8 +84,8 @@ async def resolve_chat_audio(
     started = time.perf_counter()
     style = voice_style or ""
     persona = personality_prompt or ""
-    answer_hash = tts_engine._cache_key(answer_text, voice_name, style, persona)
-    legacy_hash = tts_engine._legacy_cache_key(answer_text, voice_name, style, persona)
+    answer_hash = tts_engine.cache_key(answer_text, voice_name, style, persona)
+    legacy_hash = tts_engine.legacy_cache_key(answer_text, voice_name, style, persona)
     cache_candidates = [
         {
             "hash": answer_hash,

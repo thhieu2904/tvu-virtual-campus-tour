@@ -94,8 +94,8 @@ async def cache_qa() -> None:
                 print(f"    Generated text: {answer_text[:70]}...")
 
                 style = voice_style or ""
-                answer_hash = tts_engine._cache_key(answer_text, voice, style, personality_prompt)
-                legacy_answer_hash = tts_engine._legacy_cache_key(answer_text, voice, style, personality_prompt)
+                answer_hash = tts_engine.cache_key(answer_text, voice, style, personality_prompt)
+                legacy_answer_hash = tts_engine.legacy_cache_key(answer_text, voice, style, personality_prompt)
                 r2_candidates = [
                     (f"tts-cache/{answer_hash}.wav", f"tts-cache/{answer_hash}.mp3"),
                 ]

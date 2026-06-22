@@ -126,8 +126,8 @@ def mascot_intro_text(mascot: Mascot) -> str:
 
 
 def tts_cache_candidates(text: str, voice: str, style: str, persona: str) -> list[tuple[str, str]]:
-    current_hash = tts_engine._cache_key(text, voice, style, persona)
-    legacy_hash = tts_engine._legacy_cache_key(text, voice, style, persona)
+    current_hash = tts_engine.cache_key(text, voice, style, persona)
+    legacy_hash = tts_engine.legacy_cache_key(text, voice, style, persona)
     candidates: list[tuple[str, str]] = []
     for key_hash, kind in ((current_hash, "sha256"), (legacy_hash, "legacy-md5")):
         if candidates and key_hash == current_hash:

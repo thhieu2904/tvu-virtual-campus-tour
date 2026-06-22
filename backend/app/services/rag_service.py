@@ -8,7 +8,9 @@ Phase 2 (current): Function Calling — Gemini can invoke tools (navigate, show_
 """
 
 import logging
+import re
 import time
+from difflib import get_close_matches
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -29,7 +31,96 @@ logger = logging.getLogger(__name__)
 _SEARCH_TOOLS = {"search_documents"}
 # UI tool names — these are forwarded directly to frontend
 _UI_TOOLS = {"navigate_to", "show_media", "toggle_map"}
+_PSEUDO_TOOL_CALL_RE = re.compile(
+    r"(?:default_api\.)?(navigate_to|show_media|toggle_map)\s*\(([^)]*)\)",
+    re.IGNORECASE,
+)
+_PSEUDO_TOOL_ARG_RE = re.compile(
+    r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(['\"])(.*?)\2",
+    re.DOTALL,
+)
+_PSEUDO_TOOL_MARKER_RE = re.compile(r"(?im)^\s*tool_code\s*$")
+_PSEUDO_THOUGHT_MARKER_RE = re.compile(r"(?im)^\s*thought\s*$")
+_NAVIGATE_MAIN_INTENT_RE = re.compile(
+    r"\b(?:đưa|dẫn|quay|về|lại|đi)\b.*\b(?:sảnh|cổng\s+chính)\b",
+    re.IGNORECASE,
+)
 
+
+def recover_pseudo_tool_actions(text: str | None) -> tuple[str, list[dict]]:
+    """Recover known UI tools emitted as text without evaluating model output."""
+    raw_text = str(text or "")
+    recovered: list[dict] = []
+
+    for match in _PSEUDO_TOOL_CALL_RE.finditer(raw_text):
+        name = match.group(1).lower()
+        args = {
+            key: value
+            for key, _, value in _PSEUDO_TOOL_ARG_RE.findall(match.group(2))
+        }
+        recovered.append({"name": name, "args": args})
+
+    if not recovered:
+        return raw_text.strip(), []
+
+    marker = _PSEUDO_TOOL_MARKER_RE.search(raw_text)
+    if marker:
+        prefix = raw_text[: marker.start()].strip()
+        remainder = raw_text[marker.end() :]
+        thought_marker = _PSEUDO_THOUGHT_MARKER_RE.search(remainder)
+        if thought_marker:
+            # Never expose model reasoning. A safe user-facing sentence is generated
+            # later if no clean prefix remains.
+            remainder = remainder[: thought_marker.start()]
+        cleaned_lines = [
+            line
+            for line in remainder.splitlines()
+            if not _PSEUDO_TOOL_CALL_RE.search(line)
+            and line.strip() not in {"```", "python"}
+        ]
+        cleaned = "\n".join(part for part in [prefix, *cleaned_lines] if part).strip()
+    else:
+        cleaned = _PSEUDO_TOOL_CALL_RE.sub("", raw_text)
+        cleaned = re.sub(r"(?m)^\s*print\(\s*\)\s*$", "", cleaned).strip()
+
+    logger.warning(
+        "Recovered pseudo UI tool calls from model text tools=%s",
+        [action["name"] for action in recovered],
+    )
+    return cleaned, recovered
+
+
+async def apply_navigation_fallback(
+    session: AsyncSession,
+    message: str,
+    tool_actions: list[dict],
+) -> tuple[list[dict], bool]:
+    """Resolve the kiosk's common "return to the main hall" intent deterministically."""
+    if tool_actions or not _NAVIGATE_MAIN_INTENT_RE.search(message):
+        return tool_actions, False
+
+    result = await session.execute(
+        select(Location.slug).where(
+            Location.status == "active",
+            Location.is_start_node.is_(True),
+        )
+    )
+    start_slug = result.scalar_one_or_none()
+    if not start_slug:
+        logger.warning("Navigation fallback found no active start location")
+        return tool_actions, False
+
+    logger.info(
+        "Applied deterministic main-hall navigation fallback slug=%s message=%r",
+        start_slug,
+        message,
+    )
+    return [
+        {
+            "name": "navigate_to",
+            "args": {"location_slug": start_slug},
+        }
+    ], True
 
 def _score_media_match(media: dict, query: str) -> int:
     """Small deterministic matcher for choosing a focused media item."""
@@ -207,28 +298,77 @@ async def validate_tool_actions(
     if not tool_actions:
         return []
 
-    active_slugs: set[str] = set()
+    active_locations: dict[str, str] = {}
     if any(action.get("name") == "navigate_to" for action in tool_actions):
-        result = await session.execute(select(Location.slug).where(Location.status == "active"))
-        active_slugs = set(result.scalars().all())
+        result = await session.execute(
+            select(Location.slug, Location.name).where(Location.status == "active")
+        )
+        active_locations = {slug: name for slug, name in result.all()}
 
     validated: list[dict] = []
     for action in tool_actions:
         try:
             parsed = TOOL_ACTION_ADAPTER.validate_python(action)
         except ValidationError as exc:
-            logger.warning("Dropping invalid tool action %s: %s", action, exc)
+            logger.warning(
+                "Dropping invalid tool action action=%r validation_errors=%s",
+                action,
+                exc.errors(include_url=False),
+            )
             continue
 
         normalized = parsed.model_dump(exclude_none=True)
         if normalized["name"] == "navigate_to":
             slug = normalized["args"]["location_slug"]
-            if slug not in active_slugs:
-                logger.warning("Dropping navigate_to with inactive or unknown slug: %s", slug)
+            if slug not in active_locations:
+                closest = get_close_matches(
+                    slug,
+                    list(active_locations),
+                    n=1,
+                    cutoff=0.55,
+                )
+                logger.warning(
+                    "Dropping navigate_to slug=%r active_slugs=%s closest_match=%s",
+                    slug,
+                    sorted(active_locations),
+                    closest[0] if closest else None,
+                )
                 continue
         validated.append(normalized)
 
     return validated
+
+
+async def ensure_response_text(
+    session: AsyncSession,
+    answer: str | None,
+    tool_actions: list[dict],
+) -> str:
+    """Guarantee a user-visible answer after tool validation."""
+    normalized_answer = str(answer or "").strip()
+    if normalized_answer:
+        return normalized_answer
+
+    navigation = next(
+        (action for action in tool_actions if action.get("name") == "navigate_to"),
+        None,
+    )
+    if navigation:
+        slug = (navigation.get("args") or {}).get("location_slug")
+        result = await session.execute(
+            select(Location.name).where(
+                Location.slug == slug,
+                Location.status == "active",
+            )
+        )
+        location_name = result.scalar_one_or_none()
+        if location_name:
+            return f"Được rồi, mình đưa bạn tới {location_name} nhé!"
+
+    if tool_actions:
+        return "Được rồi, mình xử lý ngay nhé!"
+
+    return "Mình chưa hiểu ý bạn lắm, bạn có thể nói rõ hơn không?"
 
 
 async def process_query(
@@ -246,9 +386,13 @@ async def process_query(
     """Run the RAG pipeline and return a validated, fully collected result."""
     started = time.perf_counter()
     timings: dict[str, float] = {}
-    loc_uuid = UUID(location_id) if location_id else None
 
     try:
+        try:
+            loc_uuid = UUID(location_id) if location_id else None
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ValueError(f"Invalid location_id: {location_id}") from exc
+
         phase_started = time.perf_counter()
         query_vector = await embed_query(message)
         timings["embedding_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
@@ -323,11 +467,48 @@ async def process_query(
                 chunk for chunk in extra_chunks if chunk["id"] not in seen_chunk_ids
             )
 
+        answer_candidate, pseudo_tool_actions = recover_pseudo_tool_actions(final_result.text)
+        tool_actions.extend(pseudo_tool_actions)
+
+        phase_started = time.perf_counter()
+        tool_actions, used_navigation_fallback = await apply_navigation_fallback(
+            session,
+            message,
+            tool_actions,
+        )
+        timings["navigation_fallback_ms"] = round(
+            (time.perf_counter() - phase_started) * 1000,
+            2,
+        )
+        if used_navigation_fallback:
+            answer_candidate = ""
+
+        tool_started = time.perf_counter()
         phase_started = time.perf_counter()
         if tool_actions:
             tool_actions = await _enrich_tool_actions(session, tool_actions, location_id)
-            tool_actions = await validate_tool_actions(session, tool_actions)
-        timings["tool_processing_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
+        timings["tool_enrichment_ms"] = round(
+            (time.perf_counter() - phase_started) * 1000,
+            2,
+        )
+
+        phase_started = time.perf_counter()
+        tool_actions = await validate_tool_actions(session, tool_actions)
+        timings["tool_validation_ms"] = round(
+            (time.perf_counter() - phase_started) * 1000,
+            2,
+        )
+
+        phase_started = time.perf_counter()
+        answer = await ensure_response_text(session, answer_candidate, tool_actions)
+        timings["response_fallback_ms"] = round(
+            (time.perf_counter() - phase_started) * 1000,
+            2,
+        )
+        timings["tool_processing_ms"] = round(
+            (time.perf_counter() - tool_started) * 1000,
+            2,
+        )
 
     except Exception as exc:
         logger.error("RAG pipeline error: %s", exc)
@@ -353,10 +534,10 @@ async def process_query(
                 session_id=UUID(session_id),
                 location_id=loc_uuid,
                 user_message=message,
-                assistant_message=final_result.text,
+                assistant_message=answer,
                 response_time_ms=response_time_ms,
                 input_type=input_type,
-                tool_calls_data=result_r1.function_calls or None,
+                tool_calls_data=tool_actions or None,
             )
             await session.commit()
         except Exception as exc:
@@ -365,7 +546,7 @@ async def process_query(
     timings["total_rag_ms"] = round((time.perf_counter() - started) * 1000, 2)
 
     return {
-        "answer": final_result.text,
+        "answer": answer,
         "thinking": final_result.thinking,
         "sources": [
             {

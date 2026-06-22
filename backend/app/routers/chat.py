@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
@@ -33,6 +32,38 @@ def build_sse_event(event: str, payload: dict[str, Any]) -> dict[str, str]:
         "data": json.dumps(payload, ensure_ascii=False),
     }
 
+
+def _validated_location_id(location_id: str | None) -> uuid.UUID | None:
+    if not location_id:
+        return None
+    try:
+        return uuid.UUID(location_id)
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=422, detail="location_id must be a valid UUID") from exc
+
+
+def _json_response_payload(
+    request_id: str,
+    result: dict[str, Any],
+    *,
+    cache_hit: bool,
+) -> dict[str, Any]:
+    timings = dict(result.get("timings") or {})
+    return {
+        "request_id": request_id,
+        "answer": str(result.get("answer") or ""),
+        "thinking": result.get("thinking"),
+        "tool_actions": result.get("tool_actions") or [],
+        "audio_url": result.get("audio_url"),
+        "audio_content_type": result.get("audio_content_type"),
+        "tts_provider": result.get("tts_provider"),
+        "sources": result.get("sources") or [],
+        "response_time_ms": int(result.get("response_time_ms") or 0),
+        "timing": timings,
+        "timings": timings,
+        "cache_hit": cache_hit,
+        "error": bool(result.get("error")),
+    }
 
 def _runtime_audio_url(api_request: Request, filename: str) -> str:
     path = api_request.url_for("get_runtime_tts_audio", filename=filename).path
@@ -87,7 +118,7 @@ def _audio_payload(
         "content_type": audio.content_type,
         "cache_status": audio.cache_status,
         "timings": {
-            "tts_lookup_ms": audio.lookup_ms,
+            "tts_cache_lookup_ms": audio.lookup_ms,
             "tts_generation_ms": audio.generation_ms,
             "tts_total_ms": audio.total_ms,
         },
@@ -115,6 +146,7 @@ async def _get_chat_result(
                 else []
             )
             tool_actions = await rag_service.validate_tool_actions(session, tool_actions)
+            answer = await rag_service.ensure_response_text(session, answer, tool_actions)
             exchange_saved = persist and await rag_service.save_chat_exchange(
                 session=session,
                 session_id=request.session_id,
@@ -175,13 +207,12 @@ async def _persist_stream_exchange(
 async def _stream_chat_events(
     *,
     request: ChatRequest,
-    api_request: Request,
     background_tasks: BackgroundTasks,
-    location: Any | None,
     location_name: str,
     personality_prompt: str | None,
     voice_style: str | None,
 ):
+    """Emit the text-only SSE contract. Voice requests never enter this branch."""
     request_id = uuid.uuid4().hex
     stream_started = time.perf_counter()
     yield build_sse_event("start", {"request_id": request_id})
@@ -194,7 +225,7 @@ async def _stream_chat_events(
                 location_name=location_name,
                 personality_prompt=personality_prompt,
                 voice_style=voice_style,
-                allow_qa_cache=request.tts,
+                allow_qa_cache=False,
                 persist=False,
             )
     except Exception as exc:
@@ -242,69 +273,6 @@ async def _stream_chat_events(
     if request.session_id:
         background_tasks.add_task(_persist_stream_exchange, request, result)
 
-    audio_payload: dict[str, Any] | None = None
-    if request.tts and answer and not result.get("error") and not await api_request.is_disconnected():
-        cached_audio_url = result.get("audio_url") if cache_hit else None
-        if isinstance(cached_audio_url, str) and cached_audio_url:
-            audio_payload = {
-                "request_id": request_id,
-                "url": cached_audio_url,
-                "provider": result.get("tts_provider") or "cache",
-                "content_type": result.get("audio_content_type"),
-                "cache_status": "qa",
-                "timings": {
-                    "tts_lookup_ms": 0.0,
-                    "tts_generation_ms": 0.0,
-                    "tts_total_ms": 0.0,
-                },
-            }
-        else:
-            try:
-                audio = await asyncio.wait_for(
-                    chat_tts_service.resolve_chat_audio(
-                        answer_text=answer,
-                        tool_actions=tool_actions,
-                        voice_name=_voice_name(location),
-                        voice_style=voice_style,
-                        personality_prompt=personality_prompt,
-                    ),
-                    timeout=30,
-                )
-                if audio:
-                    _schedule_audio_sync(background_tasks, audio)
-                    audio_payload = _audio_payload(request_id, api_request, audio)
-            except TimeoutError:
-                logger.warning("TTS timed out for request %s", request_id)
-                yield build_sse_event(
-                    "error",
-                    {
-                        "request_id": request_id,
-                        "code": "TTS_TIMEOUT",
-                        "message": "Giọng nói chưa sẵn sàng, phần chữ vẫn hoạt động bình thường.",
-                        "recoverable": True,
-                    },
-                )
-            except Exception as exc:
-                logger.warning("TTS failed for request %s: %s", request_id, exc)
-                yield build_sse_event(
-                    "error",
-                    {
-                        "request_id": request_id,
-                        "code": "TTS_FAILED",
-                        "message": "Không thể tạo giọng nói, phần chữ vẫn hoạt động bình thường.",
-                        "recoverable": True,
-                    },
-                )
-
-    if audio_payload and audio_payload.get("url"):
-        timings.update(audio_payload["timings"])
-        timings["time_to_audio_ready_ms"] = round(
-            (time.perf_counter() - stream_started) * 1000,
-            2,
-        )
-        audio_payload["timings"]["time_to_audio_ready_ms"] = timings["time_to_audio_ready_ms"]
-        yield build_sse_event("audio_ready", audio_payload)
-
     timings["total_stream_ms"] = round((time.perf_counter() - stream_started) * 1000, 2)
     yield build_sse_event(
         "done",
@@ -313,13 +281,13 @@ async def _stream_chat_events(
             "answer": answer,
             "response_time_ms": result.get("response_time_ms", 0),
             "timings": timings,
-            "has_audio": bool(audio_payload and audio_payload.get("url")),
+            "has_audio": False,
         },
     )
 
-
-async def _attach_legacy_audio(
+async def _attach_json_audio(
     *,
+    request_id: str,
     result: dict[str, Any],
     api_request: Request,
     background_tasks: BackgroundTasks,
@@ -344,13 +312,13 @@ async def _attach_legacy_audio(
         if not audio:
             return result
         _schedule_audio_sync(background_tasks, audio)
-        payload = _audio_payload("legacy", api_request, audio)
+        payload = _audio_payload(request_id, api_request, audio)
         result["audio_url"] = payload["url"]
         result["tts_provider"] = payload["provider"]
         result["audio_content_type"] = payload["content_type"]
         result.setdefault("timings", {}).update(payload["timings"])
     except Exception as exc:
-        logger.warning("Legacy TTS synthesis failed: %s", exc)
+        logger.warning("JSON TTS synthesis failed for request %s: %s", request_id, exc)
     return result
 
 
@@ -361,14 +329,17 @@ async def chat(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
 ):
-    """Send a chat message as SSE or a backward-compatible JSON response."""
+    """Use SSE for text-only chat and one JSON response for voice chat."""
+    request_started = time.perf_counter()
+    request_id = uuid.uuid4().hex
     location_name = "Sảnh Chính"
     personality_prompt = None
     voice_style = None
     location = None
 
-    if request.location_id:
-        location = await location_repo.get_by_id(session, request.location_id)
+    location_uuid = _validated_location_id(request.location_id)
+    if location_uuid:
+        location = await location_repo.get_by_id(session, location_uuid)
         if location:
             location_name = location.name
             if location.mascot:
@@ -376,13 +347,12 @@ async def chat(
                 voice_style = location.mascot.voice_style
         await session.commit()
 
-    if request.stream:
+    # Voice mode always wins over stream=true so text and audio arrive together.
+    if request.stream and not request.tts:
         return EventSourceResponse(
             _stream_chat_events(
                 request=request,
-                api_request=api_request,
                 background_tasks=background_tasks,
-                location=location,
                 location_name=location_name,
                 personality_prompt=personality_prompt,
                 voice_style=voice_style,
@@ -404,17 +374,40 @@ async def chat(
         allow_qa_cache=request.tts,
         persist=True,
     )
-    if request.tts and not cache_hit:
-        result = await _attach_legacy_audio(
-            result=result,
-            api_request=api_request,
-            background_tasks=background_tasks,
-            location=location,
-            personality_prompt=personality_prompt,
-            voice_style=voice_style,
-        )
-    return JSONResponse(content=result)
 
+    if request.tts:
+        cached_audio_url = result.get("audio_url") if cache_hit else None
+        if isinstance(cached_audio_url, str) and cached_audio_url:
+            result.setdefault("audio_content_type", None)
+            result.setdefault("tts_provider", "cache")
+            result.setdefault("timings", {}).update(
+                {
+                    "tts_cache_lookup_ms": 0.0,
+                    "tts_generation_ms": 0.0,
+                    "tts_total_ms": 0.0,
+                }
+            )
+        else:
+            result = await _attach_json_audio(
+                request_id=request_id,
+                result=result,
+                api_request=api_request,
+                background_tasks=background_tasks,
+                location=location,
+                personality_prompt=personality_prompt,
+                voice_style=voice_style,
+            )
+
+    result.setdefault("audio_url", None)
+    result.setdefault("audio_content_type", None)
+    result.setdefault("tts_provider", None)
+    result.setdefault("timings", {})["total_ms"] = round(
+        (time.perf_counter() - request_started) * 1000,
+        2,
+    )
+    return JSONResponse(
+        content=_json_response_payload(request_id, result, cache_hit=cache_hit)
+    )
 
 @router.post("/chat/session", response_model=SessionResponse)
 async def create_session(session: AsyncSession = Depends(get_db)):

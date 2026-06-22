@@ -705,7 +705,7 @@ async def preview_mascot_voice(payload: MascotVoicePreviewRequest):
     voice = payload.voice_name or "Leda"
     style = payload.voice_style or ""
     persona = payload.personality_prompt or ""
-    cache_key = tts_engine._cache_key(preview_text, voice, style, persona)
+    cache_key = tts_engine.cache_key(preview_text, voice, style, persona)
     r2_candidates = [
         (f"tts-cache/{cache_key}.wav", CONTENT_TYPE_WAV),
         (f"tts-cache/{cache_key}.mp3", CONTENT_TYPE_MP3),

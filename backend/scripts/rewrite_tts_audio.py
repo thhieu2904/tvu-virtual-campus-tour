@@ -318,7 +318,7 @@ async def rebuild_qa_cache(session, args: argparse.Namespace) -> RunStats:
                     voice_config=voice_config,
                     allow_edge=args.allow_edge,
                 )
-                answer_hash = tts_engine._cache_key(
+                answer_hash = tts_engine.cache_key(
                     answer_text,
                     voice_config.voice,
                     voice_config.style,

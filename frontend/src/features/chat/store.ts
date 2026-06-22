@@ -17,6 +17,13 @@ const NAVIGATION_AFTER_AUDIO_DELAY_MS = 500;
 
 type ToolCall = { name: string; args: Record<string, unknown> };
 type SsePayload = Record<string, unknown> & { request_id?: string };
+type JsonChatPayload = Record<string, unknown> & {
+  request_id?: string;
+  answer?: string;
+  tool_actions?: unknown[];
+  audio_url?: string | null;
+  tts_provider?: string | null;
+};
 
 interface ChatState {
   messages: ChatMessage[];
@@ -246,6 +253,13 @@ function parsePayload(data: string): SsePayload {
   return parsed as SsePayload;
 }
 
+function parseJsonChatPayload(value: unknown): JsonChatPayload {
+  if (!value || typeof value !== "object") {
+    throw new Error("Invalid JSON chat response");
+  }
+  return value as JsonChatPayload;
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   sessionId: null,
@@ -341,6 +355,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         thinkingTimer = null;
       }
     };
+    const finishBotMessage = (answer: string, provider: string | null = null) => {
+      set((state) => ({
+        isLoading: false,
+        messages: state.messages.map((item) =>
+          item.id === botMessageId
+            ? { ...item, content: answer, isStreaming: false, ttsProvider: provider }
+            : item,
+        ),
+      }));
+    };
 
     _abortActiveRequest();
     _clearPendingToolCalls();
@@ -364,130 +388,188 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: item.role,
       content: item.content,
     }));
-    const ensureSession = async () => {
-      const activeSessionId = get().sessionId || sessionId || await get().initSession();
-      if (!activeSessionId) throw new Error("Could not initialize chat session.");
-      return activeSessionId;
+    const activeSessionId = get().sessionId || sessionId || await get().initSession();
+    if (!activeSessionId) {
+      cancelThinkingState();
+      if (_activeChatAbortController === abortController) {
+        _activeChatAbortController = null;
+      }
+      _activeRequestId = null;
+      set((state) => ({
+        isLoading: false,
+        error: "Could not initialize chat session.",
+        messages: state.messages.map((item) =>
+          item.id === botMessageId
+            ? { ...item, content: CHAT_CONNECTION_ERROR_MESSAGE, isStreaming: false }
+            : item,
+        ),
+      }));
+      useTourStore.getState().setAvatarState("idle");
+      return;
+    }
+
+    const requestBody = {
+      message,
+      ...(locationId ? { location_id: locationId } : {}),
+      session_id: activeSessionId,
+      input_type: "text",
+      history,
     };
 
     try {
-      const activeSessionId = await ensureSession();
-      await fetchEventSource(`${API_URL}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: EventStreamContentType,
-        },
-        body: JSON.stringify({
-          message,
-          ...(locationId ? { location_id: locationId } : {}),
-          session_id: activeSessionId,
-          stream: true,
-          tts: isTTSEnabled,
-          history,
-        }),
-        signal: abortController.signal,
-        openWhenHidden: true,
-        async onopen(response) {
-          if (!response.ok) {
-            throw new Error(`Chat API responded with ${response.status}`);
-          }
-          const contentType = response.headers.get("content-type");
-          if (!contentType?.startsWith(EventStreamContentType)) {
-            throw new Error(`Expected SSE response, received ${contentType || "unknown content type"}`);
-          }
-        },
-        onmessage(event) {
-          if (!event.data) return;
-          const payload = parsePayload(event.data);
-          const eventRequestId = typeof payload.request_id === "string" ? payload.request_id : requestId;
+      if (isTTSEnabled) {
+        const response = await fetch(`${API_URL}/api/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ ...requestBody, stream: false, tts: true }),
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Chat API responded with ${response.status}`);
+        }
 
-          if (event.event === "start") {
-            requestId = eventRequestId;
-            _activeRequestId = requestId;
-            return;
-          }
-          if (_activeRequestId !== eventRequestId) return;
+        const payload = parseJsonChatPayload(await response.json());
+        if (abortController.signal.aborted || _activeRequestId !== requestId) return;
 
-          switch (event.event) {
-            case "answer": {
-              cancelThinkingState();
-              const text = typeof payload.text === "string" ? payload.text : "";
-              set((state) => ({
-                messages: state.messages.map((item) =>
-                  item.id === botMessageId
-                    ? { ...item, content: text, isStreaming: true }
-                    : item,
-                ),
-              }));
-              break;
+        const serverRequestId = typeof payload.request_id === "string"
+          ? payload.request_id
+          : requestId;
+        requestId = serverRequestId;
+        _activeRequestId = serverRequestId;
+
+        const answer = typeof payload.answer === "string" && payload.answer.trim()
+          ? payload.answer
+          : "Mình chưa hiểu ý bạn lắm, bạn có thể nói rõ hơn không?";
+        const provider = typeof payload.tts_provider === "string"
+          ? payload.tts_provider
+          : null;
+        const audioUrl = typeof payload.audio_url === "string"
+          ? payload.audio_url
+          : "";
+        const toolActions = Array.isArray(payload.tool_actions)
+          ? payload.tool_actions
+          : [];
+
+        _setToolCalls(serverRequestId, toolActions);
+        _flushImmediateVisualToolCalls(serverRequestId);
+        cancelThinkingState();
+        receivedDone = true;
+
+        if (provider === "edge-tts") {
+          console.warn("TTS fallback: using Edge TTS instead of Gemini");
+        }
+
+        if (audioUrl) {
+          audioStarted = true;
+          // Start playback before committing the answer so voice and text begin together.
+          _playResponseAudio(
+            serverRequestId,
+            audioUrl,
+            answer.length,
+            () => _flushToolCalls(serverRequestId),
+          );
+          finishBotMessage(answer, provider);
+        } else {
+          finishBotMessage(answer, provider);
+          useTourStore.getState().setAvatarState("idle");
+          setTimeout(() => _flushToolCalls(serverRequestId), 500);
+        }
+      } else {
+        await fetchEventSource(`${API_URL}/api/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: EventStreamContentType,
+          },
+          body: JSON.stringify({ ...requestBody, stream: true, tts: false }),
+          signal: abortController.signal,
+          openWhenHidden: true,
+          async onopen(response) {
+            if (!response.ok) {
+              throw new Error(`Chat API responded with ${response.status}`);
             }
-
-            case "tool_actions": {
-              const actions = Array.isArray(payload.actions) ? payload.actions : [];
-              _setToolCalls(requestId, actions);
-              _flushImmediateVisualToolCalls(requestId);
-              break;
+            const contentType = response.headers.get("content-type");
+            if (!contentType?.startsWith(EventStreamContentType)) {
+              throw new Error(`Expected SSE response, received ${contentType || "unknown content type"}`);
             }
+          },
+          onmessage(event) {
+            if (!event.data) return;
+            const payload = parsePayload(event.data);
+            const eventRequestId = typeof payload.request_id === "string"
+              ? payload.request_id
+              : requestId;
 
-            case "audio_ready": {
-              const url = typeof payload.url === "string" ? payload.url : "";
-              const provider = typeof payload.provider === "string" ? payload.provider : null;
-              if (provider === "edge-tts") {
-                console.warn("TTS fallback: using Edge TTS instead of Gemini");
+            if (event.event === "start") {
+              requestId = eventRequestId;
+              _activeRequestId = requestId;
+              return;
+            }
+            if (_activeRequestId !== eventRequestId) return;
+
+            switch (event.event) {
+              case "answer": {
+                cancelThinkingState();
+                const text = typeof payload.text === "string" && payload.text.trim()
+                  ? payload.text
+                  : "Mình chưa hiểu ý bạn lắm, bạn có thể nói rõ hơn không?";
+                set((state) => ({
+                  messages: state.messages.map((item) =>
+                    item.id === botMessageId
+                      ? { ...item, content: text, isStreaming: true }
+                      : item,
+                  ),
+                }));
+                break;
               }
-              set((state) => ({
-                messages: state.messages.map((item) =>
-                  item.id === botMessageId ? { ...item, ttsProvider: provider } : item,
-                ),
-              }));
-              if (url && get().isTTSEnabled) {
-                audioStarted = true;
-                const answerLength = get().messages.find((item) => item.id === botMessageId)?.content.length || 0;
-                _playResponseAudio(requestId, url, answerLength, () => _flushToolCalls(requestId));
-              }
-              break;
-            }
 
-            case "error": {
-              const recoverable = payload.recoverable === true;
-              const errorMessage = typeof payload.message === "string"
-                ? payload.message
-                : CHAT_CONNECTION_ERROR_MESSAGE;
-              if (recoverable) {
-                console.warn("Recoverable chat stream error:", payload.code, errorMessage);
-              } else {
-                throw new Error(errorMessage);
+              case "tool_actions": {
+                const actions = Array.isArray(payload.actions) ? payload.actions : [];
+                _setToolCalls(requestId, actions);
+                break;
               }
-              break;
-            }
 
-            case "done": {
-              receivedDone = true;
-              cancelThinkingState();
-              set((state) => ({
-                isLoading: false,
-                messages: state.messages.map((item) =>
-                  item.id === botMessageId ? { ...item, isStreaming: false } : item,
-                ),
-              }));
-              if (!audioStarted) {
+              case "error": {
+                const recoverable = payload.recoverable === true;
+                const errorMessage = typeof payload.message === "string"
+                  ? payload.message
+                  : CHAT_CONNECTION_ERROR_MESSAGE;
+                if (recoverable) {
+                  console.warn("Recoverable chat stream error:", payload.code, errorMessage);
+                } else {
+                  throw new Error(errorMessage);
+                }
+                break;
+              }
+
+              case "done": {
+                receivedDone = true;
+                cancelThinkingState();
+                set((state) => ({
+                  isLoading: false,
+                  messages: state.messages.map((item) =>
+                    item.id === botMessageId ? { ...item, isStreaming: false } : item,
+                  ),
+                }));
                 useTourStore.getState().setAvatarState("idle");
                 setTimeout(() => _flushToolCalls(requestId), 500);
+                break;
               }
-              break;
             }
-          }
-        },
-        onclose() {
-          if (!receivedDone && !abortController.signal.aborted) {
-            throw new Error("Chat stream closed before completion");
-          }
-        },
-        onerror(error) {
-          throw error;
-        },
-      });
+          },
+          onclose() {
+            if (!receivedDone && !abortController.signal.aborted) {
+              throw new Error("Chat stream closed before completion");
+            }
+          },
+          onerror(error) {
+            throw error;
+          },
+        });
+      }
     } catch (error: unknown) {
       cancelThinkingState();
       if (abortController.signal.aborted) return;
@@ -517,7 +599,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ),
         }));
       }
-      if (!_currentAudio && !abortController.signal.aborted) {
+      if (!audioStarted && !_currentAudio && !abortController.signal.aborted) {
         useTourStore.getState().setAvatarState("idle");
       }
     }

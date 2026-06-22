@@ -491,8 +491,8 @@ async def _ensure_tts_audio(
     style: str,
     persona: str,
 ) -> tuple[str, str, str, bool]:
-    answer_hash = tts_engine._cache_key(text, voice, style, persona)
-    legacy_hash = tts_engine._legacy_cache_key(text, voice, style, persona)
+    answer_hash = tts_engine.cache_key(text, voice, style, persona)
+    legacy_hash = tts_engine.legacy_cache_key(text, voice, style, persona)
     candidates = [
         {
             "hash": answer_hash,

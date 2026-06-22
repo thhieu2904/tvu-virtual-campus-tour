@@ -71,7 +71,7 @@ def rewrite_tts_text(text: str) -> str:
     return rewritten
 
 
-def _cache_key(
+def cache_key(
     text: str,
     voice: str,
     voice_style: str = "",
@@ -84,7 +84,7 @@ def _cache_key(
     ).hexdigest()
 
 
-def _legacy_cache_key(
+def legacy_cache_key(
     text: str,
     voice: str,
     voice_style: str = "",
@@ -96,6 +96,11 @@ def _legacy_cache_key(
         f"{TTS_PROMPT_VERSION}_{spoken_text}_{voice}_{voice_style}_{personality_prompt}".encode()
     ).hexdigest()
 
+
+# Backward-compatible aliases for older workers. New code should use the public
+# functions above instead of depending on private module internals.
+_cache_key = cache_key
+_legacy_cache_key = legacy_cache_key
 
 def _get_cached(key: str) -> tuple[bytes, str] | None:
     """
@@ -227,7 +232,7 @@ async def synthesize(
 
     style = voice_style or ""
     persona = personality_prompt or ""
-    key = _cache_key(text, voice, style, persona)
+    key = cache_key(text, voice, style, persona)
     spoken_text = rewrite_tts_text(text)
     cached = await asyncio.to_thread(_get_cached, key) if use_local_cache else None
 
