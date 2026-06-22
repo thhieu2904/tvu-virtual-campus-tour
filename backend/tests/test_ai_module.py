@@ -5,13 +5,12 @@ Uses unittest.mock to avoid real API calls.
 
 import asyncio
 import os
-import sys
 import shutil
+import sys
 import unittest
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
-from dataclasses import dataclass
+from unittest.mock import MagicMock, patch
 
 # Ensure the project root is in sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -45,12 +44,46 @@ class TestSystemPrompts(unittest.TestCase):
         self.assertIn("Khoa CNTT có 3 ngành đào tạo.", prompt)
         self.assertNotIn("Không có ngữ cảnh bổ sung.", prompt)
 
+    def test_agent_prompt_requires_document_search_for_tvu_facts(self):
+        from app.ai.prompts.system_prompts import build_system_prompt
+
+        prompt = build_system_prompt(
+            prompt_mode="agent",
+            available_slugs="b7-thu-vien (Thư viện)",
+            current_time="2026-06-23 10:00:00",
+        )
+
+        self.assertIn("BẮT BUỘC gọi `search_documents`", prompt)
+        self.assertIn("b7-thu-vien", prompt)
+        self.assertNotIn("## Tài liệu truy xuất", prompt)
+
     def test_build_prompt_auto_time(self):
         """When current_time is not provided, it should auto-generate."""
         from app.ai.prompts.system_prompts import build_system_prompt
         prompt = build_system_prompt()
         # Should contain a date-like string (YYYY-MM-DD)
         self.assertRegex(prompt, r"\d{4}-\d{2}-\d{2}")
+
+
+class TestSettings(unittest.TestCase):
+    def test_agent_and_answer_models_are_configurable_from_environment(self):
+        from app.config import Settings
+
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_AGENT_MODEL": "agent-model-from-env",
+                "GEMINI_ANSWER_MODEL": "answer-model-from-env",
+                "GEMINI_AGENT_THINKING_LEVEL": "high",
+                "GEMINI_ANSWER_THINKING_LEVEL": "minimal",
+            },
+        ):
+            settings = Settings(_env_file=None)
+
+        self.assertEqual(settings.GEMINI_AGENT_MODEL, "agent-model-from-env")
+        self.assertEqual(settings.GEMINI_ANSWER_MODEL, "answer-model-from-env")
+        self.assertEqual(settings.GEMINI_AGENT_THINKING_LEVEL, "high")
+        self.assertEqual(settings.GEMINI_ANSWER_THINKING_LEVEL, "minimal")
 
 
 # ============================================================
@@ -87,6 +120,31 @@ class TestChatEngineHelpers(unittest.TestCase):
         config = _build_config("System prompt", enable_thinking=True, thinking_budget=512)
         self.assertIsNotNone(config.thinking_config)
         self.assertEqual(config.thinking_config.thinking_budget, 512)
+
+    def test_build_config_with_thinking_level(self):
+        from app.ai.chat_engine import _build_config
+
+        config = _build_config(
+            "System prompt",
+            enable_thinking=False,
+            thinking_budget=0,
+            thinking_level="medium",
+        )
+
+        self.assertEqual(config.thinking_config.thinking_level.value, "MEDIUM")
+        self.assertFalse(config.thinking_config.include_thoughts)
+
+    def test_build_config_default_leaves_thinking_to_model(self):
+        from app.ai.chat_engine import _build_config
+
+        config = _build_config(
+            "System prompt",
+            enable_thinking=False,
+            thinking_budget=0,
+            thinking_level="default",
+        )
+
+        self.assertIsNone(config.thinking_config)
 
     def test_parse_response_with_thinking(self):
         from app.ai.chat_engine import _parse_response
@@ -139,6 +197,8 @@ class TestChatEngineHelpers(unittest.TestCase):
         usage_meta = MagicMock()
         usage_meta.prompt_token_count = 10
         usage_meta.candidates_token_count = 5
+        usage_meta.thoughts_token_count = 7
+        usage_meta.tool_use_prompt_token_count = 2
         usage_meta.total_token_count = 15
 
         result = MagicMock()
@@ -148,6 +208,8 @@ class TestChatEngineHelpers(unittest.TestCase):
         _, _, usage, function_calls = _parse_response(result)
         self.assertEqual(usage["prompt_tokens"], 10)
         self.assertEqual(usage["completion_tokens"], 5)
+        self.assertEqual(usage["thinking_tokens"], 7)
+        self.assertEqual(usage["tool_prompt_tokens"], 2)
         self.assertEqual(usage["total_tokens"], 15)
         self.assertEqual(function_calls, [])
 
@@ -217,12 +279,12 @@ class TestTTSCache(unittest.TestCase):
         )
 
     def test_cache_miss(self):
-        from app.ai.tts_engine import _get_cached, _cache_key
+        from app.ai.tts_engine import _cache_key, _get_cached
         key = _cache_key("nonexistent", "Kore")
         self.assertIsNone(_get_cached(key))
 
     def test_cache_roundtrip_wav(self):
-        from app.ai.tts_engine import _get_cached, _save_cache, _cache_key, CONTENT_TYPE_WAV
+        from app.ai.tts_engine import CONTENT_TYPE_WAV, _cache_key, _get_cached, _save_cache
         key = _cache_key("test", "Kore")
         data = b"\x00\x01\x02\x03"
         _save_cache(key, data, CONTENT_TYPE_WAV)
@@ -233,7 +295,7 @@ class TestTTSCache(unittest.TestCase):
         self.assertEqual(ct, CONTENT_TYPE_WAV)
 
     def test_cache_roundtrip_mp3(self):
-        from app.ai.tts_engine import _get_cached, _save_cache, _cache_key, CONTENT_TYPE_MP3
+        from app.ai.tts_engine import CONTENT_TYPE_MP3, _cache_key, _get_cached, _save_cache
         key = _cache_key("test_mp3", "HoaiMy")
         data = b"\xff\xfb\x90\x00"
         _save_cache(key, data, CONTENT_TYPE_MP3)
@@ -244,7 +306,12 @@ class TestTTSCache(unittest.TestCase):
         self.assertEqual(ct, CONTENT_TYPE_MP3)
 
     def test_runtime_cache_roundtrip(self):
-        from app.ai.tts_engine import CONTENT_TYPE_WAV, get_runtime_cached, resolve_runtime_cache_file, save_runtime_cache
+        from app.ai.tts_engine import (
+            CONTENT_TYPE_WAV,
+            get_runtime_cached,
+            resolve_runtime_cache_file,
+            save_runtime_cache,
+        )
 
         filename = save_runtime_cache("a" * 32, b"wave-data", CONTENT_TYPE_WAV)
         self.assertEqual(filename, f"{'a' * 32}.wav")
@@ -333,7 +400,12 @@ class TestChatEngine(unittest.TestCase):
     def test_generate_response(self, mock_settings, mock_client):
         from app.ai.chat_engine import generate_response
 
-        mock_settings.return_value = MagicMock(GEMINI_CHAT_MODEL="gemini-2.5-flash")
+        mock_settings.return_value = MagicMock(
+            GEMINI_AGENT_MODEL="gemini-3.5-flash",
+            GEMINI_ANSWER_MODEL="gemini-3.5-flash",
+            GEMINI_AGENT_THINKING_LEVEL="high",
+            GEMINI_ANSWER_THINKING_LEVEL="default",
+        )
 
         answer_part = MagicMock()
         answer_part.thought = False
@@ -348,16 +420,27 @@ class TestChatEngine(unittest.TestCase):
         mock_result.usage_metadata = None
         mock_client.return_value.models.generate_content.return_value = mock_result
 
-        result = asyncio.run(generate_response("Xin chào"))
+        result = asyncio.run(generate_response("Xin chào", prompt_mode="agent"))
         self.assertEqual(result.text, "Chào bạn!")
         self.assertIsNone(result.thinking)
+        call_kwargs = mock_client.return_value.models.generate_content.call_args.kwargs
+        self.assertEqual(call_kwargs["model"], "gemini-3.5-flash")
+        self.assertEqual(
+            call_kwargs["config"].thinking_config.thinking_level.value,
+            "HIGH",
+        )
 
     @patch("app.ai.chat_engine.get_client")
     @patch("app.ai.chat_engine.get_settings")
     def test_generate_response_with_thinking(self, mock_settings, mock_client):
         from app.ai.chat_engine import generate_response
 
-        mock_settings.return_value = MagicMock(GEMINI_CHAT_MODEL="gemini-2.5-flash")
+        mock_settings.return_value = MagicMock(
+            GEMINI_AGENT_MODEL="gemini-3.5-flash",
+            GEMINI_ANSWER_MODEL="gemini-3.5-flash",
+            GEMINI_AGENT_THINKING_LEVEL="high",
+            GEMINI_ANSWER_THINKING_LEVEL="default",
+        )
 
         thinking_part = MagicMock()
         thinking_part.thought = True
@@ -379,6 +462,10 @@ class TestChatEngine(unittest.TestCase):
         result = asyncio.run(generate_response("Test", enable_thinking=True))
         self.assertEqual(result.text, "Answer")
         self.assertEqual(result.thinking, "Thinking...")
+        call_kwargs = mock_client.return_value.models.generate_content.call_args.kwargs
+        self.assertIsNotNone(call_kwargs["config"].thinking_config)
+        self.assertEqual(call_kwargs["config"].thinking_config.thinking_budget, 1024)
+        self.assertTrue(call_kwargs["config"].thinking_config.include_thoughts)
 
 
 # ============================================================
@@ -401,7 +488,7 @@ class TestTTSEngine(unittest.TestCase):
     @patch("app.ai.tts_engine.get_client")
     @patch("app.ai.tts_engine.get_settings")
     def test_synthesize_gemini(self, mock_settings, mock_client):
-        from app.ai.tts_engine import synthesize, CONTENT_TYPE_WAV, _pcm_to_wav
+        from app.ai.tts_engine import CONTENT_TYPE_WAV, _pcm_to_wav, synthesize
 
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
@@ -457,7 +544,7 @@ class TestTTSEngine(unittest.TestCase):
     @patch("app.ai.tts_engine.get_client")
     @patch("app.ai.tts_engine.get_settings")
     def test_synthesize_fallback(self, mock_settings, mock_client, mock_edge):
-        from app.ai.tts_engine import synthesize, CONTENT_TYPE_MP3
+        from app.ai.tts_engine import CONTENT_TYPE_MP3, synthesize
 
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",
@@ -486,7 +573,7 @@ class TestTTSEngine(unittest.TestCase):
     @patch("app.ai.tts_engine.get_client")
     @patch("app.ai.tts_engine.get_settings")
     def test_synthesize_cache_hit(self, mock_settings, mock_client):
-        from app.ai.tts_engine import synthesize, _save_cache, _cache_key, CONTENT_TYPE_WAV
+        from app.ai.tts_engine import CONTENT_TYPE_WAV, _cache_key, _save_cache, synthesize
 
         mock_settings.return_value = MagicMock(
             GEMINI_DEFAULT_VOICE="Kore",

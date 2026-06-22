@@ -19,7 +19,12 @@ from app.config import get_settings
 from app.db.database import async_session, get_db
 from app.repositories import location_repo
 from app.schemas.chat import ChatRequest, SessionResponse, TTSRequest
-from app.services import cache_fingerprint_service, chat_tts_service, rag_service
+from app.services import (
+    cache_fingerprint_service,
+    chat_tts_service,
+    content_filter,
+    rag_service,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -135,6 +140,43 @@ async def _get_chat_result(
     allow_qa_cache: bool,
     persist: bool,
 ) -> tuple[dict[str, Any], bool]:
+    filter_started = time.perf_counter()
+    input_filter = content_filter.filter_input(request.message)
+    input_filter_ms = round((time.perf_counter() - filter_started) * 1000, 2)
+    if not input_filter.is_safe:
+        logger.warning(
+            "Blocked unsafe chat input violations=%s",
+            input_filter.violations,
+        )
+        result = {
+            "answer": input_filter.filtered_text,
+            "thinking": None,
+            "sources": [],
+            "tool_actions": [],
+            "response_time_ms": 0,
+            "timings": {
+                "content_filter_input_ms": input_filter_ms,
+                "total_pipeline_ms": 0.0,
+                "total_rag_ms": 0.0,
+            },
+            "error": False,
+        }
+        if persist:
+            exchange_saved = await rag_service.save_chat_exchange(
+                session=session,
+                session_id=request.session_id,
+                location_id=request.location_id,
+                user_message=request.message,
+                assistant_message=input_filter.filtered_text,
+                response_time_ms=0,
+                input_type=request.input_type,
+                tool_calls_data=None,
+            )
+            if exchange_saved:
+                await session.commit()
+        return result, False
+
+    cache_hit = False
     if allow_qa_cache:
         cache_key = cache_fingerprint_service.qa_cache_lookup_key(request.message, location_name)
         cached_response = qa_cache_store.get(cache_key)
@@ -147,39 +189,77 @@ async def _get_chat_result(
             )
             tool_actions = await rag_service.validate_tool_actions(session, tool_actions)
             answer = await rag_service.ensure_response_text(session, answer, tool_actions)
-            exchange_saved = persist and await rag_service.save_chat_exchange(
-                session=session,
-                session_id=request.session_id,
-                location_id=request.location_id,
-                user_message=request.message,
-                assistant_message=answer,
-                response_time_ms=0,
-                input_type=request.input_type,
-                tool_calls_data=tool_actions or None,
-            )
-            if exchange_saved:
-                await session.commit()
             result = dict(cached_response)
             result["answer"] = answer
             result["tool_actions"] = tool_actions
             result.setdefault("sources", [])
             result["response_time_ms"] = 0
-            result["timings"] = {"qa_cache_ms": 0.0, "total_rag_ms": 0.0}
-            return result, True
+            result["timings"] = {
+                "content_filter_input_ms": input_filter_ms,
+                "qa_cache_ms": 0.0,
+                "total_pipeline_ms": 0.0,
+                "total_rag_ms": 0.0,
+            }
+            cache_hit = True
+        else:
+            result = await rag_service.process_query(
+                session=session,
+                message=request.message,
+                location_id=request.location_id,
+                session_id=request.session_id,
+                history=request.history,
+                location_name=location_name,
+                personality_prompt=personality_prompt,
+                voice_style=voice_style,
+                input_type=request.input_type,
+                persist=False,
+            )
+    else:
+        result = await rag_service.process_query(
+            session=session,
+            message=request.message,
+            location_id=request.location_id,
+            session_id=request.session_id,
+            history=request.history,
+            location_name=location_name,
+            personality_prompt=personality_prompt,
+            voice_style=voice_style,
+            input_type=request.input_type,
+            persist=False,
+        )
 
-    result = await rag_service.process_query(
-        session=session,
-        message=request.message,
-        location_id=request.location_id,
-        session_id=request.session_id,
-        history=request.history,
-        location_name=location_name,
-        personality_prompt=personality_prompt,
-        voice_style=voice_style,
-        input_type=request.input_type,
-        persist=persist,
+    filter_started = time.perf_counter()
+    output_filter = content_filter.filter_output(str(result.get("answer") or ""))
+    result.setdefault("timings", {})["content_filter_input_ms"] = input_filter_ms
+    result["timings"]["content_filter_output_ms"] = round(
+        (time.perf_counter() - filter_started) * 1000,
+        2,
     )
-    return result, False
+    if not output_filter.is_safe:
+        logger.error(
+            "Blocked unsafe chat output violations=%s",
+            output_filter.violations,
+        )
+        result["answer"] = output_filter.filtered_text
+        result["thinking"] = None
+        result["tool_actions"] = []
+        result["sources"] = []
+
+    if persist:
+        exchange_saved = await rag_service.save_chat_exchange(
+            session=session,
+            session_id=request.session_id,
+            location_id=request.location_id,
+            user_message=request.message,
+            assistant_message=str(result.get("answer") or ""),
+            response_time_ms=int(result.get("response_time_ms") or 0),
+            input_type=request.input_type,
+            tool_calls_data=result.get("tool_actions") or None,
+        )
+        if exchange_saved:
+            await session.commit()
+
+    return result, cache_hit
 
 
 async def _persist_stream_exchange(

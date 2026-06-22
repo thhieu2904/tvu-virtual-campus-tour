@@ -21,7 +21,10 @@ class Settings(BaseSettings):
 
     # === Gemini AI ===
     GEMINI_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"
+    GEMINI_AGENT_MODEL: str = "gemini-3.5-flash"
+    GEMINI_ANSWER_MODEL: str = "gemini-3.5-flash"
+    GEMINI_AGENT_THINKING_LEVEL: str = "high"
+    GEMINI_ANSWER_THINKING_LEVEL: str = "default"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     GEMINI_TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
     GEMINI_EMBEDDING_DIMENSIONS: int = 768

@@ -20,7 +20,7 @@ MASCOT_INTRO_TEMPLATE_VERSION = "mascot-intro-v1"
 LOCATION_INTRO_FINGERPRINT_VERSION = "location-intro-v3"
 LOCATION_QA_FINGERPRINT_VERSION = "location-qa-v1"
 QA_ITEM_FINGERPRINT_VERSION = "qa-item-v1"
-ANSWER_PROMPT_VERSION = "rag-answer-v1"
+ANSWER_PROMPT_VERSION = "agent-first-rag-answer-v2"
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,10 @@ def location_intro_item_key(location_id: UUID | str) -> str:
 def _model_source() -> dict[str, str]:
     settings = get_settings()
     return {
-        "gemini_chat_model": settings.GEMINI_CHAT_MODEL,
+        "gemini_agent_model": settings.GEMINI_AGENT_MODEL,
+        "gemini_answer_model": settings.GEMINI_ANSWER_MODEL,
+        "gemini_agent_thinking_level": settings.GEMINI_AGENT_THINKING_LEVEL,
+        "gemini_answer_thinking_level": settings.GEMINI_ANSWER_THINKING_LEVEL,
         "gemini_embedding_model": settings.GEMINI_EMBEDDING_MODEL,
         "gemini_tts_model": settings.GEMINI_TTS_MODEL,
         "gemini_default_voice": settings.GEMINI_DEFAULT_VOICE,
@@ -178,7 +181,10 @@ def location_suggested_qa_payload(location: Any) -> dict[str, Any]:
         "mascot": mascot_source(getattr(location, "mascot", None)),
         "answer_prompt_version": ANSWER_PROMPT_VERSION,
         "tts_prompt_version": TTS_PROMPT_VERSION,
-        "gemini_chat_model": models["gemini_chat_model"],
+        "gemini_agent_model": models["gemini_agent_model"],
+        "gemini_answer_model": models["gemini_answer_model"],
+        "gemini_agent_thinking_level": models["gemini_agent_thinking_level"],
+        "gemini_answer_thinking_level": models["gemini_answer_thinking_level"],
         "gemini_embedding_model": models["gemini_embedding_model"],
         "gemini_tts_model": models["gemini_tts_model"],
     }
@@ -203,7 +209,10 @@ def qa_item_payload(location: Any, question: Any, fallback_order: int = 0) -> di
         "mascot": mascot_source(getattr(location, "mascot", None)),
         "answer_prompt_version": ANSWER_PROMPT_VERSION,
         "tts_prompt_version": TTS_PROMPT_VERSION,
-        "gemini_chat_model": models["gemini_chat_model"],
+        "gemini_agent_model": models["gemini_agent_model"],
+        "gemini_answer_model": models["gemini_answer_model"],
+        "gemini_agent_thinking_level": models["gemini_agent_thinking_level"],
+        "gemini_answer_thinking_level": models["gemini_answer_thinking_level"],
         "gemini_embedding_model": models["gemini_embedding_model"],
         "gemini_tts_model": models["gemini_tts_model"],
     }

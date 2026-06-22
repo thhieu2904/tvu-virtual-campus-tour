@@ -1,15 +1,14 @@
-"""
-RAG Service — Orchestrates the Retrieval-Augmented Generation pipeline.
-Layer 2 (Business Logic): embed query → vector search → build prompt → call LLM.
+"""Agent-first chat orchestration with optional document retrieval.
 
-Phase 1: Simple RAG — vector search + Gemini text response (no Function Calling).
-Phase 2 (current): Function Calling — Gemini can invoke tools (navigate, show_media, etc.)
-                    Uses "Collect-then-Decide" pattern for streaming.
+Round 1 lets Gemini choose UI tools or ``search_documents`` without receiving
+RAG context. Retrieval and a grounded answer round run only when requested.
 """
 
+import json
 import logging
 import re
 import time
+import unicodedata
 from difflib import get_close_matches
 from uuid import UUID
 
@@ -17,7 +16,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.ai.chat_engine import generate_response
+from app.ai.chat_engine import ChatResult, generate_response
 from app.ai.embedding_engine import embed_query
 from app.ai.tools import AGENT_TOOLS
 from app.cache import slug_cache, vector_search_cache
@@ -31,6 +30,9 @@ logger = logging.getLogger(__name__)
 _SEARCH_TOOLS = {"search_documents"}
 # UI tool names — these are forwarded directly to frontend
 _UI_TOOLS = {"navigate_to", "show_media", "toggle_map"}
+_RAG_CANDIDATE_COUNT = 10
+_RAG_MAX_CHUNKS = 5
+_RAG_MAX_CONTEXT_CHARS = 12_000
 _PSEUDO_TOOL_CALL_RE = re.compile(
     r"(?:default_api\.)?(navigate_to|show_media|toggle_map)\s*\(([^)]*)\)",
     re.IGNORECASE,
@@ -45,6 +47,175 @@ _NAVIGATE_MAIN_INTENT_RE = re.compile(
     r"\b(?:đưa|dẫn|quay|về|lại|đi)\b.*\b(?:sảnh|cổng\s+chính)\b",
     re.IGNORECASE,
 )
+_CATALOG_LOCATION_RE = re.compile(r"(?:^|,\s*)([^,()]+?)\s*\(([^)]+)\)")
+_SOCIAL_INTENT_RE = re.compile(
+    r"^(?:xin chao|chao|hello|hi|cam on|thanks|tam biet|bye|"
+    r"ban la ai|ban ten gi|ban khoe khong)[!?.\s]*$"
+)
+_MAP_INTENT_RE = re.compile(r"\bban do\b")
+_MEDIA_INTENT_RE = re.compile(
+    r"\b(?:xem|mo|cho xem|hien|show)\b.*\b(?:anh|hinh|video|clip)\b|"
+    r"\b(?:anh|hinh|video|clip)\b.*\b(?:xem|mo|cho xem|hien|show)\b"
+)
+_NAVIGATION_INTENT_RE = re.compile(
+    r"\b(?:đưa|dẫn|đi|tới|đến|ghé|quay|về|sang|dua|dan|di|den|ghe|quay|ve|sang)\b",
+    re.IGNORECASE,
+)
+_TVU_DOMAIN_RE = re.compile(
+    r"\b(?:tvu|dai hoc tra vinh|truong|hoc phi|tuyen sinh|diem chuan|"
+    r"nganh|hoc bong|sinh vien|nhap hoc|quy che|lich su|thanh lap|"
+    r"quy mo|thanh tuu|co so vat chat|thu vien|khoa|giang duong|"
+    r"ky tuc xa|campus|noi nay|noi day|khu vuc nay|o day)\b"
+)
+_FACT_QUESTION_RE = re.compile(
+    r"\b(?:bao nhieu|khi nao|la gi|co gi|tai sao|the nao|noi bat|"
+    r"thong tin|gioi thieu|hoc nhung gi|mo cua|chinh sach|muc phi|"
+    r"chi phi|quy mo|thanh lap|o dau|nao)\b|"
+    r"\bco\b.{0,40}\bkhong\b"
+)
+
+
+def _normalize_intent_text(text: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", str(text or "").lower())
+    ascii_text = "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    )
+    return " ".join(ascii_text.replace("đ", "d").split())
+
+
+def _catalog_locations(available_slugs: str) -> list[tuple[str, str]]:
+    return [
+        (slug.strip(), name.strip())
+        for slug, name in _CATALOG_LOCATION_RE.findall(available_slugs or "")
+    ]
+
+
+def _resolve_catalog_location_slug(
+    message: str,
+    available_slugs: str,
+) -> str | None:
+    normalized_message = _normalize_intent_text(message)
+    matches: list[tuple[int, str]] = []
+    for slug, name in _catalog_locations(available_slugs):
+        normalized_name = _normalize_intent_text(name)
+        normalized_slug = _normalize_intent_text(slug.replace("-", " "))
+        for candidate in (normalized_name, normalized_slug):
+            if candidate and candidate in normalized_message:
+                matches.append((len(candidate), slug))
+    if not matches:
+        return None
+    return max(matches)[1]
+
+
+def required_agent_tools(
+    message: str,
+    *,
+    location_name: str,
+    available_slugs: str,
+) -> set[str]:
+    """Conservatively identify turns that must produce one or more tool calls."""
+    normalized = _normalize_intent_text(message)
+    if not normalized or _SOCIAL_INTENT_RE.fullmatch(normalized):
+        return set()
+
+    required: set[str] = set()
+    destination_slug = _resolve_catalog_location_slug(message, available_slugs)
+
+    if _MAP_INTENT_RE.search(normalized):
+        required.add("toggle_map")
+    if _MEDIA_INTENT_RE.search(normalized):
+        required.add("show_media")
+        if destination_slug:
+            current_location = _normalize_intent_text(location_name)
+            destination_name = next(
+                (
+                    name
+                    for slug, name in _catalog_locations(available_slugs)
+                    if slug == destination_slug
+                ),
+                "",
+            )
+            if _normalize_intent_text(destination_name) != current_location:
+                required.add("navigate_to")
+    if _NAVIGATION_INTENT_RE.search(message) and (
+        destination_slug or "sanh" in normalized or "cong chinh" in normalized
+    ):
+        required.add("navigate_to")
+    if _TVU_DOMAIN_RE.search(normalized) and _FACT_QUESTION_RE.search(normalized):
+        required.add("search_documents")
+
+    return required
+
+
+def _called_tool_names(result: ChatResult) -> set[str]:
+    return {
+        str(call.get("name") or "")
+        for call in result.function_calls
+        if isinstance(call, dict)
+    }
+
+
+def _merge_agent_results(first: ChatResult, retry: ChatResult) -> ChatResult:
+    merged_calls: list[dict] = []
+    seen: set[str] = set()
+    for call in [*first.function_calls, *retry.function_calls]:
+        key = json.dumps(call, ensure_ascii=False, sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            merged_calls.append(call)
+    return ChatResult(
+        text=retry.text.strip() or first.text,
+        thinking=retry.thinking or first.thinking,
+        usage=retry.usage,
+        function_calls=merged_calls,
+    )
+
+
+def _deterministic_guard_calls(
+    missing_tools: set[str],
+    *,
+    message: str,
+    available_slugs: str,
+) -> list[dict]:
+    calls: list[dict] = []
+    if "navigate_to" in missing_tools:
+        destination_slug = _resolve_catalog_location_slug(message, available_slugs)
+        if destination_slug:
+            calls.append(
+                {
+                    "name": "navigate_to",
+                    "args": {"location_slug": destination_slug},
+                }
+            )
+    if "search_documents" in missing_tools:
+        calls.append({"name": "search_documents", "args": {"query": message}})
+    if "toggle_map" in missing_tools:
+        normalized = _normalize_intent_text(message)
+        state = "close" if "dong" in normalized else "open"
+        calls.append({"name": "toggle_map", "args": {"state": state}})
+    if "show_media" in missing_tools:
+        normalized = _normalize_intent_text(message)
+        media_type = "video" if re.search(r"\b(?:video|clip)\b", normalized) else "image"
+        calls.append({"name": "show_media", "args": {"media_type": media_type}})
+    return calls
+
+
+def _record_usage(
+    timings: dict[str, float],
+    totals: dict[str, int],
+    prefix: str,
+    result: ChatResult,
+) -> None:
+    for field in (
+        "prompt_tokens",
+        "completion_tokens",
+        "thinking_tokens",
+        "tool_prompt_tokens",
+        "total_tokens",
+    ):
+        value = int(result.usage.get(field) or 0)
+        timings[f"{prefix}_{field}"] = float(value)
+        totals[field] = totals.get(field, 0) + value
 
 
 def recover_pseudo_tool_actions(text: str | None) -> tuple[str, list[dict]]:
@@ -189,10 +360,51 @@ async def _vector_search_with_cache(
         return cached_chunks
 
     chunks = await vector_repo.vector_search(
-        session, query_vector, location_id=location_id, top_k=5
+        session,
+        query_vector,
+        location_id=location_id,
+        top_k=_RAG_CANDIDATE_COUNT,
     )
     vector_search_cache.put(query_vector, location_id, chunks)
     return chunks
+
+
+def select_rag_chunks(
+    candidates: list[dict],
+    *,
+    max_chunks: int = _RAG_MAX_CHUNKS,
+    max_context_chars: int = _RAG_MAX_CONTEXT_CHARS,
+) -> list[dict]:
+    """Select ranked, unique chunks without a brittle high similarity cutoff."""
+    selected: list[dict] = []
+    seen_ids: set[str] = set()
+    seen_content: set[str] = set()
+    used_chars = 0
+
+    for chunk in candidates:
+        content = str(chunk.get("content") or "").strip()
+        chunk_id = str(chunk.get("id") or "")
+        normalized_content = " ".join(content.lower().split())
+        if not content or chunk_id in seen_ids or normalized_content in seen_content:
+            continue
+
+        remaining_chars = max_context_chars - used_chars
+        if remaining_chars <= 0:
+            break
+        if len(content) > remaining_chars:
+            if selected:
+                continue
+            chunk = {**chunk, "content": content[:remaining_chars]}
+            content = chunk["content"]
+
+        selected.append(chunk)
+        seen_ids.add(chunk_id)
+        seen_content.add(normalized_content)
+        used_chars += len(content)
+        if len(selected) >= max_chunks:
+            break
+
+    return selected
 
 
 async def _enrich_tool_actions(
@@ -383,9 +595,11 @@ async def process_query(
     input_type: str = "text",
     persist: bool = True,
 ) -> dict:
-    """Run the RAG pipeline and return a validated, fully collected result."""
+    """Run the agent-first pipeline and return a validated, collected result."""
     started = time.perf_counter()
     timings: dict[str, float] = {}
+    usage_totals: dict[str, int] = {}
+    chunks: list[dict] = []
 
     try:
         try:
@@ -394,19 +608,10 @@ async def process_query(
             raise ValueError(f"Invalid location_id: {location_id}") from exc
 
         phase_started = time.perf_counter()
-        query_vector = await embed_query(message)
-        timings["embedding_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
-
-        phase_started = time.perf_counter()
-        chunks = await _vector_search_with_cache(session, query_vector, None)
-        timings["vector_search_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
-
-        phase_started = time.perf_counter()
         available_slugs = await _get_available_slugs(session)
         timings["slug_lookup_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
         await session.commit()
 
-        rag_context = [chunk["content"] for chunk in chunks]
         gen_kwargs = {
             "query": message,
             "history": history,
@@ -420,11 +625,68 @@ async def process_query(
 
         phase_started = time.perf_counter()
         result_r1 = await generate_response(
-            rag_context=rag_context,
+            rag_context=[],
             tools=[AGENT_TOOLS],
+            prompt_mode="agent",
             **gen_kwargs,
         )
         timings["gemini_round1_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
+        _record_usage(timings, usage_totals, "agent_round1", result_r1)
+
+        required_tools = required_agent_tools(
+            message,
+            location_name=location_name,
+            available_slugs=available_slugs,
+        )
+        missing_tools = required_tools - _called_tool_names(result_r1)
+        if missing_tools:
+            logger.warning(
+                "Agent guard retry required missing_tools=%s message=%r",
+                sorted(missing_tools),
+                message,
+            )
+            phase_started = time.perf_counter()
+            retry_result = await generate_response(
+                rag_context=[],
+                tools=[AGENT_TOOLS],
+                prompt_mode="agent",
+                routing_guard=(
+                    "Bộ kiểm tra intent xác định lượt này bắt buộc phải gọi đủ "
+                    f"các tool sau: {', '.join(sorted(missing_tools))}. "
+                    "Hãy kiểm tra lại và gọi tool, không tự trả lời thay cho tool."
+                ),
+                **gen_kwargs,
+            )
+            timings["gemini_agent_retry_ms"] = round(
+                (time.perf_counter() - phase_started) * 1000,
+                2,
+            )
+            timings["agent_guard_retry"] = 1.0
+            _record_usage(
+                timings,
+                usage_totals,
+                "agent_retry",
+                retry_result,
+            )
+            result_r1 = _merge_agent_results(result_r1, retry_result)
+            missing_tools = required_tools - _called_tool_names(result_r1)
+
+        if missing_tools:
+            deterministic_calls = _deterministic_guard_calls(
+                missing_tools,
+                message=message,
+                available_slugs=available_slugs,
+            )
+            result_r1.function_calls.extend(deterministic_calls)
+            missing_tools = required_tools - _called_tool_names(result_r1)
+            timings["agent_guard_forced_calls"] = float(len(deterministic_calls))
+            if missing_tools:
+                logger.warning(
+                    "Agent guard could not resolve tools=%s message=%r",
+                    sorted(missing_tools),
+                    message,
+                )
+        timings["agent_guard_unresolved_count"] = float(len(missing_tools))
 
         search_fc = next(
             (fc for fc in result_r1.function_calls if fc.get("name") in _SEARCH_TOOLS),
@@ -436,35 +698,85 @@ async def process_query(
         final_result = result_r1
 
         if search_fc:
-            extra_query = (search_fc.get("args") or {}).get("query", message)
+            phase_started = time.perf_counter()
+            tool_actions = await validate_tool_actions(session, tool_actions)
+            timings["tool_prevalidation_ms"] = round(
+                (time.perf_counter() - phase_started) * 1000,
+                2,
+            )
+
+            rag_started = time.perf_counter()
+            extra_query = str(
+                (search_fc.get("args") or {}).get("query") or message
+            ).strip()
 
             phase_started = time.perf_counter()
             extra_vector = await embed_query(extra_query)
             timings["search_embedding_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
 
             phase_started = time.perf_counter()
-            extra_chunks = await _vector_search_with_cache(session, extra_vector, None)
+            candidates = await _vector_search_with_cache(session, extra_vector, None)
             timings["search_vector_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
-            extra_context = [chunk["content"] for chunk in extra_chunks]
+            chunks = select_rag_chunks(candidates)
+            rag_context = [chunk["content"] for chunk in chunks]
             await session.commit()
 
             logger.info(
-                "Search tool '%s' -> RAG round 2 (query='%s', results=%d)",
+                "Search tool '%s' -> grounded round 2 "
+                "(query='%s', candidates=%d, selected=%d)",
                 search_fc["name"],
                 extra_query,
-                len(extra_chunks),
+                len(candidates),
+                len(chunks),
             )
 
             phase_started = time.perf_counter()
-            final_result = await generate_response(
-                rag_context=rag_context + extra_context,
+            answer_kwargs = {
+                "rag_context": rag_context,
+                "prompt_mode": "answer",
+                "planned_actions": json.dumps(
+                    tool_actions,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
                 **gen_kwargs,
+            }
+            final_result = await generate_response(
+                **answer_kwargs,
             )
             timings["gemini_round2_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
+            _record_usage(
+                timings,
+                usage_totals,
+                "answer_round2",
+                final_result,
+            )
 
-            seen_chunk_ids = {chunk["id"] for chunk in chunks}
-            chunks.extend(
-                chunk for chunk in extra_chunks if chunk["id"] not in seen_chunk_ids
+            if not final_result.text.strip():
+                logger.warning("Grounded answer was empty; retrying once")
+                phase_started = time.perf_counter()
+                final_result = await generate_response(
+                    routing_guard=(
+                        "Lần tạo trước không có văn bản. Hãy trả lời đầy đủ bằng "
+                        "văn bản dựa trên tài liệu; nếu tài liệu thiếu, nói rõ là "
+                        "chưa có thông tin."
+                    ),
+                    **answer_kwargs,
+                )
+                timings["gemini_answer_retry_ms"] = round(
+                    (time.perf_counter() - phase_started) * 1000,
+                    2,
+                )
+                _record_usage(
+                    timings,
+                    usage_totals,
+                    "answer_retry",
+                    final_result,
+                )
+
+            timings["grounded_round_ms"] = round(
+                (time.perf_counter() - rag_started) * 1000,
+                2,
             )
 
         answer_candidate, pseudo_tool_actions = recover_pseudo_tool_actions(final_result.text)
@@ -511,8 +823,9 @@ async def process_query(
         )
 
     except Exception as exc:
-        logger.error("RAG pipeline error: %s", exc)
+        logger.error("Agent-first chat pipeline error: %s", exc)
         response_time_ms = int((time.perf_counter() - started) * 1000)
+        timings["total_pipeline_ms"] = float(response_time_ms)
         timings["total_rag_ms"] = float(response_time_ms)
         return {
             "answer": "Xin lỗi bạn, mình đang gặp sự cố kỹ thuật. Bạn thử hỏi lại sau ít phút nhé!",
@@ -525,6 +838,8 @@ async def process_query(
         }
 
     response_time_ms = int((time.perf_counter() - started) * 1000)
+    for field, value in usage_totals.items():
+        timings[f"gemini_{field}"] = float(value)
 
     persistence_started = time.perf_counter()
     if persist and session_id:
@@ -543,7 +858,8 @@ async def process_query(
         except Exception as exc:
             logger.warning("Failed to save chat messages: %s", exc)
     timings["persistence_ms"] = round((time.perf_counter() - persistence_started) * 1000, 2)
-    timings["total_rag_ms"] = round((time.perf_counter() - started) * 1000, 2)
+    timings["total_pipeline_ms"] = round((time.perf_counter() - started) * 1000, 2)
+    timings["total_rag_ms"] = timings["total_pipeline_ms"]
 
     return {
         "answer": answer,

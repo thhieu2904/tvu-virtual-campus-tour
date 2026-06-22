@@ -94,9 +94,10 @@ toggle_map_decl = types.FunctionDeclaration(
 search_documents_decl = types.FunctionDeclaration(
     name="search_documents",
     description=(
-        "Tìm kiếm thông tin tổng thể về trường Đại học Trà Vinh (TVU): học phí, điểm chuẩn, quy chế, "
-        "chương trình đào tạo, học bổng, lịch sử phát triển, và thông tin các trường/khoa trực thuộc... "
-        "Dùng khi người dùng hỏi các thông tin không có sẵn trong đoạn giới thiệu hiện tại."
+        "Công cụ duy nhất để lấy thông tin thực tế và chi tiết về Đại học Trà Vinh (TVU), "
+        "bao gồm học phí, điểm chuẩn, tuyển sinh, quy chế, chương trình đào tạo, học bổng, "
+        "lịch sử, quy mô, thành tựu, cơ sở vật chất và các trường/khoa trực thuộc. "
+        "BẮT BUỘC dùng cho mọi câu hỏi kiến thức về TVU; không tự trả lời từ kiến thức của mô hình."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,
