@@ -168,3 +168,36 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* =========================================================
+   MOBILE LANDSCAPE RESPONSIVE FOUNDATION
+   Target: height ≤ 500px in landscape orientation
+   ========================================================= */
+
+/* Edge spacing for mobile controls (per-component, not global padding).
+   Panorama stays full bleed; only fixed controls use these vars. */
+:root {
+  --ml-edge: max(12px, env(safe-area-inset-left));
+  --mr-edge: max(12px, env(safe-area-inset-right));
+  --mt-edge: max(12px, env(safe-area-inset-top));
+  --mb-edge: max(10px, env(safe-area-inset-bottom));
+  --m-dock-h: 48px;
+  --m-side-slot: 140px;
+  --m-control-gap: 10px;
+}
+
+/* Custom scrollbar for mobile panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}

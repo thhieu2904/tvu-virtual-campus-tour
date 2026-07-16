@@ -110,7 +110,8 @@ interface TourState {
   isTransitioning: boolean;
   hasStarted: boolean;               // True when user clicks 'Start' on the overlay
   avatarState: "idle" | "thinking" | "speaking";
-  activeOverlay: "none" | "info" | "map";
+  activeOverlay: "none" | "info" | "map" | "transcript";
+  isSubtitleOverlayVisible: boolean;
   navigatedByAgent: boolean;
 
   // Sequential navigation
@@ -156,7 +157,8 @@ interface TourState {
   setAvatarReady: (ready: boolean) => void;
   setHasStarted: (started: boolean) => void;
   setAvatarState: (state: "idle" | "thinking" | "speaking") => void;
-  setActiveOverlay: (overlay: "none" | "info" | "map") => void;
+  setActiveOverlay: (overlay: "none" | "info" | "map" | "transcript") => void;
+  setSubtitleOverlayVisible: (visible: boolean) => void;
   setFocusedMedia: (mediaId: string | null, preferredTab?: "video" | "info") => void;
   setPendingNavigation: (slug: string | null) => void;
   setPendingMediaFocus: (focus: { mediaId: string | null; tab: "video" | "info" } | null) => void;
@@ -179,6 +181,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   hasStarted: false,
   avatarState: "idle",
   activeOverlay: "none",
+  isSubtitleOverlayVisible: false,
   navigatedByAgent: false,
 
   // Sequential navigation
@@ -424,6 +427,7 @@ export const useTourStore = create<TourState>((set, get) => ({
   setHasStarted: (started) => set({ hasStarted: started }),
   setAvatarState: (state) => set({ avatarState: state }),
   setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+  setSubtitleOverlayVisible: (visible) => set({ isSubtitleOverlayVisible: visible }),
   setPendingNavigation: (slug) => set({ pendingNavigation: slug }),
   setPendingMediaFocus: (focus) => set({ pendingMediaFocus: focus }),
   clearPendingNavigation: () => set({ pendingNavigation: null, pendingMediaFocus: null }),

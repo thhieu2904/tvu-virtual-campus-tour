@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 /**
@@ -13,8 +12,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Crosshair, Minus, Plus } from "lucide-react";
+import { ChevronDown, Crosshair, Minus, Navigation, Plus } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
+import { useMobileVisibility } from "@/hooks/useMobileVisibility";
 import { attachWebGLContextRecovery } from "@/shared/lib/webglRecovery";
 
 const PANNELLUM_CSS_URL = "/lib/pannellum/pannellum.css";
@@ -102,8 +102,10 @@ export default function PanoramaViewer({
   const onLoadRef = useRef(onLoad);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const locations = useTourStore((s) => s.locations);
+  const { isMobileLandscape, canShowNavLinks, canShowCollapsedPanels } = useMobileVisibility();
 
   useEffect(() => {
     onLoadRef.current = onLoad;
@@ -279,10 +281,89 @@ export default function PanoramaViewer({
         </motion.div>
       )}
 
-      {/* Navigation Links Overlay */}
-      {isLoaded && !hasError && links && links.length > 0 && onNavigate && (
-        <div className="absolute top-[57%] left-5 -translate-y-1/2 z-20 flex w-[190px] flex-col gap-2 pointer-events-auto">
-          {links.map((link) => {
+      {isLoaded &&
+        !hasError &&
+        links &&
+        links.length > 0 &&
+        onNavigate &&
+        canShowNavLinks &&
+        isMobileLandscape && (
+          <div
+            className={`absolute z-20 flex flex-col gap-2 pointer-events-auto ${
+              isMobileNavOpen ? "w-[184px]" : "w-11"
+            }`}
+            style={{
+              top: "var(--mt-edge)",
+              left: "calc(var(--ml-edge) + 198px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setIsMobileNavOpen((open) => !open)}
+              className={`flex h-11 items-center rounded-xl border border-white/12 bg-[#0b1220]/68 text-white shadow-[0_10px_26px_rgba(0,0,0,0.24)] backdrop-blur-2xl outline-none focus-visible:ring-2 focus-visible:ring-[#8eb2f0]/80 ${
+                isMobileNavOpen ? "gap-2 px-3" : "justify-center px-0"
+              }`}
+              aria-expanded={isMobileNavOpen}
+              aria-label="Mở danh sách điểm đến"
+            >
+              <Navigation className="h-4 w-4 text-[#a9c7ff]" />
+              {isMobileNavOpen && (
+                <>
+                  <span className="flex-1 text-left text-[12px] font-semibold">Điểm đến</span>
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/65">
+                    {links.length}
+                  </span>
+                  <ChevronDown className="h-4 w-4 rotate-180 text-white/55" />
+                </>
+              )}
+            </button>
+
+            <AnimatePresence initial={false}>
+              {isMobileNavOpen && (
+                <motion.div
+                  className="flex flex-col gap-1.5"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                >
+                  {links.slice(0, 4).map((link) => {
+                    const targetLoc = locations.find(
+                      (item) => item.slug === link.toSlug,
+                    );
+                    const displayName = targetLoc?.name || link.label;
+
+                    return (
+                      <motion.button
+                        key={link.toSlug}
+                        onClick={() => {
+                          setIsMobileNavOpen(false);
+                          onNavigate(link.toSlug);
+                        }}
+                        className="group flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 bg-[#0b1220]/68 px-3 text-left text-white shadow-[0_8px_22px_rgba(0,0,0,0.2)] backdrop-blur-2xl transition-colors hover:bg-[#0b1220]/84"
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/10 text-sm text-white/70">
+                          →
+                        </span>
+                        <span className="min-w-0 max-w-[126px] truncate text-[11px] font-semibold text-white/90">
+                          {displayName}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+      {isLoaded && !hasError && links && links.length > 0 && onNavigate && canShowNavLinks && !isMobileLandscape && (
+        <div className={`absolute -translate-y-1/2 z-20 flex flex-col gap-1.5 pointer-events-auto ${
+          isMobileLandscape ? "top-[38%] w-[140px]" : "top-[57%] left-5 w-[190px]"
+        }`}
+          style={isMobileLandscape ? { left: 'var(--ml-edge)' } : undefined}
+        >
+          {(isMobileLandscape ? links.slice(0, 3) : links).map((link) => {
             const targetLoc = locations.find((l) => l.slug === link.toSlug);
             const displayName = targetLoc ? targetLoc.name : link.label;
 
@@ -290,7 +371,9 @@ export default function PanoramaViewer({
               <motion.button
                 key={link.toSlug}
                 onClick={() => onNavigate(link.toSlug)}
-                className="flex min-h-10 items-center gap-2 rounded-full bg-[#121511]/34 px-3.5 py-2 text-white shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-colors hover:bg-[#121511]/54 group cursor-pointer"
+                className={`flex items-center gap-2 rounded-full bg-[#121511]/34 py-1.5 text-white shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-colors hover:bg-[#121511]/54 group cursor-pointer ${
+                  isMobileLandscape ? "min-h-10 px-2" : "min-h-10 px-3.5"
+                }`}
                 whileHover={{ scale: 1.015, x: 3 }}
                 whileTap={{ scale: 0.95 }}
                 initial={{ opacity: 0, x: -20 }}
@@ -299,7 +382,9 @@ export default function PanoramaViewer({
                 <span className="text-base leading-none text-white/75 transition-colors group-hover:text-white">
                   →
                 </span>
-                <span className="min-w-0 max-w-[145px] truncate text-[13px] font-bold leading-tight text-white/90">
+                <span className={`min-w-0 truncate font-bold leading-tight text-white/90 ${
+                  isMobileLandscape ? "max-w-[100px] text-[11px]" : "max-w-[145px] text-[13px]"
+                }`}>
                   {displayName}
                 </span>
               </motion.button>
@@ -309,12 +394,18 @@ export default function PanoramaViewer({
       )}
 
       {/* Compact panorama controls */}
-      {isLoaded && !hasError && (
-        <div className="absolute bottom-6 left-6 z-20 flex items-center gap-1 rounded-full border border-white/25 bg-black/45 p-1.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-2xl pointer-events-auto">
+      {isLoaded && !hasError && canShowCollapsedPanels && (
+        <div className={`absolute z-20 flex items-center rounded-2xl border border-white/15 bg-[#0b1220]/72 text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-2xl pointer-events-auto ${
+          isMobileLandscape ? "gap-0 p-1" : "bottom-6 left-6 gap-1 p-1.5"
+        }`}
+          style={isMobileLandscape ? { bottom: "var(--mb-edge)", left: "var(--ml-edge)" } : undefined}
+        >
           <button
             type="button"
             onClick={() => adjustZoom(-12)}
-            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center"
+            className={`rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center ${
+              isMobileLandscape ? "w-9 h-9" : "w-9 h-9"
+            }`}
             title="Phóng to"
             aria-label="Phóng to"
           >
@@ -323,7 +414,9 @@ export default function PanoramaViewer({
           <button
             type="button"
             onClick={() => adjustZoom(12)}
-            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center"
+            className={`rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center ${
+              isMobileLandscape ? "w-9 h-9" : "w-9 h-9"
+            }`}
             title="Thu nhỏ"
             aria-label="Thu nhỏ"
           >
@@ -333,7 +426,9 @@ export default function PanoramaViewer({
           <button
             type="button"
             onClick={resetView}
-            className="w-9 h-9 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center"
+            className={`rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center ${
+              isMobileLandscape ? "w-9 h-9" : "w-9 h-9"
+            }`}
             title="Về góc nhìn ban đầu"
             aria-label="Về góc nhìn ban đầu"
           >

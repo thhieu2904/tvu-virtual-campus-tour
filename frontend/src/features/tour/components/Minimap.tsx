@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
+import { useMobileVisibility } from "@/hooks/useMobileVisibility";
 import { Info, Map as MapIcon, Navigation, Route, X } from "lucide-react";
 
 import CampusMap, {
@@ -18,6 +19,7 @@ export default function Minimap() {
   const setActiveOverlay = useTourStore((s) => s.setActiveOverlay);
   const expanded = activeOverlay === "map";
   const setExpanded = (val: boolean) => setActiveOverlay(val ? "map" : "none");
+  const { isMobileLandscape, canShowCollapsedPanels } = useMobileVisibility();
 
   const locations = useTourStore((s) => s.locations);
   const currentSlug = useTourStore((s) => s.currentLocationSlug);
@@ -245,7 +247,12 @@ export default function Minimap() {
           onClick={() => setExpanded(true)}
           aria-label="Mở sơ đồ Khu 1"
           title="Mở sơ đồ Khu 1"
-          className="absolute top-5 right-5 z-30 w-[148px] rounded-2xl bg-[#111512]/45 backdrop-blur-2xl border border-white/20 p-1.5 shadow-[0_14px_38px_rgba(0,0,0,0.3)] overflow-hidden cursor-pointer hover:shadow-[0_18px_48px_rgba(0,0,0,0.38)] hover:border-white/40 transition-all flex flex-col"
+          className={`absolute z-30 bg-[#111512]/45 backdrop-blur-2xl border border-white/20 shadow-[0_14px_38px_rgba(0,0,0,0.3)] overflow-hidden cursor-pointer hover:shadow-[0_18px_48px_rgba(0,0,0,0.38)] hover:border-white/40 transition-all flex flex-col ${
+            isMobileLandscape ? "w-[84px] rounded-xl p-1" : "w-[148px] rounded-2xl p-1.5"
+          } ${
+            isMobileLandscape && !canShowCollapsedPanels ? "opacity-0 pointer-events-none" : ""
+          }`}
+          style={isMobileLandscape ? { top: "var(--mt-edge)", right: "var(--mr-edge)" } : { top: 20, right: 20 }}
           whileHover={{ scale: 1.025 }}
           whileTap={{ scale: 0.97 }}
           initial={{ opacity: 0, scale: 0.8 }}
@@ -332,14 +339,16 @@ export default function Minimap() {
             {/* Modal */}
             <motion.div
               className="relative flex flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0a1628]/75 text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
-              style={{ width: "min(96vw, 1200px)", height: "min(92vh, 900px)" }}
+              style={{ width: "min(96vw, 1200px)", height: isMobileLandscape ? "min(92dvh, 900px)" : "min(92vh, 900px)" }}
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
             >
               {/* Header */}
-              <div className="relative flex min-h-[52px] shrink-0 items-center justify-center border-b border-white/10 bg-white/[0.06] px-5 py-3">
+              <div className={`relative flex shrink-0 items-center justify-center border-b border-white/10 bg-white/[0.06] px-5 ${
+                isMobileLandscape ? "min-h-[42px] py-2" : "min-h-[52px] py-3"
+              }`}>
                 {/* Title + current location (Centered) */}
                 <div className="flex min-w-0 items-center justify-center gap-3 px-12">
                   <h2 className="flex items-center gap-2 whitespace-nowrap text-sm font-bold text-white">
@@ -377,9 +386,23 @@ export default function Minimap() {
                   isPathResolving={isPathResolving}
                 />
 
+                {isMobileLandscape && (
+                  <aside className="flex w-[132px] shrink-0 flex-col justify-between border-r border-white/10 bg-white/[0.035] p-3">
+                    <div>
+                      <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">{"V\u1ecb tr\u00ed"}</p>
+                      <p className="text-xs font-semibold leading-snug text-white">{currentLocation?.name || "\u0110ang t\u1ea3i..."}</p>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-white/48">
+                      {"Ch\u1ea1m v\u00e0o t\u00ean t\u00f2a nh\u00e0 \u0111\u1ec3 xem \u0111\u01b0\u1eddng \u0111i."}
+                    </p>
+                  </aside>
+                )}
+
                 {/* Map — must stay aspect-square for SVG paths */}
-                <div className="relative flex min-w-0 flex-1 items-center justify-center p-3 sm:p-4">
-                  <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-col gap-2 lg:hidden">
+                <div className={`relative flex min-w-0 flex-1 items-center justify-center ${
+                  isMobileLandscape ? "p-2" : "p-3 sm:p-4"
+                }`}>
+                  <div className={`${isMobileLandscape ? "hidden" : "flex"} pointer-events-none absolute left-3 top-3 z-10 max-w-[calc(100%-1.5rem)] flex-col gap-2 lg:hidden`}>
                     <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-[#0a1628]/75 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-xl">
                       <span className="relative flex h-2.5 w-2.5 shrink-0">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#8eb2f0] opacity-40" />
@@ -399,9 +422,10 @@ export default function Minimap() {
 
                   <div
                     className="relative aspect-square overflow-hidden rounded-xl border border-white/15 bg-white shadow-[0_22px_65px_rgba(0,0,0,0.35)]"
-                    style={{
-                      width: "min(100%, calc(min(92vh, 900px) - 96px))",
-                    }}
+                    style={isMobileLandscape
+                      ? { height: "calc(100% - 16px)", maxWidth: "100%" }
+                      : { width: "min(100%, calc(min(92vh, 900px) - 96px))" }
+                    }
                   >
                     <CampusMap
                       className="h-full w-full"
@@ -416,7 +440,7 @@ export default function Minimap() {
                     />
                   </div>
 
-                  <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 flex items-end justify-between gap-2 lg:hidden">
+                  <div className={`${isMobileLandscape ? "hidden" : "flex"} pointer-events-none absolute bottom-3 left-3 right-3 z-10 items-end justify-between gap-2 lg:hidden`}>
                     <div className="rounded-full border border-white/15 bg-[#0a1628]/75 px-3 py-2 text-[11px] font-medium text-white/80 shadow-lg backdrop-blur-xl">
                       Chạm tên tòa nhà để xem đường đi
                     </div>
@@ -437,6 +461,27 @@ export default function Minimap() {
                     </div>
                   )}
                 </div>
+                {isMobileLandscape && (
+                  <aside className="flex w-[118px] shrink-0 flex-col justify-between border-l border-white/10 bg-white/[0.035] p-3">
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">{"Tr\u1ea1ng th\u00e1i"}</p>
+                      <MapStatusBadge
+                        isPathResolving={isPathResolving}
+                        isNavigating={!!navTarget}
+                      />
+                    </div>
+                    <button
+                      onClick={() => setShowAStarExplainer(true)}
+                      className="rounded-xl border border-[#8eb2f0]/25 bg-[#8eb2f0]/10 px-2.5 py-2 text-left text-[10px] font-semibold leading-snug text-[#b8d1ff] transition-all hover:bg-[#8eb2f0]/20 hover:text-white"
+                    >
+                      <span className="mb-0.5 flex items-center gap-1.5">
+                        <Route className="h-3.5 w-3.5" /> {"M\u00f4 ph\u1ecfng A*"}
+                      </span>
+                      <span className="block font-normal text-white/45">{"Xem c\u00e1ch t\u00ecm \u0111\u01b0\u1eddng"}</span>
+                    </button>
+                  </aside>
+                )}
+
 
                 <MapGuidePanel onShowAStar={() => setShowAStarExplainer(true)} />
               </div>

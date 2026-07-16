@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import { useTourStore } from "@/features/tour/store";
 import { useChatStore, playPrecachedAudio, _stopCurrentAudio } from "../store";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
+import { useMobileVisibility } from "@/hooks/useMobileVisibility";
 import { isWaitingMessage } from "../messages";
 
 function TypingIndicator() {
@@ -23,7 +24,13 @@ export default function ChatOverlay() {
   const location = useTourStore((s) => s.currentLocation());
   const isAppReady = useTourStore((s) => s.isAppReady);
   const activeOverlay = useTourStore((s) => s.activeOverlay);
+  const setActiveOverlay = useTourStore((s) => s.setActiveOverlay);
   const avatarState = useTourStore((s) => s.avatarState);
+  const setSubtitleOverlayVisible = useTourStore((s) => s.setSubtitleOverlayVisible);
+  const {
+    isMobileLandscape,
+    canShowSubtitle, canShowSuggestions, canShowBottomDock,
+  } = useMobileVisibility();
 
   const {
     messages,
@@ -61,7 +68,7 @@ export default function ChatOverlay() {
     browserSupportsSpeechRecognition,
   } = useSpeechRecognition(handleSpeechResult);
 
-  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const isTranscriptOpen = activeOverlay === "transcript";
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const prevSlugRef = useRef<string | null>(null);
   const prevIntroSignatureRef = useRef<string | null>(null);
@@ -222,16 +229,25 @@ export default function ChatOverlay() {
 
   const suggestedQuestions = location?.suggestedQuestions || [];
 
-  // Hide subtitles and suggestions when a fullscreen visual overlay is active.
-  const isVisualOverlayActive = activeOverlay === "map" || activeOverlay === "info";
+  // Subtitle + suggestions mutual exclusion (for mobile)
+  const showSubtitle = isSubtitleVisible && canShowSubtitle;
+  const showSuggestions = canShowSuggestions && !showSubtitle && suggestedQuestions.length > 0;
+
+  useEffect(() => {
+    setSubtitleOverlayVisible(isMobileLandscape && showSubtitle);
+    return () => setSubtitleOverlayVisible(false);
+  }, [isMobileLandscape, setSubtitleOverlayVisible, showSubtitle]);
+
+  const subtitleMessages = isMobileLandscape && latestAssistantMessage
+    ? [latestAssistantMessage]
+    : displayMessages;
 
   return (
     <>
       {/* === DYNAMIC SUBTITLES (Speech Bubbles) === */}
       <AnimatePresence>
-        {isSubtitleVisible &&
-          !isVisualOverlayActive &&
-          displayMessages.map((msg) => {
+        {showSubtitle &&
+          subtitleMessages.map((msg) => {
             if (msg.role === "assistant") {
               return (
                 <motion.div
@@ -239,17 +255,30 @@ export default function ChatOverlay() {
                   initial={{ opacity: 0, scale: 0.8, x: -20, y: 20 }}
                   animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                   exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                  className="fixed right-[30%] top-[15%] w-[420px] max-w-[40vw] z-50 pointer-events-auto origin-bottom-right"
+                  className={`fixed z-50 pointer-events-auto ${
+                    isMobileLandscape
+                      ? "left-1/2 w-[min(520px,calc(100vw-320px))] min-w-[320px] -translate-x-1/2 origin-bottom"
+                      : "right-[30%] top-[15%] w-[420px] max-w-[40vw] origin-bottom-right"
+                  }`}
+                  style={isMobileLandscape ? { bottom: "calc(var(--m-dock-h) + var(--mb-edge) + 10px)" } : undefined}
                 >
-                    <div className="relative bg-white/60 backdrop-blur-2xl text-gray-900 rounded-[28px] border border-white/75 shadow-[0_18px_55px_rgba(15,23,42,0.18)] flex flex-col max-h-[55vh] overflow-hidden">
+                    <div className={`relative flex flex-col overflow-hidden border shadow-[0_18px_55px_rgba(15,23,42,0.24)] backdrop-blur-2xl ${
+                      isMobileLandscape
+                        ? "max-h-[min(38dvh,156px)] rounded-2xl border-white/15 bg-[#0b1220]/88 text-white"
+                        : "max-h-[55vh] rounded-[28px] border-white/75 bg-white/60 text-gray-900"
+                    }`}>
                     {/* Row 1: Close button */}
-                    <div className="flex justify-end px-4 pt-3 pb-0 shrink-0">
+                    <div className={isMobileLandscape
+                      ? "absolute right-2 top-2 z-10"
+                      : "flex shrink-0 justify-end px-4 pb-0 pt-3"}>
                       <button
                         type="button"
                         onClick={() => {
                           if (activeSubtitleId) setDismissedSubtitleId(activeSubtitleId);
                         }}
-                        className="h-6 w-6 rounded-full bg-black/8 text-gray-600 hover:bg-black/16 hover:text-gray-900 transition-colors flex items-center justify-center"
+                        className={`flex items-center justify-center rounded-full transition-colors ${
+                          isMobileLandscape ? "h-9 w-9 bg-white/10 text-white/65 hover:bg-white/20 hover:text-white" : "h-6 w-6 bg-black/8 text-gray-600 hover:bg-black/16 hover:text-gray-900"
+                        }`}
                         title="Ẩn phụ đề"
                         aria-label="Ẩn phụ đề"
                       >
@@ -257,7 +286,9 @@ export default function ChatOverlay() {
                       </button>
                     </div>
                     {/* Row 2: Content */}
-                    <div className="overflow-y-auto px-6 pb-10 flex-1 whitespace-pre-wrap text-pretty text-[16px] leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className={`overflow-y-auto flex-1 whitespace-pre-wrap text-pretty leading-relaxed font-medium [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
+                      isMobileLandscape ? "px-4 pb-4 pt-4 pr-12 text-[14px]" : "px-6 pb-10 text-[16px]"
+                    }`}>
                       <ReactMarkdown
                         components={{
                           p: ({ node, ...props }) => {
@@ -295,7 +326,9 @@ export default function ChatOverlay() {
                       </div>
                     )}
                     {/* Fade-out Overlay for Kiosk touch scrolling hint */}
-                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white/55 to-transparent pointer-events-none rounded-bl-[28px] rounded-br-[28px]" />
+                    <div className={`pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t to-transparent ${
+                      isMobileLandscape ? "from-[#0b1220]/90 rounded-b-2xl" : "from-white/55 rounded-b-[28px]"
+                    }`} />
                     {msg.isStreaming && !isWaitingMessage(msg.content) && (
                       <motion.span
                         className="inline-block w-1.5 h-4 ml-1.5 bg-gray-800/70 align-middle"
@@ -320,10 +353,15 @@ export default function ChatOverlay() {
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  className="fixed bottom-[260px] left-1/2 -translate-x-1/2 w-max max-w-[400px] z-40 pointer-events-auto flex justify-center"
+                  className={`fixed left-1/2 -translate-x-1/2 w-max z-40 pointer-events-auto flex justify-center ${
+                    isMobileLandscape ? "max-w-[70vw]" : "bottom-[260px] max-w-[400px]"
+                  }`}
+                  style={isMobileLandscape ? { bottom: 'calc(var(--m-dock-h) + var(--mb-edge) + 12px)' } : undefined}
                 >
-                  <div className="bg-blue-600/90 text-white px-6 py-3 rounded-full border border-blue-400/30 shadow-xl backdrop-blur-2xl">
-                    <span className="whitespace-pre-wrap text-[15px] font-medium">
+                  <div className={`bg-blue-600/90 text-white rounded-full border border-blue-400/30 shadow-xl backdrop-blur-2xl ${
+                    isMobileLandscape ? "px-4 py-2 text-[13px]" : "px-6 py-3 text-[15px]"
+                  }`}>
+                    <span className="whitespace-pre-wrap font-medium">
                       {msg.content}
                     </span>
                   </div>
@@ -334,32 +372,53 @@ export default function ChatOverlay() {
           })}
       </AnimatePresence>
 
-      {/* === BOTTOM CONTROLS WRAPPER === */}
-      <div className="fixed bottom-11 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-40 w-full max-w-3xl pointer-events-none">
+      {canShowBottomDock && (
+      <div className={`fixed left-1/2 -translate-x-1/2 flex flex-col items-center z-40 pointer-events-none ${
+        isMobileLandscape
+          ? "w-[min(660px,calc(100vw-180px))] min-w-[320px] gap-2"
+          : "bottom-11 gap-4 w-full max-w-3xl"
+      }`}
+        style={isMobileLandscape ? { bottom: "var(--mb-edge)" } : undefined}
+      >
         {/* === QUICK ACTIONS (SUGGESTED QUESTIONS) === */}
-        {suggestedQuestions.length > 0 && !isVisualOverlayActive && (
-          <div className="flex max-w-[660px] flex-wrap justify-center gap-2 pointer-events-auto px-4">
+        {showSuggestions && (
+          <div className={`pointer-events-auto ${
+            isMobileLandscape
+              ? "flex w-full flex-wrap justify-center gap-2 px-2"
+              : "flex max-w-[660px] flex-wrap justify-center gap-2 px-4"
+          }`}>
             {suggestedQuestions.map((q, idx) => (
               <motion.button
                 key={idx}
                 onClick={() => handleSend(q)}
-                className="min-h-9 max-w-[310px] px-3.5 py-1.5 bg-[#121511]/34 hover:bg-[#121511]/54 backdrop-blur-xl border border-white/[0.12] text-white/82 font-semibold text-[13px] leading-tight rounded-full shadow-[0_7px_18px_rgba(0,0,0,0.18)] hover:shadow-white/10 hover:-translate-y-0.5 active:scale-95 transition-all flex items-center gap-2"
+                className={`flex items-center justify-center border border-white/[0.12] font-semibold leading-tight shadow-[0_7px_18px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all hover:-translate-y-0.5 active:scale-95 ${
+                  isMobileLandscape
+                    ? "min-h-9 max-w-[300px] rounded-full bg-[#0b1220]/68 px-3.5 py-1.5 text-[11px] text-white/82 hover:bg-[#0b1220]/84"
+                    : "min-h-9 max-w-[310px] rounded-full bg-[#121511]/34 px-3.5 py-1.5 text-[13px] text-white/82 hover:bg-[#121511]/54"
+                }`}
               >
-                {q}
+                <span className={isMobileLandscape ? "block whitespace-normal text-center" : ""}>
+                  {q}
+                </span>
               </motion.button>
             ))}
           </div>
         )}
 
-        {/* === VOICE HUB (Premium Dark Glass) === */}
-        <div className="bg-[#121511]/54 backdrop-blur-3xl border border-white/[0.14] shadow-[0_14px_38px_rgba(0,0,0,0.32)] rounded-[3rem] pl-3 pr-2 py-2 flex items-center gap-3 pointer-events-auto relative overflow-hidden w-[90%] sm:w-[500px]">
+        <div className={`relative flex items-center overflow-hidden border border-white/[0.14] shadow-[0_14px_38px_rgba(0,0,0,0.32)] backdrop-blur-3xl pointer-events-auto ${
+          isMobileLandscape
+            ? "h-[var(--m-dock-h)] w-[min(440px,calc(100vw-320px))] min-w-[300px] gap-1 rounded-xl bg-[#0b1220]/78 py-0.5 pl-1.5 pr-0.5"
+            : "w-[90%] gap-3 rounded-[3rem] bg-[#121511]/54 py-2 pl-3 pr-2 sm:w-[500px]"
+        }`}>
           {/* Subtle glass shimmer */}
           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 skew-x-12 opacity-50 pointer-events-none"></div>
 
           {/* Transcript Toggle Button */}
           <button
-            onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
-            className={`w-11 h-11 flex items-center justify-center rounded-full transition-all z-10 shrink-0 ${
+            onClick={() => isTranscriptOpen ? setActiveOverlay("none") : setActiveOverlay("transcript")}
+            className={`flex items-center justify-center rounded-full transition-all z-10 shrink-0 ${
+              isMobileLandscape ? "w-9 h-9" : "w-11 h-11"
+            } ${
               isTranscriptOpen
                 ? "bg-white/20 text-white"
                 : "hover:bg-white/10 text-white/70"
@@ -414,7 +473,9 @@ export default function ChatOverlay() {
                   }}
                   disabled={isLoading}
                   placeholder="Nhập câu hỏi hoặc bấm mic..."
-                  className="min-w-0 w-full bg-transparent text-white placeholder:text-white/45 text-[16px] font-medium outline-none disabled:opacity-50 pr-4"
+                  className={`min-w-0 w-full bg-transparent font-medium text-white outline-none placeholder:text-white/45 disabled:opacity-50 ${
+                    isMobileLandscape ? "pr-2 text-[14px]" : "pr-4 text-[16px]"
+                  }`}
                 />
                 <AnimatePresence>
                   {input.trim() && !isLoading && (
@@ -454,24 +515,24 @@ export default function ChatOverlay() {
                   startListening();
                 }
               }}
-              className={`w-15 h-15 rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
+              className={`rounded-full flex items-center justify-center relative group hover:scale-105 active:scale-95 transition-all z-10 shrink-0 ${
+                isMobileLandscape ? "w-10 h-10" : "w-15 h-15"
+              } ${
                 isListening
                   ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]"
-                  : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                  : isMobileLandscape
+                    ? "border border-white/70 bg-white/95 text-[#1555c0] shadow-[0_3px_12px_rgba(0,0,0,0.24)]"
+                    : "bg-white text-blue-800 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
               }`}
             >
-              <div
-                className={`absolute inset-0 rounded-full border-[3px] scale-110 transition-colors ${
-                  isListening
-                    ? "border-red-500/40 animate-ping"
-                    : "border-white/20"
-                }`}
-              ></div>
+              {isListening && (
+                <div className="absolute inset-0 scale-110 animate-ping rounded-full border-[3px] border-red-500/40" />
+              )}
               <svg
-                width="28"
-                height="28"
+                className={isMobileLandscape ? "h-5 w-5" : "h-7 w-7"}
                 viewBox="0 0 24 24"
                 fill="currentColor"
+                aria-hidden="true"
               >
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
               </svg>
@@ -479,17 +540,33 @@ export default function ChatOverlay() {
           )}
         </div>
       </div>
+      )}
       {/* END BOTTOM CONTROLS WRAPPER */}
 
-      {/* === EXPANDABLE TRANSCRIPT (Right Side Panel) === */}
+      {/* === EXPANDABLE TRANSCRIPT (Fullscreen on mobile) === */}
       <AnimatePresence>
         {isTranscriptOpen && (
+          <>
+          {/* Backdrop */}
+          {isMobileLandscape && (
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-35"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveOverlay("none")}
+            />
+          )}
           <motion.div
             initial={{ opacity: 0, x: -50, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -50, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed left-6 bottom-24 w-[380px] h-[60vh] max-h-[600px] bg-black/60 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto z-40"
+            className={`fixed bg-black/60 backdrop-blur-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col pointer-events-auto z-40 ${
+              isMobileLandscape
+                ? "inset-0 m-[var(--mb-edge)] rounded-2xl"
+                : "left-6 bottom-24 w-[380px] h-[60vh] max-h-[600px] rounded-3xl"
+            }`}
           >
             <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
               <h3 className="text-white font-medium flex items-center gap-2">
@@ -506,8 +583,10 @@ export default function ChatOverlay() {
                 Lịch sử trò chuyện
               </h3>
               <button
-                onClick={() => setIsTranscriptOpen(false)}
-                className="text-white/50 hover:text-white transition-colors"
+                onClick={() => setActiveOverlay("none")}
+                className={`text-white/50 hover:text-white transition-colors flex items-center justify-center ${
+                  isMobileLandscape ? "w-11 h-11" : ""
+                }`}
               >
                 <svg
                   width="20"
@@ -580,6 +659,7 @@ export default function ChatOverlay() {
               <div ref={transcriptEndRef} />
             </div>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>

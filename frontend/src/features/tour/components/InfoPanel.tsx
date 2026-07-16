@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Film, ImageIcon, MapPin, Maximize2, Minimize2, X } from "lucide-react";
+import { Film, ImageIcon, MapPin, Maximize2, X } from "lucide-react";
 import { useTourStore } from "@/features/tour/store";
+import { useMobileVisibility } from "@/hooks/useMobileVisibility";
 import ImageGallery from "./media/ImageGallery";
 import VideoPlayer from "./media/VideoPlayer";
 
@@ -12,6 +13,7 @@ type PanelMode = "video" | "info";
 export default function InfoPanel() {
   const [mode, setMode] = useState<PanelMode>("video");
   const [miniSlideIndex, setMiniSlideIndex] = useState(0);
+  const { isMobileLandscape, canShowCollapsedPanels } = useMobileVisibility();
 
   const activeOverlay = useTourStore((s) => s.activeOverlay);
   const setActiveOverlay = useTourStore((s) => s.setActiveOverlay);
@@ -96,6 +98,34 @@ export default function InfoPanel() {
     setActiveOverlay("none");
   };
 
+  if (isMobileLandscape && !isOverlayOpen) {
+    if (!canShowCollapsedPanels) return null;
+
+    return (
+      <motion.button
+        type="button"
+        onClick={() => setActiveOverlay("info")}
+        className="fixed z-30 flex h-11 w-[190px] max-w-[calc(100vw-var(--ml-edge)-var(--mr-edge)-154px)] items-center gap-2 rounded-xl border border-white/12 bg-[#0b1220]/68 px-2.5 text-left text-white shadow-[0_10px_26px_rgba(0,0,0,0.24)] backdrop-blur-2xl"
+        style={{ top: "var(--mt-edge)", left: "var(--ml-edge)" }}
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileTap={{ scale: 0.98 }}
+        aria-label={`Mở thông tin và media của ${location.name}`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10">
+          <MapPin className="h-4 w-4 text-rose-300" strokeWidth={2.3} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-semibold">
+            {location.name}
+          </span>
+          <span className="block text-[9px] text-white/45">Thông tin địa điểm</span>
+        </span>
+        <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/60">{locationMedia.length}</span>
+      </motion.button>
+    );
+  }
+
   return (
     <>
       {/* Backdrop — only when expanded */}
@@ -111,11 +141,13 @@ export default function InfoPanel() {
 
       <motion.div
         layout
-        className={`absolute flex flex-col bg-[#101412]/60 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.34)] overflow-hidden transition-all duration-500 ease-in-out ${
+        className={`${isMobileLandscape ? "fixed" : "absolute"} flex flex-col bg-[#101412]/60 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.34)] overflow-hidden transition-all duration-500 ease-in-out ${
           isOverlayOpen ? "z-[60]" : "z-30"
         } ${
           isOverlayOpen
-            ? "top-1/2 -translate-y-1/2 left-[3%] right-[calc(5%+min(30vw,450px)+2vw)] h-[82vh]"
+            ? isMobileLandscape
+              ? "inset-0 m-[var(--mb-edge)] h-auto"
+              : "top-1/2 -translate-y-1/2 left-[3%] right-[calc(5%+min(30vw,450px)+2vw)] h-[82vh]"
             : "top-5 left-5 w-[320px]"
         }`}
         initial={{ opacity: 0, x: -40 }}
@@ -123,7 +155,9 @@ export default function InfoPanel() {
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
       >
         {/* ── Header ── */}
-        <div className={`flex items-center justify-between bg-white/[0.06] transition-colors ${isOverlayOpen ? 'px-3 py-2 border-b border-white/10' : 'px-3 py-2'}`}>
+        <div className={`flex items-center justify-between bg-white/[0.06] transition-colors ${
+          isOverlayOpen ? 'px-3 py-2 border-b border-white/10' : 'px-3 py-2'
+        }`}>
           <div className="flex items-center gap-2 min-w-0 cursor-pointer" onClick={() => !isOverlayOpen ? setActiveOverlay("info") : handleClose()}>
             <MapPin className="h-3.5 w-3.5 shrink-0 text-rose-300" strokeWidth={2.4} />
             <h3 className="text-[13px] font-bold text-white truncate max-w-[150px]">{location.name}</h3>
@@ -134,7 +168,8 @@ export default function InfoPanel() {
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            {([
+            {/* Tab buttons: hide on mobile collapsed to keep pill compact */}
+            {(!isMobileLandscape || isOverlayOpen) && ([
               { key: "video" as PanelMode, icon: Film, count: videos.length, label: "Video" },
               { key: "info" as PanelMode, icon: ImageIcon, count: images.length, label: "Hình ảnh" },
             ]).map((tab) => (
@@ -143,7 +178,9 @@ export default function InfoPanel() {
                 onClick={() => { setMode(tab.key); setActiveOverlay("info"); }}
                 title={tab.label}
                 aria-label={tab.label}
-                className={`relative w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer border ${
+                className={`relative flex items-center justify-center rounded-lg transition-all cursor-pointer border ${
+                  isMobileLandscape ? "w-10 h-10" : "w-7 h-7"
+                } ${
                   isOverlayOpen && mode === tab.key
                     ? "bg-white/[0.18] text-white border-white/25 shadow-sm"
                     : "bg-transparent text-white/55 border-transparent hover:bg-white/10 hover:text-white"
@@ -159,11 +196,13 @@ export default function InfoPanel() {
             ))}
             <button
               onClick={() => isOverlayOpen ? handleClose() : setActiveOverlay("info")}
-              className="ml-1 w-7 h-7 flex items-center justify-center rounded-lg bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white cursor-pointer"
+              className={`flex items-center justify-center rounded-lg bg-transparent hover:bg-white/10 border border-transparent transition-all text-white/70 hover:text-white cursor-pointer ${
+                isMobileLandscape ? "ml-1 w-10 h-10" : "ml-1 w-7 h-7"
+              }`}
               title={isOverlayOpen ? "Thu nhỏ" : "Phóng to"}
             >
               {isOverlayOpen ? (
-                <Minimize2 className="h-4 w-4" strokeWidth={2.2} />
+                <X className="h-4 w-4" strokeWidth={2.2} />
               ) : (
                 <Maximize2 className="h-4 w-4" strokeWidth={2.2} />
               )}
@@ -171,8 +210,8 @@ export default function InfoPanel() {
           </div>
         </div>
 
-        {/* ── Mini Slideshow (collapsed state) ── */}
-        {!isOverlayOpen && (
+        {/* ── Mini Slideshow (collapsed state) — skip on mobile (pill only) ── */}
+        {!isOverlayOpen && !isMobileLandscape && (
           <div className="px-2.5 pb-2.5 pt-1">
             {isMediaLoading ? (
               <div className="flex items-center justify-center py-6">
@@ -235,7 +274,9 @@ export default function InfoPanel() {
               transition={{ type: "spring", bounce: 0, duration: 0.3 }}
               className="overflow-hidden flex-1 min-h-0"
             >
-              <div className="transition-all duration-500 h-full p-4 overflow-y-auto custom-scrollbar flex flex-col">
+              <div className={`transition-all duration-500 h-full overflow-y-auto custom-scrollbar flex flex-col ${
+                isMobileLandscape ? "p-2.5" : "p-4"
+              }`}>
                 {isMediaLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <motion.div
@@ -253,22 +294,25 @@ export default function InfoPanel() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="flex flex-col gap-4 h-full min-h-0"
+                        className={`flex flex-col h-full min-h-0 ${isMobileLandscape ? "gap-2" : "gap-4"}`}
                       >
                         {videos.length > 0 ? (
                           <>
                             {/* Current video */}
-                            <div className="relative flex-1 min-h-0">
+                            <div className={`relative flex-1 min-h-0 mx-auto w-full ${
+                              isMobileLandscape ? "max-w-[min(82vw,720px)]" : ""
+                            }`}>
                               <VideoPlayer
                                 key={videos[expandedVideoIdx]?.id}
                                 url={videos[expandedVideoIdx]?.url}
                                 caption={videos[expandedVideoIdx]?.caption}
                                 isFullscreen={true}
                                 autoPlay={true}
+                                fit={isMobileLandscape ? "contain" : "cover"}
                               />
                             </div>
                             {/* Caption + nav */}
-                            <div className="flex items-center justify-between px-1 shrink-0 h-8">
+                            <div className={`flex items-center justify-between px-1 shrink-0 ${isMobileLandscape ? "h-7" : "h-8"}`}>
                               <p className="text-[13px] font-medium text-white/80 truncate">{videos[expandedVideoIdx]?.caption}</p>
                               {videos.length > 1 && (
                                 <div className="flex items-center gap-2">

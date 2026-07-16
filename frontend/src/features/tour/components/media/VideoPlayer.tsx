@@ -9,6 +9,7 @@ interface VideoPlayerProps {
   caption?: string;
   isFullscreen?: boolean;
   autoPlay?: boolean;
+  fit?: "cover" | "contain";
 }
 
 function formatTime(seconds: number) {
@@ -18,7 +19,13 @@ function formatTime(seconds: number) {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function VideoPlayer({ url, caption, isFullscreen = false, autoPlay = false }: VideoPlayerProps) {
+export default function VideoPlayer({
+  url,
+  caption,
+  isFullscreen = false,
+  autoPlay = false,
+  fit,
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -175,7 +182,7 @@ export default function VideoPlayer({ url, caption, isFullscreen = false, autoPl
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
-          className={`w-full h-full ${isFullscreen && !isPortrait ? "object-cover" : "object-contain"}`}
+          className={`w-full h-full ${fit === "contain" || isPortrait ? "object-contain" : fit === "cover" || isFullscreen ? "object-cover" : "object-contain"}`}
           muted={isMuted}
           playsInline
           preload="metadata"

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/features/tour/store";
 import { X, Play, RotateCcw, ChevronRight, Sparkles } from "lucide-react";
 import MapImage from "./MapImage";
+import { useMobileLandscape } from "@/hooks/useMobileLandscape";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -46,6 +47,7 @@ export default function AStarExplainer({
 }: {
   onClose: () => void;
 }) {
+  const { isMobileLandscape } = useMobileLandscape();
   const currentSlug = useTourStore((s) => s.currentLocationSlug);
   const navNodes = useTourStore((s) => s.navNodes);
   const navEdges = useTourStore((s) => s.navEdges);
@@ -209,34 +211,40 @@ export default function AStarExplainer({
       exit={{ opacity: 0 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0d1321]">
+      <div className={`flex shrink-0 items-center justify-between border-b border-white/10 bg-[#0d1321] ${
+        isMobileLandscape ? "min-h-12 px-3 py-1.5" : "px-6 py-4"
+      }`}>
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#053384]/30">
+          <div className={isMobileLandscape ? "hidden" : "flex items-center justify-center w-9 h-9 rounded-xl bg-[#053384]/30"}>
             <Sparkles className="w-5 h-5 text-blue-400" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">
+            <h2 className={`${isMobileLandscape ? "text-sm" : "text-lg"} font-bold text-white`}>
               Thuật toán A* — Tìm đường thông minh
             </h2>
-            <p className="text-xs text-white/50">
+            <p className={`${isMobileLandscape ? "hidden" : "text-xs"} text-white/50`}>
               Xem cách hệ thống tìm đường ngắn nhất giữa các tòa nhà
             </p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          className={`${isMobileLandscape ? "h-10 w-10" : "p-2"} flex items-center justify-center rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-colors`}
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className={`flex-1 overflow-hidden ${
+        isMobileLandscape ? "flex flex-row" : "flex flex-col lg:flex-row"
+      }`}>
         {/* Map */}
-        <div className="flex-1 relative min-h-0">
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="relative w-full max-w-[600px]" style={{ aspectRatio: "1 / 1" }}>
+        <div className={`${isMobileLandscape ? "w-[60%] shrink-0" : "flex-1"} relative min-h-0`}>
+          <div className={`absolute inset-0 flex items-center justify-center ${isMobileLandscape ? "p-2" : "p-4"}`}>
+            <div className={`relative max-w-[600px] ${
+              isMobileLandscape ? "h-full max-h-full w-auto max-w-full" : "w-full"
+            }`} style={{ aspectRatio: "1 / 1" }}>
               <MapImage
                 alt="TVU Campus Map"
                 draggable={false}
@@ -336,13 +344,13 @@ export default function AStarExplainer({
               </svg>
 
               {/* Route info overlay */}
-              <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 rounded-xl bg-black/60 backdrop-blur-sm px-3 py-2 text-xs text-white">
+              <div className={`absolute flex items-center justify-between ${isMobileLandscape ? "left-2 right-2 top-2" : "top-3 left-3 right-3"}`}>
+                <div className={`flex min-w-0 items-center rounded-xl bg-black/60 text-white backdrop-blur-sm ${isMobileLandscape ? "max-w-full gap-1.5 px-2 py-1.5 text-[10px]" : "gap-2 px-3 py-2 text-xs"}`}>
                   <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="font-medium">{fromLabel}</span>
+                  <span className="truncate font-medium">{fromLabel}</span>
                   <ChevronRight className="w-3 h-3 text-white/40" />
                   <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
-                  <span className="font-medium">{toLabel}</span>
+                  <span className="truncate font-medium">{toLabel}</span>
                 </div>
               </div>
             </div>
@@ -350,9 +358,11 @@ export default function AStarExplainer({
         </div>
 
         {/* Side Panel */}
-        <div className="w-full lg:w-[340px] flex flex-col border-t lg:border-t-0 lg:border-l border-white/10 bg-[#0d1321] overflow-y-auto">
+        <div className={`flex flex-col border-white/10 bg-[#0d1321] ${
+          isMobileLandscape ? "w-[40%] min-w-0 border-l overflow-hidden" : "w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l overflow-y-auto"
+        }`}>
           {/* Explanation */}
-          <div className="px-5 py-4 border-b border-white/10">
+          <div className={`${isMobileLandscape ? "hidden" : "px-5 py-4"} border-b border-white/10`}>
             <h3 className="text-sm font-bold text-white mb-2">
               Thuật toán A* là gì?
             </h3>
@@ -370,12 +380,16 @@ export default function AStarExplainer({
               </p>
             </div>
           </div>
-
+          {isMobileLandscape && (
+            <div className="shrink-0 border-b border-white/10 px-3 py-2 text-[10px] text-white/55">
+              A*: <span className="font-mono font-semibold text-blue-300">f(n) = g(n) + h(n)</span>
+            </div>
+          )}
           {/* Stats */}
           {result && (
-            <div className="px-5 py-3 border-b border-white/10">
+            <div className={`${isMobileLandscape ? "px-2.5 py-2" : "px-5 py-3"} shrink-0 border-b border-white/10`}>
               <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-lg bg-white/5 p-2.5 text-center">
+                <div className={`rounded-lg bg-white/5 text-center ${isMobileLandscape ? "p-1.5" : "p-2.5"}`}>
                   <p className="text-[9px] uppercase tracking-wider text-white/40 font-semibold">
                     Explored
                   </p>
@@ -383,7 +397,7 @@ export default function AStarExplainer({
                     {exploredSteps.length}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/5 p-2.5 text-center">
+                <div className={`rounded-lg bg-white/5 text-center ${isMobileLandscape ? "p-1.5" : "p-2.5"}`}>
                   <p className="text-[9px] uppercase tracking-wider text-white/40 font-semibold">
                     Path
                   </p>
@@ -391,7 +405,7 @@ export default function AStarExplainer({
                     {result.path.length}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/5 p-2.5 text-center">
+                <div className={`rounded-lg bg-white/5 text-center ${isMobileLandscape ? "p-1.5" : "p-2.5"}`}>
                   <p className="text-[9px] uppercase tracking-wider text-white/40 font-semibold">
                     Cost
                   </p>
@@ -418,13 +432,13 @@ export default function AStarExplainer({
           )}
 
           {/* Step Log */}
-          <div className="flex-1 min-h-0 px-5 py-3">
+          <div className={`flex flex-1 min-h-0 flex-col ${isMobileLandscape ? "px-2.5 py-2" : "px-5 py-3"}`}>
             <h4 className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2">
               Quá trình
             </h4>
             <div
               ref={stepLogRef}
-              className="h-[180px] lg:h-auto lg:max-h-[calc(100vh-500px)] overflow-y-auto rounded-lg bg-black/40 p-3 font-mono text-[10px] leading-relaxed"
+              className={`${isMobileLandscape ? "h-auto flex-1 p-2" : "h-[180px] lg:h-auto lg:max-h-[calc(100vh-500px)] p-3"} overflow-y-auto rounded-lg bg-black/40 font-mono text-[10px] leading-relaxed`}
             >
               {isLoading && (
                 <p className="text-blue-400 animate-pulse">
@@ -456,11 +470,11 @@ export default function AStarExplainer({
           </div>
 
           {/* Actions */}
-          <div className="px-5 py-4 border-t border-white/10 flex gap-2">
+          <div className={`shrink-0 border-t border-white/10 flex gap-2 ${isMobileLandscape ? "px-2.5 py-2" : "px-5 py-4"}`}>
             <button
               onClick={handleReplay}
               disabled={isAnimating}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#053384] hover:bg-[#053384]/80 text-white text-sm font-medium transition-all disabled:opacity-50"
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-[#053384] hover:bg-[#053384]/80 text-white font-medium transition-all disabled:opacity-50 ${isMobileLandscape ? "px-2 py-2 text-xs" : "px-4 py-2.5 text-sm"}`}
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Xem route khác
@@ -468,7 +482,7 @@ export default function AStarExplainer({
           </div>
 
           {/* Legend */}
-          <div className="px-5 pb-4 flex flex-wrap gap-x-3 gap-y-1">
+          <div className={`${isMobileLandscape ? "hidden" : "flex"} px-5 pb-4 flex-wrap gap-x-3 gap-y-1`}>
             {[
               { color: STATE_COLORS.start, label: "Điểm đi" },
               { color: STATE_COLORS.goal, label: "Điểm đến" },
