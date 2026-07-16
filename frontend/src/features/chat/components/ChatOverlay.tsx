@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { ChevronDown, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useTourStore } from "@/features/tour/store";
 import { useChatStore, playPrecachedAudio, _stopCurrentAudio } from "../store";
@@ -42,6 +42,7 @@ export default function ChatOverlay() {
   } = useChatStore();
   const [input, setInput] = useState("");
   const [dismissedSubtitleId, setDismissedSubtitleId] = useState<string | null>(null);
+  const [areSuggestionsExpanded, setAreSuggestionsExpanded] = useState(true);
   const locationId = location?.id;
   const locationSlug = location?.slug;
   const locationName = location?.name;
@@ -232,6 +233,7 @@ export default function ChatOverlay() {
   // Subtitle + suggestions mutual exclusion (for mobile)
   const showSubtitle = isSubtitleVisible && canShowSubtitle;
   const showSuggestions = canShowSuggestions && !showSubtitle && suggestedQuestions.length > 0;
+  const showSuggestionItems = showSuggestions && (!isMobileLandscape || areSuggestionsExpanded);
 
   useEffect(() => {
     setSubtitleOverlayVisible(isMobileLandscape && showSubtitle);
@@ -381,7 +383,7 @@ export default function ChatOverlay() {
         style={isMobileLandscape ? { bottom: "var(--mb-edge)" } : undefined}
       >
         {/* === QUICK ACTIONS (SUGGESTED QUESTIONS) === */}
-        {showSuggestions && (
+        {showSuggestionItems && (
           <div className={`pointer-events-auto ${
             isMobileLandscape
               ? "flex w-full flex-wrap justify-center gap-2 px-2"
@@ -412,6 +414,34 @@ export default function ChatOverlay() {
         }`}>
           {/* Subtle glass shimmer */}
           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 skew-x-12 opacity-50 pointer-events-none"></div>
+
+          {isMobileLandscape && showSuggestions && (
+            <button
+              type="button"
+              onClick={() => setAreSuggestionsExpanded((expanded) => !expanded)}
+              aria-expanded={areSuggestionsExpanded}
+              aria-label={areSuggestionsExpanded ? "Thu g\u1ecdn c\u00e2u h\u1ecfi g\u1ee3i \u00fd" : "Hi\u1ec7n c\u00e2u h\u1ecfi g\u1ee3i \u00fd"}
+              className={`relative z-10 ml-0.5 flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-semibold transition-all active:scale-95 ${
+                areSuggestionsExpanded
+                  ? "border-[#8eb2f0]/28 bg-[#8eb2f0]/14 text-[#dce9ff] shadow-[0_4px_14px_rgba(5,51,132,0.18)]"
+                  : "border-white/10 bg-white/[0.055] text-white/68 hover:bg-white/10 hover:text-white"
+              }`}
+              title={areSuggestionsExpanded ? "Thu g\u1ecdn g\u1ee3i \u00fd" : "Hi\u1ec7n c\u00e2u h\u1ecfi g\u1ee3i \u00fd"}
+            >
+              <Sparkles className={`h-3.5 w-3.5 ${areSuggestionsExpanded ? "text-[#8eb2f0]" : "text-white/55"}`} />
+              <span className="max-[700px]:hidden">{"G\u1ee3i \u00fd"}</span>
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-black/20 px-1 text-[9px] tabular-nums text-white/65">
+                {suggestedQuestions.length}
+              </span>
+              <motion.span
+                animate={{ rotate: areSuggestionsExpanded ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex"
+              >
+                <ChevronDown className="h-3 w-3 text-white/45" />
+              </motion.span>
+            </button>
+          )}
 
           {/* Transcript Toggle Button */}
           <button
