@@ -5,8 +5,8 @@ Embedding Engine — Handles vectorization of text for RAG.
 import asyncio
 import logging
 
-from google.genai import types
 from google.api_core.exceptions import ResourceExhausted
+from google.genai import types
 
 from app.ai.core_client import get_client
 from app.cache import embedding_cache

@@ -14,13 +14,13 @@ import logging
 from pathlib import Path
 from uuid import UUID
 
+from app.ai.embedding_engine import embed_batch
 from app.db.database import async_session
 from app.db.tables import DocumentCategory
-from app.services.extractors import TextExtractor
-from app.services.chunker import MarkdownSemanticChunker
-from app.services import storage_service
 from app.repositories import document_repo
-from app.ai.embedding_engine import embed_batch
+from app.services import storage_service
+from app.services.chunker import MarkdownSemanticChunker
+from app.services.extractors import TextExtractor
 
 logger = logging.getLogger(__name__)
 

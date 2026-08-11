@@ -21,10 +21,10 @@ Edge cases handled:
 Adapted from: src-tham-khao/aic-rag/document-service/src/worker/chunker.py
 Changed: Removed langchain dependency, using SimpleFallbackSplitter instead.
 """
+import logging
 import re
 import unicodedata
-import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

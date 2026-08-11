@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services import location_service
-from app.schemas.location import LocationsListResponse
 from app.repositories import location_repo, media_repo
+from app.schemas.location import LocationsListResponse
+from app.services import location_service
 
 router = APIRouter()
 

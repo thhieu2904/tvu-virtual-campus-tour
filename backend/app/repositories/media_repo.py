@@ -5,9 +5,10 @@ Layer 3 (Data Access): Only knows SQL/ORM, does NOT know HTTP.
 
 from uuid import UUID
 
+from sqlalchemy import String, cast, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import or_, String, cast
+
 from app.db.tables import Media
 
 

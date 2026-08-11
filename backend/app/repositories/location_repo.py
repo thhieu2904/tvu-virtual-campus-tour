@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+
 from app.db.tables import Location, LocationLink
 
 
@@ -41,17 +42,17 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
         selectinload(Location.suggested_questions),
         selectinload(Location.mascot),
     ).where(Location.status == "active").order_by(Location.sort_order)
-    
+
     result = await db.execute(stmt)
     locations = result.scalars().all()
-    
+
     # Fetch all location links with the target slug
     link_stmt = select(LocationLink, Location.slug.label("to_slug")).join(
         Location, LocationLink.to_location_id == Location.id
     )
     link_result = await db.execute(link_stmt)
     links_data = link_result.all()
-    
+
     # Map links by from_location_id
     links_by_from = {}
     for link_obj, to_slug in links_data:
@@ -62,14 +63,14 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
             "toSlug": to_slug,
             "label": link_obj.label
         })
-        
+
     response_nodes = []
     for loc in locations:
         loc_id_str = str(loc.id)
-        
+
         # Sort questions by sort_order
         sorted_qs = sorted(loc.suggested_questions, key=lambda q: q.sort_order)
-        
+
         node = {
             "id": loc_id_str,
             "name": loc.name,
@@ -87,5 +88,5 @@ async def get_all_locations_node_data(db: AsyncSession) -> list[dict]:
             "links": links_by_from.get(loc_id_str, [])
         }
         response_nodes.append(node)
-        
+
     return response_nodes

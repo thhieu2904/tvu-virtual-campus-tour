@@ -9,9 +9,9 @@ Output: List[{page_number, text, char_count}]
 
 Adapted from: src-tham-khao/aic-rag/document-service/src/worker/extractors/pdf_extractor.py
 """
-import re
 import logging
-from typing import List, Dict, Any, Optional
+from importlib.util import find_spec
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,10 @@ class PDFExtractor:
 
     def extract_pages_from_bytes(self, file_bytes: bytes) -> List[Dict[str, Any]]:
         """Extract text from PDF bytes."""
-        import tempfile
         import os
+        import tempfile
 
-        try:
-            import pdfplumber
-        except ImportError:
+        if find_spec("pdfplumber") is None:
             raise ImportError("pdfplumber required: pip install pdfplumber")
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:

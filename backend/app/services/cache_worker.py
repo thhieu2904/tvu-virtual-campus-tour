@@ -24,8 +24,7 @@ from app.cache import qa_cache_store, tts_key_cache
 from app.db.database import async_session
 from app.db.tables import CacheArtifact, CacheJob, CacheJobLog, Location, Mascot
 from app.services import cache_fingerprint_service as fingerprints
-from app.services import location_audio_service
-from app.services import rag_service, storage_service
+from app.services import location_audio_service, rag_service, storage_service
 
 logger = logging.getLogger(__name__)
 

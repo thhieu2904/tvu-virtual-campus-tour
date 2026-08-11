@@ -2,17 +2,18 @@
 TTS Engine — Synthesizes speech with Gemini TTS and Edge TTS fallback.
 """
 
+import asyncio
+import hashlib
 import logging
 import os
-import hashlib
-import asyncio
+import re
 import struct
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
-import re
-import uuid
-from google.genai import types
+
 import edge_tts
+from google.genai import types
 
 from app.ai.core_client import get_client
 from app.config import get_settings
@@ -199,7 +200,7 @@ def _pcm_to_wav(pcm_data: bytes, sample_rate: int = 24000, num_channels: int = 1
     block_align = num_channels * sample_width
     data_size = len(pcm_data)
     chunk_size = 36 + data_size
-    
+
     header = struct.pack(
         '<4sI4s4sIHHIIHH4sI',
         b'RIFF', chunk_size, b'WAVE',
@@ -274,7 +275,7 @@ async def synthesize(
 
         audio_data = result.candidates[0].content.parts[0].inline_data.data
         audio_data = _pcm_to_wav(audio_data)
-        
+
         if use_local_cache:
             await asyncio.to_thread(_save_cache, key, audio_data, CONTENT_TYPE_WAV)
         return TTSResult(

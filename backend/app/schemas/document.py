@@ -2,9 +2,10 @@
 Pydantic schemas for Document/Ingest endpoints (Request/Response DTOs).
 """
 
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class IngestResponse(BaseModel):

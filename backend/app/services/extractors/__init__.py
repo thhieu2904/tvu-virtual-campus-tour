@@ -17,11 +17,11 @@ All extractors return: List[{page_number: int, text: str, char_count: int}]
 """
 import logging
 import os
-from typing import Dict, List, Any, Type
+from typing import Any, Dict, List, Type
 
-from app.services.extractors.pdf_extractor import PDFExtractor
 from app.services.extractors.docx_extractor import DocxExtractor
 from app.services.extractors.md_extractor import MarkdownExtractor
+from app.services.extractors.pdf_extractor import PDFExtractor
 
 logger = logging.getLogger(__name__)
 

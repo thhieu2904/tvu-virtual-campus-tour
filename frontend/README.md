@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TVU Virtual Campus Tour frontend
 
-## Getting Started
+This directory contains the Next.js visitor, kiosk, and administration interfaces for [TVU Virtual Campus Tour](../README.md).
 
-First, run the development server:
+## Run locally
 
 ```bash
+npm ci
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+On Windows PowerShell, use `Copy-Item .env.example .env.local` instead of `cp`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Set `NEXT_PUBLIC_API_URL=http://localhost:8000` for a locally running backend. Open <http://localhost:3000> for the visitor experience or <http://localhost:3000/admin/login> for administration.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Main directories
 
-## Learn More
+```text
+src/
+├── app/       # Next.js routes and layouts
+├── features/  # Tour, chat, navigation, mascot, and admin features
+└── shared/    # Shared API, browser, and recovery utilities
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Quality checks
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Production routing
 
-## Deploy on Vercel
+The frontend is deployed at <https://www.tvu-tour.site>. In production, leave `NEXT_PUBLIC_API_URL` unset to use the same-origin `/api` rewrite. `API_PROXY_ORIGIN` selects the public FastAPI origin and defaults to `https://api.tvu-tour.site`; `MEDIA_PROXY_ORIGIN` selects the R2 media origin and defaults to `https://tvu-tour.site`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See the [root README](../README.md#configuration) for backend setup, architecture, deployment, and contribution guidance.

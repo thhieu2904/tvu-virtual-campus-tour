@@ -10,9 +10,9 @@ Returns a single "page" containing the entire document as Markdown.
 Adapted from: src-tham-khao/aic-rag/document-service/src/worker/extractors/docx_extractor.py
 """
 import io
-import re
 import logging
-from typing import List, Dict, Any
+import re
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,6 @@ class DocxExtractor:
 
     def _process_paragraph(self, element, doc) -> str | None:
         """Convert a paragraph element to Markdown text."""
-        from docx.oxml.ns import qn
 
         para = self._find_paragraph(element, doc)
         if para is None:

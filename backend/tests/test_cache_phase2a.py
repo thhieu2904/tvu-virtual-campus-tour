@@ -10,10 +10,8 @@ from unittest.mock import patch
 from uuid import UUID
 
 from app.services import cache_fingerprint_service as fingerprints
-from app.services import cache_worker
-from app.services import location_audio_service
+from app.services import cache_worker, location_audio_service
 from scripts import backfill_cache_artifacts
-
 
 MASCOT_ID = UUID("11111111-1111-1111-1111-111111111111")
 LOCATION_ID = UUID("22222222-2222-2222-2222-222222222222")
